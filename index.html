@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Barstool Pick Em Tracker</title>
+<style>
+:root{--bg:#0a0c10;--panel:#12161d;--panel2:#181d26;--text:#f5f7fa;--muted:#9ca6b5;--border:#262d38;--accent:#fff;--good:#56d38b;--bad:#ff6262}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif} button{font:inherit}
+.shell{max-width:1050px;margin:auto;padding:24px 16px 48px}.eyebrow{font-size:12px;letter-spacing:.16em;color:var(--muted);font-weight:800}.top{display:flex;justify-content:space-between;align-items:end;gap:16px;margin-bottom:18px}.top h1{margin:5px 0 0;font-size:clamp(27px,6vw,44px);letter-spacing:-.04em}.updated{font-size:12px;color:var(--muted);white-space:nowrap}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.card{border:1px solid var(--border);background:linear-gradient(180deg,var(--panel2),var(--panel));border-radius:18px;padding:18px;min-width:0}.name{font-size:15px;font-weight:900;letter-spacing:.03em}.record{font-size:34px;font-weight:900;letter-spacing:-.04em;margin:16px 0 3px}.pct{font-size:16px;font-weight:800}.lock{margin-top:16px;padding-top:14px;border-top:1px solid var(--border);display:flex;justify-content:space-between;color:var(--muted);font-size:13px}.lock b{color:var(--text)}
+.chartbox{margin-top:14px;border:1px solid var(--border);background:var(--panel);border-radius:18px;padding:18px;overflow:hidden}.sectionhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}.sectionhead h2{font-size:18px;margin:0}.sectionhead span{font-size:12px;color:var(--muted)}#race{width:100%;height:auto;display:block;min-height:280px}.grid{stroke:#2b323e;stroke-width:1}.axistext{fill:#8f99a8;font-size:11px}.line{fill:none;stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round}.endpct{fill:#f5f7fa;font-weight:900;font-size:12px}.avatarText{fill:#0a0c10;font-size:10px;font-weight:900;text-anchor:middle;dominant-baseline:central}
+.fullbtn{width:100%;margin-top:14px;border:1px solid var(--border);background:#f5f7fa;color:#0a0c10;border-radius:14px;padding:15px 18px;font-weight:900;font-size:15px;cursor:pointer}.fullbtn:active{transform:scale(.995)}
+.view{display:none}.view.active{display:block}.back{border:0;background:transparent;color:var(--text);padding:8px 0;font-weight:800}.weeks{display:flex;gap:8px;overflow-x:auto;padding:5px 0 15px;scrollbar-width:none}.weekbtn{border:1px solid var(--border);background:var(--panel);color:var(--muted);border-radius:999px;padding:9px 14px;white-space:nowrap;font-weight:800}.weekbtn.active{background:var(--text);color:var(--bg)}.pickerBlock{margin:0 0 18px;border:1px solid var(--border);border-radius:18px;overflow:hidden;background:var(--panel)}.pickerTitle{padding:15px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;font-weight:900}.pick{display:grid;grid-template-columns:1fr auto;gap:12px;padding:13px 16px;border-bottom:1px solid var(--border)}.pick:last-child{border-bottom:0}.sel{font-weight:800}.meta{font-size:12px;color:var(--muted);margin-top:4px}.badge{display:inline-block;border:1px solid #39414e;border-radius:999px;padding:2px 6px;margin-right:5px;font-size:10px;font-weight:800}.result{font-size:19px;align-self:center}.empty{padding:18px;color:var(--muted);font-size:13px}.source{color:inherit;text-decoration:none}.source:hover{text-decoration:underline}
+@media(max-width:680px){.shell{padding-top:18px}.cards{grid-template-columns:1fr}.card{display:grid;grid-template-columns:1fr auto;grid-template-areas:"n r" "p r" "l l";align-items:center}.name{grid-area:n}.record{grid-area:r;margin:0;font-size:30px}.pct{grid-area:p}.lock{grid-area:l}.updated{display:none}.chartbox{padding:14px 10px}#race{min-height:320px}}
+</style>
+</head>
+<body><main class="shell">
+<section id="overview" class="view active">
+  <div class="top"><div><div class="eyebrow">2026 SEASON</div><h1>Barstool Pick Em</h1></div><div id="updated" class="updated"></div></div>
+  <div id="cards" class="cards"></div>
+  <div class="chartbox"><div class="sectionhead"><h2>Win % Race</h2><span>Cumulative by week</span></div><svg id="race" viewBox="0 0 900 360" role="img" aria-label="Cumulative win percentage by week"></svg></div>
+  <button id="openCards" class="fullbtn">Full Card View →</button>
+</section>
+<section id="full" class="view">
+  <button id="back" class="back">← Overview</button>
+  <div class="top"><div><div class="eyebrow">2026 SEASON</div><h1>Full Card View</h1></div></div>
+  <div id="weeks" class="weeks"></div><div id="cardBody"></div>
+</section>
+</main>
+<script>
+const PICKERS=["Big Cat","Stool Presidente","Rico Bosco"];
+const COLORS={"Big Cat":"#67a9ff","Stool Presidente":"#ff6b6b","Rico Bosco":"#f6c85f"};
+const AVATARS={"Big Cat":"assets/bigcat.jpg","Stool Presidente":"assets/pres.jpg","Rico Bosco":"assets/rico.jpg"};
+const INITIALS={"Big Cat":"BC","Stool Presidente":"DP","Rico Bosco":"RB"};
+let DATA={cappers:[],win_pct_history:{},weeks:[],picks:[]}, selectedWeek=null;
+const $=s=>document.querySelector(s);
+function record(c){return `${c.wins||0}-${c.losses||0}${c.pushes?`-${c.pushes}`:""}`}
+function lockRecord(c){return `${c.mortal_wins||0}-${c.mortal_losses||0}${c.mortal_pushes?`-${c.mortal_pushes}`:""}`}
+function renderCards(){
+  $("#cards").innerHTML=PICKERS.map(p=>{const c=DATA.cappers.find(x=>x.picker===p)||{picker:p};return `<article class="card"><div class="name">${p.toUpperCase()}</div><div class="record">${record(c)}</div><div class="pct">${(c.win_pct||0).toFixed(1)}% win rate</div><div class="lock"><span>Mortal Lock</span><b>${lockRecord(c)}</b></div></article>`}).join("");
+}
+function svgEl(tag,attrs={}){const n=document.createElementNS("http://www.w3.org/2000/svg",tag);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,v));return n}
+function renderChart(){
+ const svg=$("#race");svg.innerHTML=""; const W=900,H=360,L=48,R=92,T=25,B=42;
+ const all=PICKERS.flatMap(p=>DATA.win_pct_history[p]||[]); if(!all.length){const t=svgEl("text",{x:W/2,y:H/2,"text-anchor":"middle",class:"axistext"});t.textContent="Win % history will appear after picks are graded.";svg.appendChild(t);return}
+ const weeks=[...new Set(all.map(d=>+d.week))].sort((a,b)=>a-b); const vals=all.map(d=>+d.win_pct); let ymin=Math.max(0,Math.floor((Math.min(...vals)-8)/5)*5), ymax=Math.min(100,Math.ceil((Math.max(...vals)+8)/5)*5); if(ymax-ymin<20){ymin=Math.max(0,ymin-10);ymax=Math.min(100,ymax+10)}
+ const x=w=>weeks.length===1?L+(W-L-R)/2:L+(w-weeks[0])/(weeks.at(-1)-weeks[0])*(W-L-R); const y=v=>T+(ymax-v)/(ymax-ymin)*(H-T-B);
+ for(let i=0;i<=4;i++){const v=ymin+(ymax-ymin)*i/4, yy=y(v);svg.appendChild(svgEl("line",{x1:L,y1:yy,x2:W-R,y2:yy,class:"grid"}));const tx=svgEl("text",{x:L-8,y:yy+4,"text-anchor":"end",class:"axistext"});tx.textContent=`${v.toFixed(0)}%`;svg.appendChild(tx)}
+ weeks.forEach(w=>{const tx=svgEl("text",{x:x(w),y:H-14,"text-anchor":"middle",class:"axistext"});tx.textContent=`W${w}`;svg.appendChild(tx)});
+ PICKERS.forEach(p=>{const s=DATA.win_pct_history[p]||[];if(!s.length)return;const pts=s.map(d=>`${x(+d.week)},${y(+d.win_pct)}`).join(" ");svg.appendChild(svgEl("polyline",{points:pts,class:"line",stroke:COLORS[p]}));const last=s.at(-1),cx=x(+last.week),cy=y(+last.win_pct);const g=svgEl("g");const clipId=`clip-${INITIALS[p]}`;const defs=svgEl("defs"),clip=svgEl("clipPath",{id:clipId}),circle=svgEl("circle",{cx:cx+22,cy,r:18});clip.appendChild(circle);defs.appendChild(clip);g.appendChild(defs);const bg=svgEl("circle",{cx:cx+22,cy,r:19,fill:COLORS[p],stroke:"#0a0c10","stroke-width":3});g.appendChild(bg);const img=svgEl("image",{href:AVATARS[p],x:cx+4,y:cy-18,width:36,height:36,"clip-path":`url(#${clipId})`,preserveAspectRatio:"xMidYMid slice"});img.addEventListener("error",()=>img.style.display="none");g.appendChild(img);const initials=svgEl("text",{x:cx+22,y:cy+1,class:"avatarText"});initials.textContent=INITIALS[p];g.insertBefore(initials,img);const pct=svgEl("text",{x:cx+46,y:cy+4,class:"endpct"});pct.textContent=`${(+last.win_pct).toFixed(1)}%`;g.appendChild(pct);svg.appendChild(g)})
+}
+function resultIcon(p){if(p.status!=="FINAL")return "⏳";return p.result==="WIN"?"💰":p.result==="LOSS"?"❌":p.result==="PUSH"?"➖":"⏳"}
+function renderWeeks(){const weeks=DATA.weeks?.length?DATA.weeks:[1];if(!selectedWeek)selectedWeek=weeks.at(-1);$("#weeks").innerHTML=weeks.map(w=>`<button class="weekbtn ${+w===+selectedWeek?"active":""}" data-week="${w}">Week ${w}</button>`).join("");document.querySelectorAll(".weekbtn").forEach(b=>b.addEventListener("click",()=>{selectedWeek=+b.dataset.week;renderWeeks();renderFull()}))}
+function renderFull(){
+ $("#cardBody").innerHTML=PICKERS.map(p=>{const picks=DATA.picks.filter(x=>x.picker===p&&+x.week===+selectedWeek).sort((a,b)=>(a.posted_at||"").localeCompare(b.posted_at||""));const finals=picks.filter(x=>x.status==="FINAL"),w=finals.filter(x=>x.result==="WIN").length,l=finals.filter(x=>x.result==="LOSS").length;const rows=picks.length?picks.map(x=>`<div class="pick"><div><div class="sel">${x.selection||"Pick"}</div><div class="meta">${x.mortal_lock?'<span class="badge">MORTAL LOCK</span>':''}${x.added_pick?'<span class="badge">ADDED PICK</span>':''}${x.final_score?`${x.final_score} · `:""}${x.source_url?`<a class="source" href="${x.source_url}" target="_blank" rel="noopener">Source ↗</a>`:""}</div></div><div class="result">${resultIcon(x)}</div></div>`).join(""):'<div class="empty">No picks captured for this week yet.</div>';return `<section class="pickerBlock"><div class="pickerTitle"><span>${p.toUpperCase()}</span><span>${w}-${l}</span></div>${rows}</section>`}).join("")
+}
+$("#openCards").addEventListener("click",()=>{$("#overview").classList.remove("active");$("#full").classList.add("active");renderWeeks();renderFull();window.scrollTo(0,0)});$("#back").addEventListener("click",()=>{$("#full").classList.remove("active");$("#overview").classList.add("active");window.scrollTo(0,0)});
+fetch("data/dashboard.json",{cache:"no-store"}).then(r=>r.json()).then(d=>{DATA=d;renderCards();renderChart();if(d.updated_at)$("#updated").textContent=`Updated ${new Date(d.updated_at).toLocaleString()}`}).catch(()=>{renderCards();renderChart()});
+</script></body></html>
