@@ -1,39 +1,33 @@
-name: Update picks, scores, and website
+name: Pickem Tracker
 
 on:
-  schedule:
-    - cron: '*/5 * * * *'
   workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
 
 permissions:
   contents: write
   pages: write
   id-token: write
 
-concurrency:
-  group: pickem-tracker
-  cancel-in-progress: false
-
 jobs:
-  update-and-deploy:
+  update:
     runs-on: ubuntu-latest
+
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt
 
-      - name: Ingest posts, grade picks, rebuild dashboard
+      - name: Update tracker
         env:
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -41,22 +35,20 @@ jobs:
           OPENAI_MODEL: gpt-5.6-luna
         run: python scripts/run_all.py
 
-      - name: Save updated tracker data
+      - name: Save data
         run: |
           git config user.name "pickem-bot"
           git config user.email "pickem-bot@users.noreply.github.com"
           git add data/
-          git diff --cached --quiet || git commit -m "Auto-update picks and results"
+          git diff --cached --quiet || git commit -m "Update tracker"
           git push
 
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v5
 
-      - name: Upload website to GitHub Pages
-        uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v4
         with:
-          path: '.'
+          path: "."
 
-      - name: Publish website
+      - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
