@@ -1,1 +1,42 @@
-{}
+{
+  "updated_at": "2026-09-06T17:10:55.520775+00:00",
+  "cappers": [
+    {
+      "picker": "Big Cat",
+      "wins": 0,
+      "losses": 0,
+      "pushes": 0,
+      "win_pct": 0.0,
+      "mortal_wins": 0,
+      "mortal_losses": 0,
+      "mortal_pushes": 0
+    },
+    {
+      "picker": "Stool Presidente",
+      "wins": 0,
+      "losses": 0,
+      "pushes": 0,
+      "win_pct": 0.0,
+      "mortal_wins": 0,
+      "mortal_losses": 0,
+      "mortal_pushes": 0
+    },
+    {
+      "picker": "Rico Bosco",
+      "wins": 0,
+      "losses": 0,
+      "pushes": 0,
+      "win_pct": 0.0,
+      "mortal_wins": 0,
+      "mortal_losses": 0,
+      "mortal_pushes": 0
+    }
+  ],
+  "win_pct_history": {
+    "Big Cat": [],
+    "Stool Presidente": [],
+    "Rico Bosco": []
+  },
+  "weeks": [],
+  "picks": []
+}
