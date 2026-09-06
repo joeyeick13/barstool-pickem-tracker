@@ -20,88 +20,147 @@ ESPN = (
 
 LOOKBACK_DAYS = 14
 
-# Canonical names for common abbreviations / alternate names.
 ALIASES = {
-    "uconn": {"uconn", "connecticut", "connecticut huskies"},
-    "usc": {"usc", "southern california", "usc trojans"},
-    "cal": {"cal", "california", "california golden bears"},
-    "ole miss": {"ole miss", "mississippi", "mississippi rebels"},
-    "lsu": {"lsu", "louisiana state", "lsu tigers"},
-    "pitt": {"pitt", "pittsburgh", "pittsburgh panthers"},
-    "smu": {"smu", "southern methodist", "smu mustangs"},
-    "tcu": {"tcu", "texas christian", "tcu horned frogs"},
-    "byu": {"byu", "brigham young", "byu cougars"},
-    "ucf": {"ucf", "central florida", "ucf knights"},
-    "utsa": {"utsa", "texas san antonio", "utsa roadrunners"},
-    "utep": {"utep", "texas el paso", "utep miners"},
-    "fiu": {"fiu", "florida international", "fiu panthers"},
-    "usf": {"usf", "south florida", "south florida bulls"},
-    "ecu": {"ecu", "east carolina", "east carolina pirates"},
-    "wazzu": {
-        "wazzu",
-        "washington state",
-        "washington state cougars",
-        "wsu",
+    "uconn": {
+        "uconn",
+        "connecticut",
+        "connecticut huskies",
+    },
+    "cal": {
+        "cal",
+        "california",
+        "california golden bears",
     },
     "nd": {
         "nd",
         "notre dame",
         "notre dame fighting irish",
     },
+    "wazzu": {
+        "wazzu",
+        "wsu",
+        "washington state",
+        "washington state cougars",
+    },
+    "ole miss": {
+        "ole miss",
+        "mississippi",
+        "mississippi rebels",
+    },
+    "lsu": {
+        "lsu",
+        "louisiana state",
+        "lsu tigers",
+    },
     "miami oh": {
         "miami oh",
         "miami ohio",
         "miami redhawks",
     },
-    "central michigan": {
-        "central michigan",
-        "central michigan chippewas",
-        "cmu",
+    "fiu": {
+        "fiu",
+        "florida international",
+        "fiu panthers",
+    },
+    "usf": {
+        "usf",
+        "south florida",
+        "south florida bulls",
     },
     "texas am": {
         "texas am",
         "texas a m",
-        "texas a&m",
         "texas a and m",
+        "texas a&m",
         "texas a m aggies",
-        "aggies",
     },
 }
 
+SPECIAL_MARKERS = (
+    "1q",
+    "1st q",
+    "first quarter",
+    "1h",
+    "1st h",
+    "first half",
+    "team total",
+    " tt ",
+    " tt",
+    "1st half tt",
+    "first half tt",
+)
+
 
 def norm(value):
-    value = str(value or "").lower()
+    text = str(value or "").lower()
 
-    value = (
-        value.replace("&", " and ")
+    text = (
+        text.replace("&", " and ")
         .replace("−", "-")
         .replace("–", "-")
         .replace("—", "-")
         .replace("'", "")
     )
 
-    value = re.sub(r"[^a-z0-9 ]", " ", value)
-    value = re.sub(r"\s+", " ", value)
+    text = re.sub(
+        r"[^a-z0-9 ]",
+        " ",
+        text,
+    )
 
-    return value.strip()
+    text = re.sub(
+        r"\s+",
+        " ",
+        text,
+    )
+
+    return text.strip()
 
 
 def alias_group(value):
-    n = norm(value)
+    normalized = norm(value)
 
-    if not n:
+    if not normalized:
         return set()
 
-    result = {n}
+    result = {normalized}
 
     for canonical, names in ALIASES.items():
-        normalized = {norm(x) for x in names}
-        normalized.add(norm(canonical))
+        group = {
+            norm(canonical),
+            *[norm(x) for x in names],
+        }
 
-        if n in normalized:
-            result.update(normalized)
+        if normalized in group:
+            result |= group
 
     return result
+
+
+def is_specialty(pick):
+    bet_type = str(
+        pick.get("bet_type") or ""
+    ).upper()
+
+    if bet_type not in {
+        "SPREAD",
+        "TOTAL",
+        "MONEYLINE",
+    }:
+        return True
+
+    text = (
+        " "
+        + norm(
+            pick.get("selection")
+        )
+        + " "
+    )
+
+    return any(
+        marker in text
+        for marker in SPECIAL_MARKERS
+    )
 
 
 def scoreboard(date_yyyymmdd):
@@ -116,7 +175,25 @@ def scoreboard(date_yyyymmdd):
 
     response.raise_for_status()
 
-    return response.json().get("events", [])
+    return response.json().get(
+        "events",
+        [],
+    )
+
+
+def competitors(event):
+    competitions = event.get(
+        "competitions",
+        [],
+    )
+
+    if not competitions:
+        return []
+
+    return competitions[0].get(
+        "competitors",
+        [],
+    )
 
 
 def completed(event):
@@ -127,65 +204,53 @@ def completed(event):
     )
 
 
-def competitors(event):
-    competitions = event.get("competitions", [])
-
-    if not competitions:
-        return []
-
-    return competitions[0].get("competitors", [])
-
-
 def espn_names(comp):
-    team = comp.get("team", {})
+    team = comp.get(
+        "team",
+        {},
+    )
 
-    values = [
+    names = set()
+
+    for value in (
         team.get("displayName"),
         team.get("shortDisplayName"),
         team.get("name"),
         team.get("abbreviation"),
         team.get("location"),
-    ]
-
-    names = set()
-
-    for value in values:
-        if value:
-            names.update(alias_group(value))
+    ):
+        names |= alias_group(value)
 
     return names
 
 
-def exact_team_match(hint, comp):
-    hints = alias_group(hint)
-
-    if not hints:
-        return False
-
-    return bool(hints & espn_names(comp))
+def matches_name(hint, comp):
+    return bool(
+        alias_group(hint)
+        & espn_names(comp)
+    )
 
 
 def split_matchup(value):
     if not value:
         return []
 
-    text = str(value)
-
     return [
         part.strip()
         for part in re.split(
             r"\s+(?:vs\.?|v\.?|at|@)\s+|/",
-            text,
+            str(value),
             flags=re.I,
         )
         if part.strip()
     ]
 
 
-def clean_selection_team(selection):
-    text = str(selection or "")
+def clean_team(selection):
+    text = str(
+        selection or ""
+    )
 
-    # Remove common wager terminology.
     text = re.sub(
         r"\b(over|under|moneyline|ml)\b",
         " ",
@@ -193,7 +258,6 @@ def clean_selection_team(selection):
         flags=re.I,
     )
 
-    # Remove spread / total numbers.
     text = re.sub(
         r"[+-]\s*\d+(?:\.\d+)?",
         " ",
@@ -206,39 +270,64 @@ def clean_selection_team(selection):
         text,
     )
 
-    return re.sub(r"\s+", " ", text).strip(" /-")
+    text = re.sub(
+        r"\s+",
+        " ",
+        text,
+    )
+
+    return text.strip(" /-")
 
 
-def primary_team_hints(pick):
+def primary_hints(pick):
     hints = []
 
-    # These fields are most trustworthy.
-    for field in ("team", "side"):
+    for field in (
+        "team",
+        "side",
+    ):
         value = pick.get(field)
 
-        if value and norm(value) not in {"over", "under"}:
-            hints.append(str(value))
+        if (
+            value
+            and norm(value)
+            not in {
+                "over",
+                "under",
+            }
+        ):
+            hints.append(
+                str(value)
+            )
 
-    # For a spread/moneyline, the selection itself normally begins
-    # with the selected team.
-    btype = str(pick.get("bet_type") or "").upper()
+    bet_type = str(
+        pick.get("bet_type") or ""
+    ).upper()
 
-    if btype in {"SPREAD", "MONEYLINE"}:
-        cleaned = clean_selection_team(
+    if bet_type in {
+        "SPREAD",
+        "MONEYLINE",
+    }:
+        cleaned = clean_team(
             pick.get("selection")
         )
 
         if cleaned:
             hints.append(cleaned)
 
-    # Preserve order while removing duplicates.
     output = []
 
     for hint in hints:
-        if norm(hint) and norm(hint) not in {
-            norm(x) for x in output
-        }:
-            output.append(hint)
+        normalized = norm(hint)
+
+        if (
+            normalized
+            and normalized
+            not in output
+        ):
+            output.append(
+                normalized
+            )
 
     return output
 
@@ -246,34 +335,57 @@ def primary_team_hints(pick):
 def opponent_hints(pick):
     hints = []
 
-    opponent = pick.get("opponent")
+    if pick.get("opponent"):
+        hints.append(
+            norm(
+                pick["opponent"]
+            )
+        )
 
-    if opponent:
-        hints.append(str(opponent))
-
-    matchup_parts = split_matchup(
-        pick.get("matchup")
+    primary = primary_hints(
+        pick
     )
 
-    primary = primary_team_hints(pick)
-
-    for part in matchup_parts:
+    for part in split_matchup(
+        pick.get("matchup")
+    ):
         if not any(
-            alias_group(part) & alias_group(p)
-            for p in primary
+            alias_group(part)
+            & alias_group(primary_hint)
+            for primary_hint in primary
         ):
-            hints.append(part)
+            hints.append(
+                norm(part)
+            )
 
-    return hints
+    output = []
+
+    for hint in hints:
+        if (
+            hint
+            and hint
+            not in output
+        ):
+            output.append(hint)
+
+    return output
 
 
-def find_selected_comp(pick, comps):
+def selected_comp(
+    pick,
+    comps,
+):
     matches = []
 
     for comp in comps:
         if any(
-            exact_team_match(hint, comp)
-            for hint in primary_team_hints(pick)
+            matches_name(
+                hint,
+                comp,
+            )
+            for hint in primary_hints(
+                pick
+            )
         ):
             matches.append(comp)
 
@@ -283,221 +395,261 @@ def find_selected_comp(pick, comps):
     return None
 
 
-def event_matches_pick(pick, event):
+def event_matches(
+    pick,
+    event,
+):
     comps = competitors(event)
 
     if len(comps) != 2:
         return False
 
-    selected = find_selected_comp(pick, comps)
+    selected = selected_comp(
+        pick,
+        comps,
+    )
 
     if selected is None:
         return False
 
-    opp_hints = opponent_hints(pick)
+    opponents = opponent_hints(
+        pick
+    )
 
-    if opp_hints:
+    if opponents:
         other = next(
-            c for c in comps
-            if c["id"] != selected["id"]
+            c
+            for c in comps
+            if c["id"]
+            != selected["id"]
         )
 
-        # If we have an explicit opponent/matchup, require it to match.
         if not any(
-            exact_team_match(hint, other)
-            for hint in opp_hints
+            matches_name(
+                hint,
+                other,
+            )
+            for hint in opponents
         ):
             return False
 
     return True
 
 
-def pick_post_date(pick):
-    raw = pick.get("posted_at")
-
-    if not raw:
-        return None
-
+def parse_datetime(value):
     try:
         return datetime.fromisoformat(
-            raw.replace("Z", "+00:00")
+            str(value).replace(
+                "Z",
+                "+00:00",
+            )
         )
     except Exception:
         return None
 
 
-def event_datetime(event):
-    raw = event.get("date")
+def find_event(
+    pick,
+    events,
+):
+    bet_type = str(
+        pick.get("bet_type") or ""
+    ).upper()
 
-    if not raw:
-        return None
-
-    try:
-        return datetime.fromisoformat(
-            raw.replace("Z", "+00:00")
+    # Game totals MUST have a resolvable
+    # two-team matchup.
+    if bet_type == "TOTAL":
+        parts = split_matchup(
+            pick.get("matchup")
         )
-    except Exception:
-        return None
 
+        if len(parts) < 2:
+            return None
 
-def find_event(pick, events):
-    """
-    STRICT matching:
-    1. Selected team must exactly match an ESPN name/alias.
-    2. If opponent is known, opponent must also exactly match.
-    3. Prefer completed games after the pick was posted.
-    4. Never choose an event merely because its name is vaguely similar.
-    """
+        valid = []
 
-    matches = [
-        event
-        for event in events
-        if event_matches_pick(pick, event)
-    ]
+        for event in events:
+            comps = competitors(
+                event
+            )
 
-    if not matches:
-        return None
+            if len(comps) != 2:
+                continue
 
-    posted = pick_post_date(pick)
+            first_found = any(
+                matches_name(
+                    parts[0],
+                    c,
+                )
+                for c in comps
+            )
+
+            second_found = any(
+                matches_name(
+                    parts[1],
+                    c,
+                )
+                for c in comps
+            )
+
+            if (
+                first_found
+                and second_found
+            ):
+                valid.append(
+                    event
+                )
+
+    else:
+        valid = [
+            event
+            for event in events
+            if event_matches(
+                pick,
+                event,
+            )
+        ]
+
+    posted = parse_datetime(
+        pick.get("posted_at")
+    )
 
     if posted:
         sensible = []
 
-        for event in matches:
-            dt = event_datetime(event)
+        for event in valid:
+            event_time = parse_datetime(
+                event.get("date")
+            )
 
-            if not dt:
+            if not event_time:
                 continue
 
-            # A wager should normally be posted before kickoff.
-            # Allow a small date tolerance for timezone differences.
-            days = (
-                dt.date() - posted.date()
+            day_diff = (
+                event_time.date()
+                - posted.date()
             ).days
 
-            if -1 <= days <= 9:
-                sensible.append(event)
+            if -1 <= day_diff <= 9:
+                sensible.append(
+                    event
+                )
 
         if sensible:
-            matches = sensible
+            valid = sensible
 
-    completed_matches = [
+    finals = [
         event
-        for event in matches
+        for event in valid
         if completed(event)
     ]
 
-    if completed_matches:
-        matches = completed_matches
+    if finals:
+        valid = finals
 
-    # One exact candidate = safe.
-    if len(matches) == 1:
-        return matches[0]
+    # Bulletproof behavior:
+    # only grade when exactly ONE
+    # event satisfies the rules.
+    if len(valid) == 1:
+        return valid[0]
 
-    # If multiple games for the same team are in our window,
-    # choose the closest game occurring on/after the post.
-    if posted:
-        dated = []
-
-        for event in matches:
-            dt = event_datetime(event)
-
-            if dt:
-                delta = (
-                    dt - posted
-                ).total_seconds()
-
-                # Strongly prefer games after the pick.
-                penalty = (
-                    abs(delta)
-                    if delta >= -43200
-                    else abs(delta) + 999999999
-                )
-
-                dated.append(
-                    (penalty, event)
-                )
-
-        dated.sort(key=lambda x: x[0])
-
-        if dated:
-            # Only accept if the best candidate is clearly the closest.
-            if len(dated) == 1:
-                return dated[0][1]
-
-            if (
-                dated[1][0] - dated[0][0]
-                > 24 * 60 * 60
-            ):
-                return dated[0][1]
-
-    # Ambiguous = do not grade.
     return None
 
 
-def final_score_text(comps, scores):
+def final_score_text(
+    comps,
+    scores,
+):
     output = []
 
     for comp in comps:
-        team = comp.get("team", {})
+        team = comp.get(
+            "team",
+            {},
+        )
 
         name = (
-            team.get("abbreviation")
-            or team.get("shortDisplayName")
-            or team.get("displayName")
+            team.get(
+                "abbreviation"
+            )
+            or team.get(
+                "shortDisplayName"
+            )
+            or team.get(
+                "displayName"
+            )
             or "Team"
         )
 
-        output.append(
-            f"{name} {int(scores[comp['id']])}"
+        score = int(
+            scores[
+                comp["id"]
+            ]
         )
 
-    return " - ".join(output)
+        output.append(
+            f"{name} {score}"
+        )
+
+    return " - ".join(
+        output
+    )
 
 
-def grade_pick(pick, event):
+def grade_pick(
+    pick,
+    event,
+):
     if not completed(event):
         return False
 
-    comps = competitors(event)
+    comps = competitors(
+        event
+    )
 
     if len(comps) != 2:
         return False
 
     scores = {
-        c["id"]: float(c.get("score") or 0)
+        c["id"]: float(
+            c.get("score") or 0
+        )
         for c in comps
     }
 
-    btype = str(
+    bet_type = str(
         pick.get("bet_type") or ""
     ).upper()
 
     line = pick.get("line")
 
-    if btype == "TOTAL":
+    if bet_type == "TOTAL":
         if line is None:
             return False
 
         side = norm(
             pick.get("side")
-            or pick.get("selection")
+            or pick.get(
+                "selection"
+            )
         )
 
-        game_total = sum(scores.values())
+        total = sum(
+            scores.values()
+        )
 
         if "over" in side:
-            if game_total > float(line):
+            if total > float(line):
                 result = "WIN"
-            elif game_total < float(line):
+            elif total < float(line):
                 result = "LOSS"
             else:
                 result = "PUSH"
 
         elif "under" in side:
-            if game_total < float(line):
+            if total < float(line):
                 result = "WIN"
-            elif game_total > float(line):
+            elif total > float(line):
                 result = "LOSS"
             else:
                 result = "PUSH"
@@ -505,8 +657,11 @@ def grade_pick(pick, event):
         else:
             return False
 
-    elif btype in {"SPREAD", "MONEYLINE"}:
-        selected = find_selected_comp(
+    elif bet_type in {
+        "SPREAD",
+        "MONEYLINE",
+    }:
+        selected = selected_comp(
             pick,
             comps,
         )
@@ -515,16 +670,25 @@ def grade_pick(pick, event):
             return False
 
         other = next(
-            c for c in comps
-            if c["id"] != selected["id"]
+            c
+            for c in comps
+            if c["id"]
+            != selected["id"]
         )
 
         margin = (
-            scores[selected["id"]]
-            - scores[other["id"]]
+            scores[
+                selected["id"]
+            ]
+            - scores[
+                other["id"]
+            ]
         )
 
-        if btype == "MONEYLINE":
+        if (
+            bet_type
+            == "MONEYLINE"
+        ):
             if margin > 0:
                 result = "WIN"
             elif margin < 0:
@@ -537,7 +701,8 @@ def grade_pick(pick, event):
                 return False
 
             adjusted = (
-                margin + float(line)
+                margin
+                + float(line)
             )
 
             if adjusted > 0:
@@ -552,32 +717,38 @@ def grade_pick(pick, event):
 
     pick["result"] = result
     pick["status"] = "FINAL"
-    pick["event_id"] = event.get("id")
+    pick["event_id"] = event.get(
+        "id"
+    )
     pick["graded_at"] = now_iso()
 
-    pick["final_score"] = final_score_text(
-        comps,
-        scores,
+    pick["final_score"] = (
+        final_score_text(
+            comps,
+            scores,
+        )
     )
 
-    pick["profit_units"] = american_profit(
-        pick.get("odds"),
-        float(pick.get("units") or 1),
-        result,
+    pick["profit_units"] = (
+        american_profit(
+            pick.get("odds"),
+            float(
+                pick.get("units")
+                or 1
+            ),
+            result,
+        )
     )
 
     return True
 
 
-def clear_old_grade(pick):
-    """
-    Critical for this repair:
-    remove results produced by the earlier permissive matcher before
-    attempting to grade the pick again.
-    """
-
+def clear_grade(
+    pick,
+    status="OPEN",
+):
     pick["result"] = None
-    pick["status"] = "OPEN"
+    pick["status"] = status
     pick["event_id"] = None
     pick["graded_at"] = None
     pick["final_score"] = None
@@ -590,21 +761,34 @@ def grade_open():
         [],
     )
 
-    now = datetime.now(timezone.utc)
-
     events_by_id = {}
 
-    for i in range(LOOKBACK_DAYS):
+    now = datetime.now(
+        timezone.utc
+    )
+
+    for i in range(
+        LOOKBACK_DAYS
+    ):
         date = (
-            now - timedelta(days=i)
-        ).strftime("%Y%m%d")
+            now
+            - timedelta(days=i)
+        ).strftime(
+            "%Y%m%d"
+        )
 
         try:
-            for event in scoreboard(date):
-                event_id = event.get("id")
+            for event in scoreboard(
+                date
+            ):
+                event_id = event.get(
+                    "id"
+                )
 
                 if event_id:
-                    events_by_id[event_id] = event
+                    events_by_id[
+                        event_id
+                    ] = event
 
         except Exception as exc:
             print(
@@ -613,15 +797,18 @@ def grade_open():
                 exc,
             )
 
-    events = list(events_by_id.values())
+    events = list(
+        events_by_id.values()
+    )
 
     print(
-        f"Loaded {len(events)} unique ESPN events"
+        f"Loaded {len(events)} "
+        f"unique ESPN events"
     )
 
     graded = 0
     unmatched = 0
-    unsupported = 0
+    specialty = 0
 
     for pick in picks:
         if pick.get("sport") not in {
@@ -630,21 +817,43 @@ def grade_open():
         }:
             continue
 
-        btype = str(
+        bet_type = str(
             pick.get("bet_type") or ""
         ).upper()
 
-        if btype not in {
+        # Anything specialty is explicitly
+        # removed from full-game grading.
+        if is_specialty(pick):
+            clear_grade(
+                pick,
+                "REVIEW",
+            )
+
+            specialty += 1
+
+            print(
+                "QUARANTINED:",
+                pick.get("picker"),
+                "|",
+                pick.get(
+                    "selection"
+                ),
+            )
+
+            continue
+
+        if bet_type not in {
             "SPREAD",
             "TOTAL",
             "MONEYLINE",
         }:
-            unsupported += 1
             continue
 
-        # Recheck ALL supported wagers, including previously FINAL ones.
-        # This repairs bad matches created by the old grader.
-        clear_old_grade(pick)
+        # Recheck every supported pick,
+        # including previously FINAL picks.
+        # This repairs results from older
+        # unsafe grader versions.
+        clear_grade(pick)
 
         event = find_event(
             pick,
@@ -658,7 +867,9 @@ def grade_open():
                 "UNMATCHED:",
                 pick.get("picker"),
                 "|",
-                pick.get("selection"),
+                pick.get(
+                    "selection"
+                ),
             )
 
             continue
@@ -668,8 +879,11 @@ def grade_open():
                 "NOT FINAL:",
                 pick.get("picker"),
                 "|",
-                pick.get("selection"),
+                pick.get(
+                    "selection"
+                ),
             )
+
             continue
 
         if grade_pick(
@@ -682,11 +896,17 @@ def grade_open():
                 "GRADED:",
                 pick.get("picker"),
                 "|",
-                pick.get("selection"),
+                pick.get(
+                    "selection"
+                ),
                 "|",
-                pick.get("result"),
+                pick.get(
+                    "result"
+                ),
                 "|",
-                pick.get("final_score"),
+                pick.get(
+                    "final_score"
+                ),
             )
 
     save_json(
@@ -695,15 +915,18 @@ def grade_open():
     )
 
     print(
-        f"Safely graded: {graded}"
+        f"Safely graded: "
+        f"{graded}"
     )
 
     print(
-        f"Unmatched supported picks: {unmatched}"
+        f"Unmatched supported picks: "
+        f"{unmatched}"
     )
 
     print(
-        f"Unsupported/specialty picks left alone: {unsupported}"
+        f"Specialty picks quarantined: "
+        f"{specialty}"
     )
 
 
