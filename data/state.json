@@ -1,9 +1,23 @@
 {
   "last_x_post_id": "2096615762718867641",
-  "updated_at": "2026-09-07T17:48:31.570819+00:00",
+  "updated_at": "2026-09-07T18:12:22.920750+00:00",
   "backfill_complete": true,
   "reply_backfill_complete": false,
   "reply_recovery_complete": true,
   "reply_only_recovery_v2_complete": true,
-  "reply_only_recovery_v3_complete": true
+  "reply_only_recovery_v3_complete": true,
+  "week1_reconciliation_v4_complete": true,
+  "processed_post_ids": [
+    "2095584927836217769",
+    "2095584938988904892",
+    "2095596296962793687",
+    "2096002674793599432",
+    "2096235630300627085",
+    "2096246473646055690",
+    "2096315756996599924",
+    "2096375527510581260",
+    "2096390492233626085"
+  ],
+  "processed_ids_initialized_v2": true,
+  "failed_post_ids": []
 }
