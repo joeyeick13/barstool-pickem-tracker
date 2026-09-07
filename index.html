@@ -55,7 +55,8 @@ button{
 }
 
 button,
-.card{
+.card,
+.weekRow{
   -webkit-tap-highlight-color:transparent;
 }
 
@@ -158,6 +159,30 @@ h1{
 
 
 /* =========================================================
+   SECTION HEADERS
+========================================================= */
+
+.metricHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:2px 0 10px;
+}
+
+.metricHead h2{
+  margin:0;
+  font-size:18px;
+  letter-spacing:-.02em;
+}
+
+.metricHead span{
+  color:var(--muted);
+  font-size:11px;
+}
+
+
+/* =========================================================
    SUMMARY CARDS
 ========================================================= */
 
@@ -191,12 +216,7 @@ h1{
 }
 
 .card.leader{
-  border-color:
-    color-mix(
-      in srgb,
-      var(--gold) 48%,
-      var(--border)
-    );
+  border-color:rgba(246,200,95,.55);
 }
 
 .leaderTag{
@@ -216,6 +236,27 @@ h1{
   font-weight:900;
 }
 
+.rankTag{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:22px;
+  height:22px;
+  padding:0 6px;
+  border-radius:999px;
+  border:1px solid var(--border2);
+  color:var(--muted);
+  font-size:10px;
+  font-weight:900;
+  margin-bottom:10px;
+}
+
+.rankTag.first{
+  color:var(--gold);
+  border-color:rgba(246,200,95,.4);
+  background:rgba(246,200,95,.08);
+}
+
 .name{
   font-size:14px;
   font-weight:900;
@@ -224,32 +265,16 @@ h1{
 }
 
 .record{
-  font-size:36px;
+  font-size:38px;
   line-height:1;
   font-weight:950;
   letter-spacing:-.05em;
-  margin:18px 0 5px;
+  margin:14px 0 5px;
 }
 
 .pct{
   font-size:15px;
   font-weight:850;
-}
-
-.weekMini{
-  margin-top:15px;
-  padding-top:13px;
-  border-top:1px solid var(--border);
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:10px;
-  font-size:11px;
-  color:var(--muted);
-}
-
-.weekMini strong{
-  color:var(--text);
 }
 
 
@@ -338,7 +363,7 @@ h1{
 
 
 /* =========================================================
-   THIS WEEK
+   WEEKLY LEADERBOARD
 ========================================================= */
 
 .weekBoard{
@@ -356,6 +381,7 @@ h1{
   gap:10px;
   padding:13px 0;
   border-bottom:1px solid var(--border);
+  cursor:pointer;
 }
 
 .weekRow:last-child{
@@ -365,6 +391,10 @@ h1{
 
 .weekRow:first-child{
   padding-top:6px;
+}
+
+.weekRow:active{
+  opacity:.8;
 }
 
 .rank{
@@ -605,11 +635,17 @@ h1{
     display:grid;
     grid-template-columns:1fr auto;
     grid-template-areas:
+      "rank rank"
       "name record"
-      "pct record"
-      "week week";
+      "pct record";
     align-items:center;
     padding:16px;
+  }
+
+  .rankTag{
+    grid-area:rank;
+    justify-self:start;
+    margin-bottom:8px;
   }
 
   .name{
@@ -620,18 +656,12 @@ h1{
     grid-area:record;
     margin:0;
     padding-left:12px;
-    font-size:32px;
+    font-size:34px;
   }
 
   .pct{
     grid-area:pct;
     margin-top:3px;
-  }
-
-  .weekMini{
-    grid-area:week;
-    margin-top:13px;
-    padding-top:11px;
   }
 
   .leaderTag{
@@ -649,6 +679,10 @@ h1{
 
   .card:hover{
     border-color:var(--border2);
+  }
+
+  .weekRow:hover{
+    opacity:.9;
   }
 
   .source:hover{
@@ -708,6 +742,19 @@ h1{
     </div>
 
   </header>
+
+
+  <div class="metricHead">
+
+    <h2>
+      Overall
+    </h2>
+
+    <span>
+      Season record
+    </span>
+
+  </div>
 
 
   <div
@@ -886,7 +933,7 @@ const $=
 
 
 /* =========================================================
-   RECORD HELPERS
+   HELPERS
 ========================================================= */
 
 function recordFromValues(
@@ -976,10 +1023,6 @@ function statsForPicks(
 }
 
 
-/* =========================================================
-   CURRENT WEEK
-========================================================= */
-
 function latestWeek(){
 
   const weeks=
@@ -992,6 +1035,30 @@ function latestWeek(){
     [1];
 
   return +weeks.at(-1);
+
+}
+
+
+function formatUpdatedTime(){
+
+  if(
+    !DATA.updated_at
+  ){
+    return "Update time unavailable";
+  }
+
+  const d=
+    new Date(
+      DATA.updated_at
+    );
+
+  return d.toLocaleTimeString(
+    [],
+    {
+      hour:"numeric",
+      minute:"2-digit"
+    }
+  );
 
 }
 
@@ -1010,50 +1077,26 @@ function renderStatus(){
       p=>+p.week===week
     );
 
-  const graded=
-    weekPicks.filter(
-      finalized
-    ).length;
-
   const pending=
     weekPicks.filter(
       p=>!finalized(p)
     ).length;
 
-  const total=
-    weekPicks.length;
+  const updated=
+    formatUpdatedTime();
 
-  const status=
+
+  const completionPill=
     pending===0
     ?
     `
       <div class="statusPill">
         <span class="dot good"></span>
-        <strong>Week ${week}</strong>
-      </div>
-
-      <div class="statusPill">
-        <strong>${graded}</strong>
-        graded
-      </div>
-
-      <div class="statusPill">
-        <span class="dot good"></span>
-        0 pending
+        <strong>Week Complete ✓</strong>
       </div>
     `
     :
     `
-      <div class="statusPill">
-        <span class="dot open"></span>
-        <strong>Week ${week}</strong>
-      </div>
-
-      <div class="statusPill">
-        <strong>${graded}</strong>
-        of ${total} graded
-      </div>
-
       <div class="statusPill">
         <span class="dot open"></span>
         <strong>${pending}</strong>
@@ -1061,91 +1104,110 @@ function renderStatus(){
       </div>
     `;
 
+
   $("#statusStrip").innerHTML=
-    status;
+    `
+      <div class="statusPill">
+        <strong>Week ${week}</strong>
+      </div>
+
+      <div class="statusPill">
+        Updated as of
+        <strong>${updated}</strong>
+      </div>
+
+      ${completionPill}
+    `;
 
 }
 
 
 /* =========================================================
-   SEASON LEADER
+   OVERALL STANDINGS
 ========================================================= */
 
-function seasonLeader(){
+function sortedCappers(){
 
-  const eligible=
-    DATA.cappers
-    .filter(
-      c=>
-        (c.wins||0)
-        +
-        (c.losses||0)
-        >
-        0
-    )
-    .sort(
-      (a,b)=>
-        (
-          b.win_pct||0
-        )
+  return PICKERS.map(
+    picker=>
+      DATA.cappers.find(
+        c=>c.picker===picker
+      )
+      ||
+      {
+        picker,
+        wins:0,
+        losses:0,
+        pushes:0,
+        win_pct:0
+      }
+  )
+  .sort(
+    (a,b)=>{
+
+      const pctDiff=
+        (b.win_pct||0)
         -
-        (
-          a.win_pct||0
-        )
-    );
+        (a.win_pct||0);
 
-  return (
-    eligible[0]
-    ?
-    eligible[0].picker
-    :
-    null
+      if(pctDiff!==0){
+        return pctDiff;
+      }
+
+      const gamesA=
+        (a.wins||0)
+        +
+        (a.losses||0);
+
+      const gamesB=
+        (b.wins||0)
+        +
+        (b.losses||0);
+
+      if(gamesB!==gamesA){
+        return gamesB-gamesA;
+      }
+
+      return (
+        (b.wins||0)
+        -
+        (a.wins||0)
+      );
+
+    }
   );
 
 }
 
 
 /* =========================================================
-   SUMMARY CARDS
+   OVERALL CARDS
 ========================================================= */
 
 function renderCards(){
 
-  const week=
-    latestWeek();
+  const cappers=
+    sortedCappers();
 
-  const leader=
-    seasonLeader();
 
   $("#cards").innerHTML=
-    PICKERS.map(
-      picker=>{
+    cappers.map(
+      (capper,index)=>{
 
-        const capper=
-          DATA.cappers.find(
-            c=>c.picker===picker
-          )
-          ||
-          {
-            picker,
-            wins:0,
-            losses:0,
-            pushes:0,
-            win_pct:0
-          };
-
-        const weekStats=
-          statsForPicks(
-            DATA.picks.filter(
-              p=>
-                p.picker===picker
-                &&
-                +p.week===week
-            )
-          );
+        const picker=
+          capper.picker;
 
         const isLeader=
-          picker===leader;
+          index===0
+          &&
+          (
+            (capper.wins||0)
+            +
+            (capper.losses||0)
+            >
+            0
+          );
+
 
         return `
           <article
@@ -1166,6 +1228,11 @@ function renderCards(){
               ""
             }
 
+            <div
+              class="rankTag ${index===0?"first":""}">
+              #${index+1}
+            </div>
+
             <div class="name">
               ${picker.toUpperCase()}
             </div>
@@ -1175,25 +1242,7 @@ function renderCards(){
             </div>
 
             <div class="pct">
-              ${(capper.win_pct||0).toFixed(1)}% win rate
-            </div>
-
-            <div class="weekMini">
-
-              <span>
-                Week ${week}
-              </span>
-
-              <strong>
-                ${
-                  recordFromValues(
-                    weekStats.wins,
-                    weekStats.losses,
-                    weekStats.pushes
-                  )
-                }
-              </strong>
-
+              ${(capper.win_pct||0).toFixed(1)}% overall win rate
             </div>
 
           </article>
@@ -1283,7 +1332,7 @@ function svgEl(
 
 
 /* =========================================================
-   CHART
+   SEASON RACE
 ========================================================= */
 
 function renderChart(){
@@ -1344,14 +1393,6 @@ function renderChart(){
     (a,b)=>a-b
   );
 
-
-  /*
-    Dynamically shorten chart early in season.
-
-    1 week = 220
-    2-3 weeks = 250
-    4+ weeks = 300
-  */
 
   const H=
     weeks.length===1
@@ -1763,14 +1804,10 @@ function renderChart(){
    WEEKLY LEADERBOARD
 ========================================================= */
 
-function renderWeekBoard(){
+function weeklyBoardData(){
 
   const week=
     latestWeek();
-
-
-  $("#weekBoardTitle").textContent=
-    `Week ${week}`;
 
 
   const board=
@@ -1802,25 +1839,37 @@ function renderWeekBoard(){
       if(
         b.pct!==a.pct
       ){
-        return (
-          b.pct-a.pct
-        );
+        return b.pct-a.pct;
       }
 
       if(
         b.wins!==a.wins
       ){
-        return (
-          b.wins-a.wins
-        );
+        return b.wins-a.wins;
       }
 
-      return (
-        a.losses-b.losses
-      );
+      return a.losses-b.losses;
 
     }
   );
+
+
+  return board;
+
+}
+
+
+function renderWeekBoard(){
+
+  const week=
+    latestWeek();
+
+  const board=
+    weeklyBoardData();
+
+
+  $("#weekBoardTitle").textContent=
+    `Week ${week}`;
 
 
   $("#weekBoard").innerHTML=
@@ -1828,7 +1877,11 @@ function renderWeekBoard(){
       (row,index)=>{
 
         return `
-          <div class="weekRow">
+          <div
+            class="weekRow"
+            data-picker="${row.picker}"
+            role="button"
+            tabindex="0">
 
             <div
               class="rank ${index===0?"first":""}">
@@ -1888,6 +1941,51 @@ function renderWeekBoard(){
     ).join(
       ""
     );
+
+
+  document.querySelectorAll(
+    ".weekRow[data-picker]"
+  ).forEach(
+    row=>{
+
+      function openPickerWeek(){
+
+        selectedWeek=
+          latestWeek();
+
+        selectedFilter=
+          row.dataset.picker;
+
+        openFullView();
+
+      }
+
+      row.addEventListener(
+        "click",
+        openPickerWeek
+      );
+
+      row.addEventListener(
+        "keydown",
+        event=>{
+
+          if(
+            event.key==="Enter"
+            ||
+            event.key===" "
+          ){
+
+            event.preventDefault();
+
+            openPickerWeek();
+
+          }
+
+        }
+      );
+
+    }
+  );
 
 }
 
