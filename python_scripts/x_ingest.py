@@ -9,12 +9,12 @@ from datetime import date, datetime, timedelta, timezone
 import requests
 
 from common import (
-    load_json,
-    save_json,
     PICKS_FILE,
     STATE_FILE,
-    now_iso,
+    load_json,
     normalize_picker,
+    now_iso,
+    save_json,
 )
 
 
@@ -29,14 +29,29 @@ USERNAME = os.getenv(
     "barstoolpickem",
 )
 
-BACKFILL_DAYS = 8
-MAX_BACKFILL_PAGES = 3
-
-# Historical recovery is ONLY for official replies/subtweets.
-REPLY_RECOVERY_DAYS = 12
-MAX_REPLY_RECOVERY_PAGES = 4
+OPENAI_MODEL = os.getenv(
+    "OPENAI_MODEL",
+    "gpt-5.6-luna",
+)
 
 MAX_PARENT_DEPTH = 3
+
+INITIAL_BACKFILL_DAYS = 10
+INITIAL_BACKFILL_PAGES = 3
+
+# Clean Week 1 state from before the bad historical reprocessing.
+WEEK1_BASELINE_URL = (
+    "https://raw.githubusercontent.com/"
+    "joeyeick13/"
+    "barstool-pickem-tracker/"
+    "1402a56/"
+    "data/picks.json"
+)
+
+# Changing this would cause the repair to run again.
+# Leave it alone after this version is installed.
+WEEK1_REPAIR_FLAG = "week1_reconciliation_v4_complete"
+
 
 SUPPORTED_MARKETS = {
     "SPREAD",
@@ -74,8 +89,10 @@ def clean_text(value):
     )
 
 
-def normalize_text(value):
-    value = clean_text(value).lower()
+def norm(value):
+    value = clean_text(
+        value
+    ).lower()
 
     value = value.replace(
         "&",
@@ -97,64 +114,13 @@ def normalize_text(value):
     return value.strip()
 
 
-def normalize_team(value):
-    """
-    Used only for canonical comparison/dedupe.
-
-    Do NOT use overly broad mascot aliases.
-    """
-
-    value = normalize_text(value)
-
-    aliases = {
-        "byu cougars": "byu",
-        "brigham young": "byu",
-
-        "utah tech trailblazers": "utah tech",
-        "utah tech": "utah tech",
-
-        "wisconsin badgers": "wisconsin",
-        "wis": "wisconsin",
-        "wisc": "wisconsin",
-
-        "notre dame fighting irish": "notre dame",
-        "nd": "notre dame",
-
-        "texas a and m": "texas a&m",
-        "texas am": "texas a&m",
-        "a and m": "texas a&m",
-        "tamu": "texas a&m",
-
-        "wash": "washington",
-        "uw": "washington",
-
-        "wazzu": "washington state",
-        "wsu": "washington state",
-
-        "california": "cal",
-        "cal golden bears": "cal",
-
-        "hou": "houston",
-
-        "mem": "memphis",
-
-        "ore": "oregon",
-
-        "iu": "indiana",
-    }
-
-    return aliases.get(
-        value,
-        value,
-    )
-
-
 def safe_float(value):
     if value is None:
         return None
 
     try:
         return float(value)
+
     except Exception:
         pass
 
@@ -170,16 +136,1323 @@ def safe_float(value):
         return float(
             match.group(0)
         )
+
     except Exception:
         return None
 
 
 def stable_id(value):
     return (
-        hashlib.sha1(
-            str(value).encode("utf-8")
+        hashlib
+        .sha1(
+            str(value).encode(
+                "utf-8"
+            )
         )
         .hexdigest()[:16]
+    )
+
+
+def pick_week(pick):
+    try:
+        return int(
+            pick.get("week")
+            or 0
+        )
+
+    except Exception:
+        return 0
+
+
+# ============================================================
+# TEAM NORMALIZATION
+# ============================================================
+
+TEAM_ALIASES = {
+    "nd": "notre dame",
+    "notre dame": "notre dame",
+
+    "wis": "wisconsin",
+    "wisc": "wisconsin",
+    "wisconsin": "wisconsin",
+
+    "byu": "byu",
+    "brigham young": "byu",
+
+    "utah tech": "utah tech",
+
+    "wazzu": "washington state",
+    "wsu": "washington state",
+    "wash state": "washington state",
+    "washington state": "washington state",
+
+    "wash": "washington",
+    "uw": "washington",
+    "washington": "washington",
+
+    "california": "cal",
+    "cal": "cal",
+
+    "ore": "oregon",
+    "oregon": "oregon",
+
+    "hou": "houston",
+    "houston": "houston",
+
+    "mem": "memphis",
+    "memphis": "memphis",
+
+    "iu": "indiana",
+    "indiana": "indiana",
+
+    "a and m": "texas a&m",
+    "texas am": "texas a&m",
+    "texas a and m": "texas a&m",
+    "tamu": "texas a&m",
+    "texas a&m": "texas a&m",
+
+    "cmu": "central michigan",
+    "central michigan": "central michigan",
+
+    "ok st": "oklahoma state",
+    "ok state": "oklahoma state",
+    "oklahoma state": "oklahoma state",
+
+    "usc": "usc",
+    "ucla": "ucla",
+}
+
+
+def normalize_team(value):
+    value = norm(value)
+
+    return TEAM_ALIASES.get(
+        value,
+        value,
+    )
+
+
+# ============================================================
+# MARKET NORMALIZATION
+# ============================================================
+
+def normalize_bet_type(value):
+    raw = str(
+        value or "OTHER"
+    ).upper().strip()
+
+    aliases = {
+        "1Q_SPREAD":
+            "FIRST_QUARTER_SPREAD",
+
+        "1Q_TOTAL":
+            "FIRST_QUARTER_TOTAL",
+
+        "1Q_MONEYLINE":
+            "FIRST_QUARTER_MONEYLINE",
+
+        "1Q_TEAM_TOTAL":
+            "FIRST_QUARTER_TEAM_TOTAL",
+
+        "1H_SPREAD":
+            "FIRST_HALF_SPREAD",
+
+        "1H_TOTAL":
+            "FIRST_HALF_TOTAL",
+
+        "1H_MONEYLINE":
+            "FIRST_HALF_MONEYLINE",
+
+        "1H_TEAM_TOTAL":
+            "FIRST_HALF_TEAM_TOTAL",
+    }
+
+    return aliases.get(
+        raw,
+        raw,
+    )
+
+
+def normalize_side(value):
+    value = clean_text(
+        value
+    )
+
+    if value.upper() in {
+        "OVER",
+        "UNDER",
+    }:
+        return value.upper()
+
+    return normalize_team(
+        value
+    )
+
+
+# ============================================================
+# MATCHUP NORMALIZATION
+# ============================================================
+
+def matchup_key(value):
+    value = norm(value)
+
+    if not value:
+        return ""
+
+    pieces = re.split(
+        r"\s*@\s*"
+        r"|\s*/\s*"
+        r"|\s+vs\.?\s+"
+        r"|\s+v\.?\s+"
+        r"|\s+at\s+",
+        value,
+        flags=re.I,
+    )
+
+    pieces = [
+        normalize_team(piece)
+        for piece in pieces
+        if normalize_team(piece)
+    ]
+
+    if len(pieces) >= 2:
+        return "::".join(
+            sorted(
+                pieces[:2]
+            )
+        )
+
+    return normalize_team(
+        value
+    )
+
+
+def structured_matchup_key(pick):
+    team = normalize_team(
+        pick.get("team")
+    )
+
+    opponent = normalize_team(
+        pick.get("opponent")
+    )
+
+    if team and opponent:
+        return "::".join(
+            sorted(
+                [
+                    team,
+                    opponent,
+                ]
+            )
+        )
+
+    return matchup_key(
+        pick.get("matchup")
+    )
+
+
+# ============================================================
+# SELECTION HELPERS
+# ============================================================
+
+def spread_team_from_selection(selection):
+    """
+    Examples:
+
+    BYU -51.5
+    Utah Tech @ BYU / BYU -51.5
+    Central Michigan +11.5
+    Oklahoma 1Q -9.5
+    """
+
+    text = clean_text(
+        selection
+    )
+
+    match = re.search(
+        r"([A-Za-z0-9 .&'-]+?)"
+        r"\s*[+-]\s*"
+        r"\d+(?:\.\d+)?"
+        r"\s*$",
+        text,
+    )
+
+    if not match:
+        return ""
+
+    candidate = clean_text(
+        match.group(1)
+    )
+
+    # If the selection contains a matchup, use only the final
+    # portion immediately before the spread.
+    for separator in [
+        "/",
+        "@",
+        " vs ",
+        " at ",
+    ]:
+        if separator in candidate.lower():
+            pieces = re.split(
+                re.escape(separator),
+                candidate,
+                flags=re.I,
+            )
+
+            candidate = (
+                pieces[-1]
+                .strip()
+            )
+
+    candidate = re.sub(
+        r"\b(?:1q|1h|first quarter|first half)\b",
+        "",
+        candidate,
+        flags=re.I,
+    ).strip()
+
+    return normalize_team(
+        candidate
+    )
+
+
+def team_total_team_from_selection(selection):
+    text = clean_text(
+        selection
+    )
+
+    match = re.search(
+        r"^(.+?)\s+"
+        r"(?:tt|team\s+total)\b",
+        text,
+        flags=re.I,
+    )
+
+    if not match:
+        return ""
+
+    return normalize_team(
+        match.group(1)
+    )
+
+
+# ============================================================
+# CANONICAL WAGER KEY
+# ============================================================
+
+def canonical_pick_key(pick):
+    """
+    A duplicate is defined by the WAGER, not by the X post.
+
+    source_post_id is deliberately excluded.
+
+    Same wager + same picker + same week = one record.
+
+    The same wager can still belong to two different pickers.
+    """
+
+    picker = (
+        normalize_picker(
+            pick.get("picker")
+        )
+        or ""
+    )
+
+    week = pick_week(
+        pick
+    )
+
+    bet_type = normalize_bet_type(
+        pick.get("bet_type")
+    )
+
+    side = normalize_side(
+        pick.get("side")
+    )
+
+    line = safe_float(
+        pick.get("line")
+    )
+
+    line_key = (
+        ""
+        if line is None
+        else f"{line:.3f}"
+    )
+
+    team = normalize_team(
+        pick.get("team")
+    )
+
+    opponent = normalize_team(
+        pick.get("opponent")
+    )
+
+    selection = norm(
+        pick.get("selection")
+    )
+
+    game = structured_matchup_key(
+        pick
+    )
+
+
+    # --------------------------------------------------------
+    # SPREAD
+    # --------------------------------------------------------
+
+    if bet_type in {
+        "SPREAD",
+        "FIRST_QUARTER_SPREAD",
+        "FIRST_HALF_SPREAD",
+    }:
+
+        wager_team = (
+            team
+            or (
+                side
+                if side not in {
+                    "OVER",
+                    "UNDER",
+                    "",
+                }
+                else ""
+            )
+            or spread_team_from_selection(
+                pick.get("selection")
+            )
+        )
+
+        if wager_team:
+            return (
+                picker,
+                week,
+                bet_type,
+                wager_team,
+                line_key,
+            )
+
+
+    # --------------------------------------------------------
+    # TEAM TOTAL
+    # --------------------------------------------------------
+
+    if bet_type in {
+        "TEAM_TOTAL",
+        "FIRST_QUARTER_TEAM_TOTAL",
+        "FIRST_HALF_TEAM_TOTAL",
+    }:
+
+        wager_team = (
+            team
+            or team_total_team_from_selection(
+                pick.get("selection")
+            )
+        )
+
+        if wager_team:
+            return (
+                picker,
+                week,
+                bet_type,
+                wager_team,
+                side,
+                line_key,
+            )
+
+
+    # --------------------------------------------------------
+    # GAME TOTAL
+    # --------------------------------------------------------
+
+    if bet_type in {
+        "TOTAL",
+        "FIRST_QUARTER_TOTAL",
+        "FIRST_HALF_TOTAL",
+    }:
+
+        if game:
+            return (
+                picker,
+                week,
+                bet_type,
+                game,
+                side,
+                line_key,
+            )
+
+
+    # --------------------------------------------------------
+    # MONEYLINE
+    # --------------------------------------------------------
+
+    if bet_type in {
+        "MONEYLINE",
+        "FIRST_QUARTER_MONEYLINE",
+        "FIRST_HALF_MONEYLINE",
+    }:
+
+        wager_team = (
+            team
+            or (
+                side
+                if side not in {
+                    "OVER",
+                    "UNDER",
+                    "",
+                }
+                else ""
+            )
+        )
+
+        if wager_team:
+            return (
+                picker,
+                week,
+                bet_type,
+                wager_team,
+            )
+
+
+    # --------------------------------------------------------
+    # FALLBACK
+    # --------------------------------------------------------
+
+    return (
+        picker,
+        week,
+        bet_type,
+        selection,
+        side,
+        line_key,
+    )
+
+
+# ============================================================
+# DEDUPE
+# ============================================================
+
+def pick_quality(pick):
+    score = 0
+
+    result = str(
+        pick.get("result")
+        or ""
+    ).upper()
+
+    if result in {
+        "WIN",
+        "LOSS",
+        "PUSH",
+    }:
+        score += 100
+
+    if pick.get(
+        "event_id"
+    ):
+        score += 20
+
+    if pick.get(
+        "final_score"
+    ):
+        score += 15
+
+    if pick.get(
+        "matchup"
+    ):
+        score += 5
+
+    if pick.get(
+        "opponent"
+    ):
+        score += 3
+
+    if pick.get(
+        "team"
+    ):
+        score += 2
+
+    return score
+
+
+def dedupe_picks(picks):
+    groups = {}
+
+    for index, pick in enumerate(
+        picks
+    ):
+        key = canonical_pick_key(
+            pick
+        )
+
+        groups.setdefault(
+            key,
+            [],
+        ).append(
+            (
+                index,
+                pick,
+            )
+        )
+
+    keep_indexes = set()
+    removed = 0
+
+    for key, members in groups.items():
+
+        if len(members) == 1:
+            keep_indexes.add(
+                members[0][0]
+            )
+
+            continue
+
+        best_index, best_pick = max(
+            members,
+            key=lambda item:
+                (
+                    pick_quality(
+                        item[1]
+                    ),
+                    -item[0],
+                )
+        )
+
+        keep_indexes.add(
+            best_index
+        )
+
+        for index, duplicate in members:
+
+            if index == best_index:
+                continue
+
+            removed += 1
+
+            print(
+                "DUPLICATE REMOVED:",
+                duplicate.get(
+                    "picker"
+                ),
+                "|",
+                duplicate.get(
+                    "selection"
+                ),
+                "| source:",
+                duplicate.get(
+                    "source_post_id"
+                ),
+            )
+
+    cleaned = [
+        pick
+        for index, pick
+        in enumerate(picks)
+        if index in keep_indexes
+    ]
+
+    if removed:
+        print(
+            "Total duplicate wagers removed:",
+            removed,
+        )
+
+    return cleaned
+
+
+# ============================================================
+# CONFIRMED WEEK 1 PICK DETECTORS
+# ============================================================
+
+def is_bigcat_alabama_tt(pick):
+    if (
+        normalize_picker(
+            pick.get("picker")
+        )
+        != "Big Cat"
+    ):
+        return False
+
+    if pick_week(
+        pick
+    ) != 1:
+        return False
+
+    line = safe_float(
+        pick.get("line")
+    )
+
+    if (
+        line is None
+        or abs(
+            line - 40.5
+        ) > 0.01
+    ):
+        return False
+
+    text = norm(
+        pick.get("selection")
+    )
+
+    return (
+        "alabama"
+        in text
+        and (
+            "tt" in text
+            or "team total" in text
+        )
+        and (
+            "over" in text
+            or normalize_side(
+                pick.get("side")
+            ) == "OVER"
+        )
+    )
+
+
+def is_bigcat_central_michigan(pick):
+    if (
+        normalize_picker(
+            pick.get("picker")
+        )
+        != "Big Cat"
+    ):
+        return False
+
+    if pick_week(
+        pick
+    ) != 1:
+        return False
+
+    line = safe_float(
+        pick.get("line")
+    )
+
+    if (
+        line is None
+        or abs(
+            line - 11.5
+        ) > 0.01
+    ):
+        return False
+
+    text = norm(
+        pick.get("selection")
+    )
+
+    return (
+        "central michigan"
+        in text
+        or re.search(
+            r"\bcmu\b",
+            text,
+        )
+        is not None
+    )
+
+
+def best_matching_pick(
+    picks,
+    predicate,
+):
+    matches = [
+        pick
+        for pick in picks
+        if predicate(
+            pick
+        )
+    ]
+
+    if not matches:
+        return None
+
+    return max(
+        matches,
+        key=pick_quality,
+    )
+
+
+# ============================================================
+# RICO MISSING ND UNDER
+# ============================================================
+
+def rico_nd_under_exists(picks):
+    for pick in picks:
+
+        if (
+            normalize_picker(
+                pick.get("picker")
+            )
+            != "Rico Bosco"
+        ):
+            continue
+
+        if pick_week(
+            pick
+        ) != 1:
+            continue
+
+        if (
+            normalize_bet_type(
+                pick.get("bet_type")
+            )
+            != "TOTAL"
+        ):
+            continue
+
+        line = safe_float(
+            pick.get("line")
+        )
+
+        if (
+            line is None
+            or abs(
+                line - 46.5
+            ) > 0.01
+        ):
+            continue
+
+        if (
+            normalize_side(
+                pick.get("side")
+            )
+            != "UNDER"
+        ):
+            continue
+
+        game = (
+            structured_matchup_key(
+                pick
+            )
+        )
+
+        text = norm(
+            pick.get("selection")
+        )
+
+        if (
+            game
+            == "notre dame::wisconsin"
+            or (
+                (
+                    "wisconsin" in text
+                    or re.search(
+                        r"\bwis\b",
+                        text,
+                    )
+                )
+                and (
+                    "notre dame" in text
+                    or re.search(
+                        r"\bnd\b",
+                        text,
+                    )
+                )
+            )
+        ):
+            return True
+
+    return False
+
+
+def make_rico_nd_under():
+    source_post_id = (
+        "2095584927836217769"
+    )
+
+    pick = {
+        "picker":
+            "Rico Bosco",
+
+        "sport":
+            "CFB",
+
+        "matchup":
+            "Wisconsin @ Notre Dame",
+
+        "team":
+            None,
+
+        "opponent":
+            None,
+
+        "bet_type":
+            "TOTAL",
+
+        "selection":
+            "WIS @ ND Under 46.5",
+
+        "side":
+            "UNDER",
+
+        "line":
+            46.5,
+
+        "odds":
+            None,
+
+        "units":
+            1.0,
+
+        "mortal_lock":
+            False,
+
+        "week":
+            1,
+
+        "added_pick":
+            False,
+
+        "confidence":
+            1.0,
+
+        "status":
+            "OPEN",
+
+        "result":
+            None,
+
+        "profit_units":
+            0,
+
+        "source_post_id":
+            source_post_id,
+
+        "source_url":
+            (
+                "https://x.com/"
+                "barstoolpickem/status/"
+                f"{source_post_id}"
+            ),
+
+        "source_text":
+            (
+                "Official Rico Bosco "
+                "Week 1 pick card"
+            ),
+
+        "source_is_reply":
+            False,
+
+        "conversation_id":
+            source_post_id,
+
+        "posted_at":
+            None,
+
+        "graded_at":
+            None,
+
+        "final_score":
+            None,
+
+        "event_id":
+            None,
+    }
+
+    pick["id"] = stable_id(
+        repr(
+            canonical_pick_key(
+                pick
+            )
+        )
+    )
+
+    return pick
+
+
+# ============================================================
+# ONE-TIME WEEK 1 RECONCILIATION
+# ============================================================
+
+def restore_week1_once(
+    existing,
+    state,
+):
+    """
+    Repair the damage from the historical reprocessing run.
+
+    Week 1 is rebuilt from the clean snapshot.
+
+    We then preserve the two confirmed Big Cat picks that were
+    discovered after that clean snapshot:
+
+        Alabama TT Over 40.5
+        Central Michigan +11.5
+
+    Finally we add Rico's confirmed missing:
+
+        WIS @ ND Under 46.5
+
+    Week 2+ is never touched.
+    """
+
+    if state.get(
+        WEEK1_REPAIR_FLAG
+    ):
+        return existing
+
+    print()
+    print(
+        "===================================="
+    )
+    print(
+        "ONE-TIME WEEK 1 RECONCILIATION"
+    )
+    print(
+        "===================================="
+    )
+
+    # Pull these from the CURRENT dataset before replacing W1,
+    # so we preserve their real X metadata/source IDs.
+    alabama_pick = (
+        best_matching_pick(
+            existing,
+            is_bigcat_alabama_tt,
+        )
+    )
+
+    cmu_pick = (
+        best_matching_pick(
+            existing,
+            is_bigcat_central_michigan,
+        )
+    )
+
+    if not alabama_pick:
+        print(
+            "WARNING: confirmed Big Cat "
+            "Alabama TT Over 40.5 row "
+            "not found in current data."
+        )
+
+    if not cmu_pick:
+        print(
+            "WARNING: confirmed Big Cat "
+            "Central Michigan +11.5 row "
+            "not found in current data."
+        )
+
+    try:
+        response = requests.get(
+            WEEK1_BASELINE_URL,
+            timeout=30,
+        )
+
+        response.raise_for_status()
+
+        baseline = response.json()
+
+        if not isinstance(
+            baseline,
+            list,
+        ):
+            raise RuntimeError(
+                "Week 1 baseline was not a list"
+            )
+
+    except Exception as exc:
+        print(
+            "WEEK 1 BASELINE DOWNLOAD FAILED:"
+        )
+
+        print(
+            type(exc).__name__,
+            exc,
+        )
+
+        print(
+            "Repair NOT marked complete. "
+            "It will retry next run."
+        )
+
+        return existing
+
+
+    # --------------------------------------------------------
+    # KEEP ONLY CLEAN WEEK 1 FROM BASELINE
+    # --------------------------------------------------------
+
+    clean_week1 = [
+        dict(pick)
+        for pick in baseline
+        if pick_week(
+            pick
+        ) == 1
+    ]
+
+
+    # --------------------------------------------------------
+    # PRESERVE ALL CURRENT WEEK 2+ DATA
+    # --------------------------------------------------------
+
+    future_picks = [
+        pick
+        for pick in existing
+        if pick_week(
+            pick
+        ) >= 2
+    ]
+
+
+    # --------------------------------------------------------
+    # ADD THE TWO CONFIRMED BIG CAT REPLY PICKS
+    # --------------------------------------------------------
+
+    if alabama_pick:
+        clean_week1.append(
+            dict(
+                alabama_pick
+            )
+        )
+
+    if cmu_pick:
+        clean_week1.append(
+            dict(
+                cmu_pick
+            )
+        )
+
+
+    # --------------------------------------------------------
+    # ADD RICO'S CONFIRMED MISSING CARD PICK
+    # --------------------------------------------------------
+
+    if not rico_nd_under_exists(
+        clean_week1
+    ):
+        clean_week1.append(
+            make_rico_nd_under()
+        )
+
+        print(
+            "ADDED CONFIRMED MISSING PICK:",
+            "Rico Bosco | "
+            "WIS @ ND Under 46.5",
+        )
+
+
+    # --------------------------------------------------------
+    # REMOVE ALL DUPLICATES
+    # --------------------------------------------------------
+
+    clean_week1 = dedupe_picks(
+        clean_week1
+    )
+
+    repaired = (
+        clean_week1
+        + future_picks
+    )
+
+    repaired = dedupe_picks(
+        repaired
+    )
+
+
+    # --------------------------------------------------------
+    # MARK COMPLETE
+    # --------------------------------------------------------
+
+    state[
+        WEEK1_REPAIR_FLAG
+    ] = True
+
+    # Retire all old historical recovery logic permanently.
+    state[
+        "reply_recovery_complete"
+    ] = True
+
+    state[
+        "reply_only_recovery_v2_complete"
+    ] = True
+
+    state[
+        "reply_only_recovery_v3_complete"
+    ] = True
+
+    print(
+        "Clean Week 1 rows after repair:",
+        len(clean_week1),
+    )
+
+    print(
+        "Week 2+ rows preserved:",
+        len(future_picks),
+    )
+
+    print(
+        "Week 1 reconciliation complete."
+    )
+
+    return repaired
+
+
+# ============================================================
+# WEEK INFERENCE
+# ============================================================
+
+def explicit_week_from_text(text):
+    match = re.search(
+        r"\bweek\s*#?\s*"
+        r"(\d{1,2})\b",
+        str(text or ""),
+        flags=re.I,
+    )
+
+    if not match:
+        return None
+
+    try:
+        return int(
+            match.group(1)
+        )
+
+    except Exception:
+        return None
+
+
+def infer_week_from_date(
+    created_at
+):
+    if not created_at:
+        return None
+
+    try:
+        dt = datetime.fromisoformat(
+            str(created_at).replace(
+                "Z",
+                "+00:00",
+            )
+        )
+
+    except Exception:
+        return None
+
+    if dt.tzinfo is None:
+        dt = dt.replace(
+            tzinfo=timezone.utc
+        )
+
+    d = (
+        dt
+        .astimezone(
+            timezone.utc
+        )
+        .date()
+    )
+
+
+    # --------------------------------------------------------
+    # 2026 EXACT SCHEDULE
+    # --------------------------------------------------------
+
+    if d.year == 2026:
+
+        if (
+            date(
+                2026,
+                8,
+                22,
+            )
+            <= d
+            <= date(
+                2026,
+                9,
+                7,
+            )
+        ):
+            return 1
+
+        if (
+            date(
+                2026,
+                9,
+                8,
+            )
+            <= d
+            <= date(
+                2026,
+                9,
+                13,
+            )
+        ):
+            return 2
+
+        week3_start = date(
+            2026,
+            9,
+            14,
+        )
+
+        if d >= week3_start:
+            return (
+                3
+                +
+                (
+                    d
+                    - week3_start
+                ).days
+                // 7
+            )
+
+        return None
+
+
+    # --------------------------------------------------------
+    # FUTURE-SEASON FALLBACK
+    #
+    # Explicit "Week N" text always wins when available.
+    #
+    # Otherwise use Monday-based football weeks beginning around
+    # the start of September.
+    # --------------------------------------------------------
+
+    september_1 = date(
+        d.year,
+        9,
+        1,
+    )
+
+    first_monday = (
+        september_1
+        - timedelta(
+            days=
+                september_1.weekday()
+        )
+    )
+
+    delta = (
+        d
+        - first_monday
+    ).days
+
+    if delta < -10:
+        return None
+
+    if delta < 0:
+        return 1
+
+    return (
+        delta // 7
+    ) + 1
+
+
+def infer_week(
+    text,
+    created_at,
+):
+    explicit = (
+        explicit_week_from_text(
+            text
+        )
+    )
+
+    if explicit:
+        return explicit
+
+    return infer_week_from_date(
+        created_at
     )
 
 
@@ -187,7 +1460,10 @@ def stable_id(value):
 # X API
 # ============================================================
 
-def x_get(path, params=None):
+def x_get(
+    path,
+    params=None,
+):
     token = os.environ[
         "X_BEARER_TOKEN"
     ]
@@ -209,7 +1485,8 @@ def x_get(path, params=None):
 
 def resolve_user_id():
     payload = x_get(
-        f"/users/by/username/{USERNAME}"
+        f"/users/by/username/"
+        f"{USERNAME}"
     )
 
     return str(
@@ -219,7 +1496,8 @@ def resolve_user_id():
 
 def iso_x_time(dt):
     return (
-        dt.astimezone(
+        dt
+        .astimezone(
             timezone.utc
         )
         .strftime(
@@ -229,11 +1507,12 @@ def iso_x_time(dt):
 
 
 # ============================================================
-# OFFICIAL USER TIMELINE
+# FETCH OFFICIAL TIMELINE
 # ============================================================
 
 def fetch_user_posts(
     user_id,
+    *,
     since_id=None,
     start_time=None,
     max_pages=1,
@@ -241,15 +1520,18 @@ def fetch_user_posts(
     """
     Fetch only posts authored by @barstoolpickem.
 
-    Replies ARE included.
+    Replies are INCLUDED.
     Retweets are excluded.
+
+    We never use search/recent for historical recovery.
     """
 
     params = {
-        "max_results": 100,
+        "max_results":
+            100,
 
-        # Do NOT exclude replies.
-        "exclude": "retweets",
+        "exclude":
+            "retweets",
 
         "tweet.fields": (
             "author_id,"
@@ -275,7 +1557,9 @@ def fetch_user_posts(
     if since_id:
         params[
             "since_id"
-        ] = str(since_id)
+        ] = str(
+            since_id
+        )
 
     if start_time:
         params[
@@ -284,14 +1568,16 @@ def fetch_user_posts(
             start_time
         )
 
-    all_posts = []
+    posts = []
     media_map = {}
 
-    page = 0
+    pages = 0
 
     while True:
+
         payload = x_get(
-            f"/users/{user_id}/tweets",
+            f"/users/"
+            f"{user_id}/tweets",
             params,
         )
 
@@ -299,27 +1585,30 @@ def fetch_user_posts(
             "data",
             [],
         ):
-            author_id = str(
-                post.get(
-                    "author_id"
-                )
-                or ""
-            )
 
-            # Absolute author safety.
+            # Absolute safety:
+            # never ingest fan/third-party content.
             if (
-                author_id
-                and author_id
-                != str(user_id)
+                str(
+                    post.get(
+                        "author_id"
+                    )
+                    or ""
+                )
+                != str(
+                    user_id
+                )
             ):
                 print(
-                    "REJECTED NON-OFFICIAL AUTHOR:",
-                    post.get("id"),
-                    author_id,
+                    "REJECTED NON-OFFICIAL POST:",
+                    post.get(
+                        "id"
+                    ),
                 )
+
                 continue
 
-            all_posts.append(
+            posts.append(
                 post
             )
 
@@ -334,16 +1623,16 @@ def fetch_user_posts(
                 [],
             )
         ):
-            media_key = media.get(
+            key = media.get(
                 "media_key"
             )
 
-            if media_key:
+            if key:
                 media_map[
-                    media_key
+                    key
                 ] = media
 
-        page += 1
+        pages += 1
 
         next_token = (
             payload
@@ -359,7 +1648,7 @@ def fetch_user_posts(
         if not next_token:
             break
 
-        if page >= max_pages:
+        if pages >= max_pages:
             break
 
         params[
@@ -367,10 +1656,14 @@ def fetch_user_posts(
         ] = next_token
 
     return (
-        all_posts,
+        posts,
         media_map,
     )
 
+
+# ============================================================
+# SINGLE POST FETCH
+# ============================================================
 
 def fetch_post_by_id(post_id):
     payload = x_get(
@@ -385,8 +1678,10 @@ def fetch_post_by_id(post_id):
                 "conversation_id,"
                 "in_reply_to_user_id"
             ),
+
             "expansions":
                 "attachments.media_keys",
+
             "media.fields": (
                 "media_key,"
                 "type,"
@@ -429,663 +1724,6 @@ def fetch_post_by_id(post_id):
 
 
 # ============================================================
-# REPLY / THREAD SUPPORT
-# ============================================================
-
-def replied_to_post_id(post):
-    for reference in (
-        post.get(
-            "referenced_tweets"
-        )
-        or []
-    ):
-        if (
-            reference.get("type")
-            == "replied_to"
-        ):
-            post_id = reference.get(
-                "id"
-            )
-
-            if post_id:
-                return str(
-                    post_id
-                )
-
-    return None
-
-
-def is_reply_post(post):
-    if replied_to_post_id(
-        post
-    ):
-        return True
-
-    return bool(
-        post.get(
-            "in_reply_to_user_id"
-        )
-    )
-
-
-def official_parent_context(
-    post,
-    official_user_id,
-    cache,
-):
-    """
-    Parent content is usable ONLY when the parent was also
-    authored by @barstoolpickem.
-
-    Parent content may identify the picker, but wagers from the
-    parent are never extracted as child-post wagers.
-    """
-
-    current_id = replied_to_post_id(
-        post
-    )
-
-    if not current_id:
-        return ""
-
-    pieces = []
-    depth = 0
-
-    while (
-        current_id
-        and depth < MAX_PARENT_DEPTH
-    ):
-        depth += 1
-
-        if current_id in cache:
-            parent = cache[
-                current_id
-            ]
-
-        else:
-            try:
-                parent, _ = (
-                    fetch_post_by_id(
-                        current_id
-                    )
-                )
-            except Exception as exc:
-                print(
-                    "PARENT FETCH FAILED:",
-                    current_id,
-                    type(exc).__name__,
-                    exc,
-                )
-
-                cache[
-                    current_id
-                ] = None
-
-                break
-
-            cache[
-                current_id
-            ] = parent
-
-        if not parent:
-            break
-
-        author_id = str(
-            parent.get(
-                "author_id"
-            )
-            or ""
-        )
-
-        # Never use fan/third-party context.
-        if (
-            author_id
-            != str(
-                official_user_id
-            )
-        ):
-            print(
-                "IGNORING NON-OFFICIAL PARENT:",
-                current_id,
-            )
-            break
-
-        text = str(
-            parent.get("text")
-            or ""
-        ).strip()
-
-        if text:
-            pieces.append(
-                text
-            )
-
-        current_id = (
-            replied_to_post_id(
-                parent
-            )
-        )
-
-    return "\n\n".join(
-        pieces
-    )
-
-
-# ============================================================
-# WEEK MAPPING
-# ============================================================
-
-def infer_week_from_date(
-    created_at
-):
-    if not created_at:
-        return None
-
-    try:
-        dt = datetime.fromisoformat(
-            str(created_at).replace(
-                "Z",
-                "+00:00",
-            )
-        )
-    except Exception:
-        return None
-
-    if dt.tzinfo is None:
-        dt = dt.replace(
-            tzinfo=timezone.utc
-        )
-
-    d = (
-        dt
-        .astimezone(
-            timezone.utc
-        )
-        .date()
-    )
-
-    # --------------------------------------------------------
-    # 2026 Pick Em season
-    # --------------------------------------------------------
-
-    if dt.year == 2026:
-
-        # Week 1
-        if (
-            date(
-                2026,
-                8,
-                22,
-            )
-            <= d
-            <= date(
-                2026,
-                9,
-                7,
-            )
-        ):
-            return 1
-
-        # Week 2
-        if (
-            date(
-                2026,
-                9,
-                8,
-            )
-            <= d
-            <= date(
-                2026,
-                9,
-                13,
-            )
-        ):
-            return 2
-
-        # Week 3 onward
-        week_3_start = date(
-            2026,
-            9,
-            14,
-        )
-
-        if d >= week_3_start:
-            return (
-                3
-                +
-                (
-                    d
-                    - week_3_start
-                ).days
-                // 7
-            )
-
-        return None
-
-    # --------------------------------------------------------
-    # Generic future-season fallback
-    # --------------------------------------------------------
-
-    sept_1 = datetime(
-        dt.year,
-        9,
-        1,
-        tzinfo=timezone.utc,
-    )
-
-    week_one_monday = (
-        sept_1
-        - timedelta(
-            days=sept_1.weekday()
-        )
-    )
-
-    delta_days = (
-        dt
-        - week_one_monday
-    ).days
-
-    if delta_days < -7:
-        return None
-
-    if delta_days < 0:
-        return 1
-
-    return (
-        delta_days // 7
-    ) + 1
-
-
-# ============================================================
-# PICKER DETECTION
-# ============================================================
-
-def picker_hint_from_text(
-    text
-):
-    text = str(
-        text or ""
-    ).lower()
-
-    if (
-        "barstoolbigcat"
-        in text
-        or "big cat"
-        in text
-        or "bigcat"
-        in text
-    ):
-        return "Big Cat"
-
-    if (
-        "stoolpresidente"
-        in text
-        or "stool presidente"
-        in text
-        or "dave portnoy"
-        in text
-        or "portnoy"
-        in text
-        or "el pres"
-        in text
-    ):
-        return (
-            "Stool Presidente"
-        )
-
-    if (
-        "ricobosco"
-        in text
-        or "rico bosco"
-        in text
-        or re.search(
-            r"\brico\b",
-            text,
-        )
-    ):
-        return "Rico Bosco"
-
-    return None
-
-
-def is_added_post(
-    text
-):
-    text = str(
-        text or ""
-    ).lower()
-
-    terms = [
-        "adds for",
-        "add for",
-        "added pick",
-        "adding",
-        "addition",
-        "another one",
-    ]
-
-    return any(
-        term in text
-        for term in terms
-    )
-
-
-# ============================================================
-# CANDIDATE POST FILTER
-# ============================================================
-
-def looks_like_pick_post(
-    text,
-    image_urls,
-):
-    # All official image posts are eligible for inspection.
-    if image_urls:
-        return True
-
-    text = str(
-        text or ""
-    ).lower()
-
-    keywords = [
-        "adds for",
-        "add for",
-        "over ",
-        "under ",
-        "moneyline",
-        " ml",
-        "team total",
-        " tt ",
-        "first half",
-        "1h",
-        "first quarter",
-        "1q",
-    ]
-
-    if any(
-        keyword in text
-        for keyword in keywords
-    ):
-        return True
-
-    # Spread-like text.
-    if re.search(
-        r"\b[a-z][a-z .&'-]{1,35}"
-        r"\s[+-]\d+(?:\.\d+)?\b",
-        text,
-    ):
-        return True
-
-    return False
-
-
-# ============================================================
-# MARKET NORMALIZATION
-# ============================================================
-
-def normalize_bet_type(
-    value
-):
-    raw = str(
-        value or "OTHER"
-    ).upper().strip()
-
-    aliases = {
-        "1Q_SPREAD":
-            "FIRST_QUARTER_SPREAD",
-
-        "1Q_TOTAL":
-            "FIRST_QUARTER_TOTAL",
-
-        "1Q_MONEYLINE":
-            "FIRST_QUARTER_MONEYLINE",
-
-        "1Q_TEAM_TOTAL":
-            "FIRST_QUARTER_TEAM_TOTAL",
-
-        "1H_SPREAD":
-            "FIRST_HALF_SPREAD",
-
-        "1H_TOTAL":
-            "FIRST_HALF_TOTAL",
-
-        "1H_MONEYLINE":
-            "FIRST_HALF_MONEYLINE",
-
-        "1H_TEAM_TOTAL":
-            "FIRST_HALF_TEAM_TOTAL",
-    }
-
-    return aliases.get(
-        raw,
-        raw,
-    )
-
-
-def infer_market_from_selection(
-    original_pick
-):
-    pick = dict(
-        original_pick
-    )
-
-    selection = clean_text(
-        pick.get(
-            "selection"
-        )
-    )
-
-    text = selection.lower()
-
-    current = normalize_bet_type(
-        pick.get(
-            "bet_type"
-        )
-    )
-
-    first_quarter = bool(
-        re.search(
-            r"\b(?:"
-            r"1q|"
-            r"1st\s*q|"
-            r"first\s*quarter"
-            r")\b",
-            text,
-            flags=re.I,
-        )
-    )
-
-    first_half = bool(
-        re.search(
-            r"\b(?:"
-            r"1h|"
-            r"1st\s*h|"
-            r"first\s*half"
-            r")\b",
-            text,
-            flags=re.I,
-        )
-    )
-
-    team_total = bool(
-        re.search(
-            r"\b(?:"
-            r"tt|"
-            r"team\s*total"
-            r")\b",
-            text,
-            flags=re.I,
-        )
-    )
-
-    # --------------------------------------------------------
-    # TEAM TOTAL
-    # --------------------------------------------------------
-
-    if team_total:
-
-        if first_quarter:
-            pick[
-                "bet_type"
-            ] = (
-                "FIRST_QUARTER_TEAM_TOTAL"
-            )
-
-        elif first_half:
-            pick[
-                "bet_type"
-            ] = (
-                "FIRST_HALF_TEAM_TOTAL"
-            )
-
-        else:
-            pick[
-                "bet_type"
-            ] = "TEAM_TOTAL"
-
-        compact = re.search(
-            r"\b(?:tt|team\s*total)"
-            r"\s*(o|u)\s*"
-            r"([0-9]+(?:\.[0-9]+)?)",
-            text,
-            flags=re.I,
-        )
-
-        if compact:
-            pick["side"] = (
-                "OVER"
-                if (
-                    compact
-                    .group(1)
-                    .lower()
-                    == "o"
-                )
-                else "UNDER"
-            )
-
-            pick["line"] = float(
-                compact.group(2)
-            )
-
-            return pick
-
-        verbose = re.search(
-            r"\b(?:tt|team\s*total)"
-            r"\s*(over|under)\s*"
-            r"([0-9]+(?:\.[0-9]+)?)",
-            text,
-            flags=re.I,
-        )
-
-        if verbose:
-            pick[
-                "side"
-            ] = (
-                verbose
-                .group(1)
-                .upper()
-            )
-
-            pick[
-                "line"
-            ] = float(
-                verbose.group(2)
-            )
-
-        return pick
-
-    # --------------------------------------------------------
-    # PERIOD BET
-    # --------------------------------------------------------
-
-    if (
-        first_quarter
-        or first_half
-    ):
-        prefix = (
-            "FIRST_QUARTER"
-            if first_quarter
-            else "FIRST_HALF"
-        )
-
-        if re.search(
-            r"\b(?:over|under)\b",
-            text,
-            flags=re.I,
-        ):
-            pick[
-                "bet_type"
-            ] = (
-                f"{prefix}_TOTAL"
-            )
-
-        elif re.search(
-            r"\b(?:ml|moneyline)\b",
-            text,
-            flags=re.I,
-        ):
-            pick[
-                "bet_type"
-            ] = (
-                f"{prefix}_MONEYLINE"
-            )
-
-        elif re.search(
-            r"[+-]\s*"
-            r"[0-9]+(?:\.[0-9]+)?",
-            text,
-        ):
-            pick[
-                "bet_type"
-            ] = (
-                f"{prefix}_SPREAD"
-            )
-
-        else:
-            pick[
-                "bet_type"
-            ] = current
-
-        return pick
-
-    pick[
-        "bet_type"
-    ] = current
-
-    # Normalize regular totals.
-    total_match = re.search(
-        r"\b(over|under)\s*"
-        r"([0-9]+(?:\.[0-9]+)?)",
-        text,
-        flags=re.I,
-    )
-
-    if total_match:
-        if current in {
-            "TOTAL",
-            "OTHER",
-        }:
-            pick[
-                "bet_type"
-            ] = "TOTAL"
-
-        pick[
-            "side"
-        ] = (
-            total_match
-            .group(1)
-            .upper()
-        )
-
-        pick[
-            "line"
-        ] = float(
-            total_match.group(2)
-        )
-
-    return pick
-
-
-# ============================================================
 # MEDIA
 # ============================================================
 
@@ -1096,7 +1734,8 @@ def image_urls_for_post(
     urls = []
 
     keys = (
-        post.get(
+        post
+        .get(
             "attachments",
             {},
         )
@@ -1107,16 +1746,16 @@ def image_urls_for_post(
     )
 
     for key in keys:
+
         media = media_map.get(
             key,
             {},
         )
 
-        media_type = media.get(
-            "type"
-        )
-
-        if media_type == "photo":
+        if (
+            media.get("type")
+            == "photo"
+        ):
             url = media.get(
                 "url"
             )
@@ -1138,84 +1777,474 @@ def image_urls_for_post(
 
 
 # ============================================================
+# REPLY SUPPORT
+# ============================================================
+
+def replied_to_post_id(post):
+    for reference in (
+        post.get(
+            "referenced_tweets"
+        )
+        or []
+    ):
+        if (
+            reference.get("type")
+            == "replied_to"
+        ):
+            value = reference.get(
+                "id"
+            )
+
+            if value:
+                return str(
+                    value
+                )
+
+    return None
+
+
+def is_reply_post(post):
+    return bool(
+        replied_to_post_id(
+            post
+        )
+        or post.get(
+            "in_reply_to_user_id"
+        )
+    )
+
+
+def official_parent_context(
+    post,
+    official_user_id,
+    cache,
+):
+    """
+    Parent text is context only.
+
+    It can identify the picker for an official reply.
+
+    It may NEVER create picks itself.
+
+    If the parent is not @barstoolpickem, we stop immediately.
+    """
+
+    current_id = (
+        replied_to_post_id(
+            post
+        )
+    )
+
+    pieces = []
+    depth = 0
+
+    while (
+        current_id
+        and depth
+        < MAX_PARENT_DEPTH
+    ):
+        depth += 1
+
+        if current_id in cache:
+            parent = cache[
+                current_id
+            ]
+
+        else:
+
+            try:
+                parent, _ = (
+                    fetch_post_by_id(
+                        current_id
+                    )
+                )
+
+            except Exception as exc:
+                print(
+                    "PARENT FETCH FAILED:",
+                    current_id,
+                    type(exc).__name__,
+                    exc,
+                )
+
+                cache[
+                    current_id
+                ] = None
+
+                break
+
+            cache[
+                current_id
+            ] = parent
+
+        if not parent:
+            break
+
+        # Fan parent = no context.
+        if (
+            str(
+                parent.get(
+                    "author_id"
+                )
+                or ""
+            )
+            != str(
+                official_user_id
+            )
+        ):
+            break
+
+        parent_text = str(
+            parent.get(
+                "text"
+            )
+            or ""
+        ).strip()
+
+        if parent_text:
+            pieces.append(
+                parent_text
+            )
+
+        current_id = (
+            replied_to_post_id(
+                parent
+            )
+        )
+
+    return "\n\n".join(
+        pieces
+    )
+
+
+# ============================================================
+# PICKER HINTS
+# ============================================================
+
+def picker_hint_from_text(text):
+    text = str(
+        text or ""
+    ).lower()
+
+    if (
+        "barstoolbigcat" in text
+        or "big cat" in text
+        or "bigcat" in text
+    ):
+        return "Big Cat"
+
+    if (
+        "stoolpresidente" in text
+        or "stool presidente" in text
+        or "dave portnoy" in text
+        or "portnoy" in text
+        or "el pres" in text
+    ):
+        return (
+            "Stool Presidente"
+        )
+
+    if (
+        "rico bosco" in text
+        or "ricobosco" in text
+        or "returnofrb" in text
+        or re.search(
+            r"\brico\b",
+            text,
+        )
+    ):
+        return "Rico Bosco"
+
+    return None
+
+
+def is_added_post(text):
+    text = str(
+        text or ""
+    ).lower()
+
+    phrases = [
+        "adds for",
+        "add for",
+        "added pick",
+        "adding",
+        "addition",
+        "another one",
+    ]
+
+    return any(
+        phrase in text
+        for phrase in phrases
+    )
+
+
+# ============================================================
+# PICK-POST FILTER
+# ============================================================
+
+def looks_like_pick_post(
+    text,
+    image_urls,
+):
+    # Images are eligible because weekly card posts are images.
+    if image_urls:
+        return True
+
+    text = str(
+        text or ""
+    ).lower()
+
+    keywords = [
+        "over ",
+        "under ",
+        "moneyline",
+        " ml",
+        "team total",
+        " tt ",
+        "1q",
+        "1h",
+        "first quarter",
+        "first half",
+        "adds for",
+        "add for",
+    ]
+
+    if any(
+        keyword in text
+        for keyword in keywords
+    ):
+        return True
+
+    # Spread-like wager.
+    if re.search(
+        r"[a-z][a-z .&'-]{1,40}"
+        r"\s[+-]\d+(?:\.\d+)?",
+        text,
+        flags=re.I,
+    ):
+        return True
+
+    return False
+
+
+# ============================================================
+# DETERMINISTIC MARKET REPAIR
+# ============================================================
+
+def normalize_extracted_market(pick):
+    pick = dict(
+        pick
+    )
+
+    selection = clean_text(
+        pick.get("selection")
+    )
+
+    text = selection.lower()
+
+    bet_type = normalize_bet_type(
+        pick.get("bet_type")
+    )
+
+    first_quarter = bool(
+        re.search(
+            r"\b(?:"
+            r"1q|"
+            r"first quarter|"
+            r"1st quarter"
+            r")\b",
+            text,
+            flags=re.I,
+        )
+    )
+
+    first_half = bool(
+        re.search(
+            r"\b(?:"
+            r"1h|"
+            r"first half|"
+            r"1st half"
+            r")\b",
+            text,
+            flags=re.I,
+        )
+    )
+
+    team_total = bool(
+        re.search(
+            r"\b(?:"
+            r"tt|"
+            r"team total"
+            r")\b",
+            text,
+            flags=re.I,
+        )
+    )
+
+
+    # --------------------------------------------------------
+    # TEAM TOTAL
+    # --------------------------------------------------------
+
+    if team_total:
+
+        if first_quarter:
+            bet_type = (
+                "FIRST_QUARTER_TEAM_TOTAL"
+            )
+
+        elif first_half:
+            bet_type = (
+                "FIRST_HALF_TEAM_TOTAL"
+            )
+
+        else:
+            bet_type = (
+                "TEAM_TOTAL"
+            )
+
+        compact = re.search(
+            r"\b(?:tt|team total)"
+            r"\s*(o|u)\s*"
+            r"([0-9]+(?:\.[0-9]+)?)",
+            text,
+            flags=re.I,
+        )
+
+        verbose = re.search(
+            r"\b(?:tt|team total)"
+            r"\s*(over|under)\s*"
+            r"([0-9]+(?:\.[0-9]+)?)",
+            text,
+            flags=re.I,
+        )
+
+        if compact:
+
+            pick["side"] = (
+                "OVER"
+                if (
+                    compact
+                    .group(1)
+                    .lower()
+                    == "o"
+                )
+                else "UNDER"
+            )
+
+            pick["line"] = float(
+                compact.group(2)
+            )
+
+        elif verbose:
+
+            pick["side"] = (
+                verbose
+                .group(1)
+                .upper()
+            )
+
+            pick["line"] = float(
+                verbose.group(2)
+            )
+
+
+    # --------------------------------------------------------
+    # FIRST QUARTER / FIRST HALF
+    # --------------------------------------------------------
+
+    elif (
+        first_quarter
+        or first_half
+    ):
+
+        prefix = (
+            "FIRST_QUARTER"
+            if first_quarter
+            else "FIRST_HALF"
+        )
+
+        if re.search(
+            r"\b(?:over|under)\b",
+            text,
+            flags=re.I,
+        ):
+            bet_type = (
+                f"{prefix}_TOTAL"
+            )
+
+        elif re.search(
+            r"\b(?:ml|moneyline)\b",
+            text,
+            flags=re.I,
+        ):
+            bet_type = (
+                f"{prefix}_MONEYLINE"
+            )
+
+        elif re.search(
+            r"[+-]\s*"
+            r"\d+(?:\.\d+)?",
+            text,
+        ):
+            bet_type = (
+                f"{prefix}_SPREAD"
+            )
+
+
+    # --------------------------------------------------------
+    # NORMAL TOTAL
+    # --------------------------------------------------------
+
+    else:
+
+        total = re.search(
+            r"\b(over|under)"
+            r"\s*"
+            r"([0-9]+(?:\.[0-9]+)?)",
+            text,
+            flags=re.I,
+        )
+
+        if total:
+
+            if bet_type == "OTHER":
+                bet_type = "TOTAL"
+
+            pick["side"] = (
+                total
+                .group(1)
+                .upper()
+            )
+
+            pick["line"] = float(
+                total.group(2)
+            )
+
+
+    pick["bet_type"] = (
+        normalize_bet_type(
+            bet_type
+        )
+    )
+
+    return pick
+
+
+# ============================================================
 # OPENAI EXTRACTION
 # ============================================================
 
-def extract_json_from_response(
-    response
-):
-    text = str(
-        getattr(
-            response,
-            "output_text",
-            "",
-        )
-        or ""
-    ).strip()
-
-    if not text:
-        return {
-            "picks": []
-        }
-
-    # Strip Markdown fences if model ever returns them.
-    text = re.sub(
-        r"^```(?:json)?\s*",
-        "",
-        text,
-        flags=re.I,
-    )
-
-    text = re.sub(
-        r"\s*```$",
-        "",
-        text,
-    )
-
-    try:
-        return json.loads(
-            text
-        )
-    except Exception:
-        pass
-
-    start = text.find("{")
-    end = text.rfind("}")
-
-    if (
-        start >= 0
-        and end > start
-    ):
-        try:
-            return json.loads(
-                text[
-                    start:
-                    end + 1
-                ]
-            )
-        except Exception:
-            pass
-
-    print(
-        "AI JSON PARSE FAILED:",
-        text[:400],
-    )
-
-    return {
-        "picks": []
-    }
-
-
 def parse_post_with_ai(
+    *,
     text,
     image_urls,
     post_url,
     posted_at,
     inferred_week,
     picker_hint,
-    added_hint,
-    reply_hint=False,
-    official_parent_text="",
+    reply_hint,
+    parent_text,
 ):
     from openai import OpenAI
 
@@ -1223,146 +2252,161 @@ def parse_post_with_ai(
 
     prompt = f"""
 You extract NCAA college football gambling picks from the
-official Barstool Pick Em X account.
+official @barstoolpickem X account.
 
-ONLY track picks belonging to:
+TRACK ONLY:
 - Big Cat
-- Stool Presidente / Dave Portnoy / El Presidente / Pres
+- Stool Presidente / Dave Portnoy / El Pres
 - Rico Bosco
 
-SOURCE SAFETY
 
-The ACTUAL SOURCE POST has already been verified by the program
-as authored by @barstoolpickem.
+ACTUAL SOURCE POST
+==================
 
-Parent/thread context has also been verified as official.
-
-ONLY wagers visible or written in the ACTUAL SOURCE POST may
-create picks.
-
-Parent/thread context may ONLY:
-1. identify which picker a reply belongs to;
-2. tell you that the source reply is an added pick.
-
-NEVER create a wager solely from parent context.
-
-SOURCE URL:
+URL:
 {post_url}
 
-POSTED AT:
+POSTED:
 {posted_at}
 
-ACTUAL SOURCE POST TEXT:
+TEXT:
 {text}
 
 VERIFIED OFFICIAL PARENT CONTEXT:
-{official_parent_text or "None"}
+{parent_text or "None"}
 
-LIKELY PICKER:
+PICKER HINT:
 {picker_hint or "Unknown"}
 
-LIKELY CFB WEEK:
+DEFAULT WEEK:
 {inferred_week}
 
-LIKELY ADDED PICK:
-{added_hint}
-
-IS OFFICIAL REPLY/SUBTWEET:
+IS OFFICIAL REPLY:
 {reply_hint}
 
 
-CRITICAL IMAGE-CARD RULES
+NON-NEGOTIABLE RULES
+====================
 
-Read EVERY image carefully.
+1. Only wagers contained in the ACTUAL SOURCE POST may create
+   new picks.
 
-Weekly cards often use this format:
+2. Parent context is used ONLY to identify the picker or explain
+   that a reply is an added pick.
 
-    WIS @ ND 7:30pm SUN
-      • 46.5
+3. Never extract a parent wager while parsing its child reply.
 
-The bullet may contain only a number because the handwritten
-direction is small, faint, stylized, or visually separated.
+4. Never use fan replies or fan text.
 
-DO NOT silently omit a numeric wager.
+5. Read ALL attached images.
 
-For every matchup heading, inspect every bullet immediately
-beneath that heading.
+6. Extract EVERY wager visible on the weekly card.
 
-If the visual clearly indicates OVER or UNDER, record it.
+7. Each bullet belongs to the closest matchup heading above it.
 
-Specifically, the 2026 Rico Week 1 card contains:
+8. Pay special attention to the final bullet on each card.
 
-    WIS @ ND
-    Under 46.5
+9. Do not treat a printed historical "Record" on a card as picks.
 
-This must be extracted as:
-- picker: Rico Bosco
-- matchup: Wisconsin @ Notre Dame
-- bet_type: TOTAL
-- selection: WIS @ ND Under 46.5
-- side: UNDER
-- line: 46.5
+10. Do not treat kickoff times or final scores as betting lines.
 
-Do NOT confuse this with Big Cat having the same wager.
-The same wager may legitimately belong to multiple DIFFERENT
-pickers.
+11. Same wager appearing in two official posts is okay. Extract
+    it normally; the program deduplicates it.
 
-Also recognize compact notation:
-- Oregon TT o37.5
-- Oregon TT u37.5
-- Alabama TT over 40.5
-- Oklahoma 1Q -9.5
-- Miami 1H -13.5
-- Indiana first half TT over 27.5
+12. The same wager may legitimately belong to DIFFERENT pickers.
 
-For a weekly-card image:
-- associate bullets with the nearest matchup heading above;
-- do not drop the final bullet on the card;
-- inspect all images in the carousel;
-- capture every wager exactly once.
 
-Do NOT guess genuinely unreadable direction.
-If a number is truly ambiguous and there is no visual evidence
-of Over/Under, omit it rather than inventing a side.
+CARD SHORTHAND
+==============
 
-OSU is ambiguous unless matchup/opponent context disambiguates
-Ohio State, Oklahoma State, or Oregon State.
+Examples:
 
-A&M means Texas A&M only when the actual context supports it.
+BYU -51.5
+=> SPREAD
 
-Return JSON ONLY.
+WIS @ ND Under 46.5
+=> TOTAL / UNDER / 46.5
 
-Use exactly:
+Oregon TT o37.5
+=> TEAM_TOTAL / OVER / 37.5
+
+Alabama TT over 40.5
+=> TEAM_TOTAL / OVER / 40.5
+
+Oklahoma 1Q -9.5
+=> FIRST_QUARTER_SPREAD
+
+Miami 1H -13.5
+=> FIRST_HALF_SPREAD
+
+Indiana first half TT over 27.5
+=> FIRST_HALF_TEAM_TOTAL / OVER / 27.5
+
+OSU @ HOU Over 49.5
+=> TOTAL
+
+OSU is ambiguous without opponent/matchup context.
+
+A&M may be Texas A&M when the source context makes that clear.
+
+
+VERY IMPORTANT IMAGE RULE
+=========================
+
+A card may visually look like:
+
+WIS @ ND 7:30pm SUN
+• Under 46.5
+
+The word "Under" may be small, handwritten, faint, or positioned
+away from the number.
+
+Inspect the image carefully.
+
+Do not omit a wager merely because the direction is visually
+separated from the numeric line.
+
+But if the direction is genuinely unreadable, do NOT invent it.
+
+
+OUTPUT
+======
+
+Return JSON only:
 
 {{
   "picks": [
     {{
       "picker": "Big Cat|Stool Presidente|Rico Bosco",
       "sport": "CFB",
-      "matchup": "game matchup or null",
-      "team": "wagered team or identifying team or null",
+      "matchup": "matchup or null",
+      "team": "wagered team or null",
       "opponent": "opponent or null",
       "bet_type": "SPREAD|TOTAL|MONEYLINE|TEAM_TOTAL|FIRST_QUARTER_SPREAD|FIRST_QUARTER_TOTAL|FIRST_QUARTER_MONEYLINE|FIRST_QUARTER_TEAM_TOTAL|FIRST_HALF_SPREAD|FIRST_HALF_TOTAL|FIRST_HALF_MONEYLINE|FIRST_HALF_TEAM_TOTAL|OTHER",
-      "selection": "concise wager",
+      "selection": "concise exact wager",
       "side": "OVER|UNDER|team name|null",
       "line": 0.0,
       "odds": null,
+      "units": 1.0,
       "week": {inferred_week if inferred_week is not None else "null"},
       "added_pick": false,
-      "confidence": 0.0
+      "confidence": 0.99
     }}
   ]
 }}
 
-Confidence should be 0.00 to 1.00.
+Confidence is 0 to 1.
 
-Do not return commentary.
+No markdown.
+No explanation.
+JSON only.
 """
 
     content = [
         {
             "type":
                 "input_text",
+
             "text":
                 prompt,
         }
@@ -1373,6 +2417,7 @@ Do not return commentary.
             {
                 "type":
                     "input_image",
+
                 "image_url":
                     image_url,
             }
@@ -1380,38 +2425,108 @@ Do not return commentary.
 
     response = (
         client.responses.create(
-            model="gpt-5.6-luna",
+            model=OPENAI_MODEL,
+
             input=[
                 {
-                    "role": "user",
-                    "content": content,
+                    "role":
+                        "user",
+
+                    "content":
+                        content,
                 }
             ],
         )
     )
 
-    return extract_json_from_response(
-        response
+    raw = str(
+        getattr(
+            response,
+            "output_text",
+            "",
+        )
+        or ""
+    ).strip()
+
+    raw = re.sub(
+        r"^```(?:json)?\s*",
+        "",
+        raw,
+        flags=re.I,
     )
 
+    raw = re.sub(
+        r"\s*```$",
+        "",
+        raw,
+    )
+
+    try:
+        payload = json.loads(
+            raw
+        )
+
+    except Exception:
+
+        start = raw.find(
+            "{"
+        )
+
+        end = raw.rfind(
+            "}"
+        )
+
+        if (
+            start < 0
+            or end <= start
+        ):
+            raise
+
+        payload = json.loads(
+            raw[
+                start:
+                end + 1
+            ]
+        )
+
+    picks = payload.get(
+        "picks",
+        [],
+    )
+
+    if not isinstance(
+        picks,
+        list,
+    ):
+        raise ValueError(
+            "OpenAI returned picks "
+            "in an invalid format"
+        )
+
+    return [
+        normalize_extracted_market(
+            pick
+        )
+        for pick in picks
+    ]
+
 
 # ============================================================
-# PICK NORMALIZATION
+# NORMALIZE AI PICK
 # ============================================================
 
-def normalize_extracted_pick(
+def normalize_ai_pick(
     raw_pick,
-    inferred_week=None,
-    picker_hint=None,
+    *,
+    default_week,
+    picker_hint,
 ):
     pick = dict(
         raw_pick or {}
     )
 
     picker = normalize_picker(
-        pick.get(
-            "picker"
-        )
+        pick.get("picker")
     )
 
     if not picker:
@@ -1427,1074 +2542,143 @@ def normalize_extracted_pick(
         return None
 
     selection = clean_text(
-        pick.get(
-            "selection"
-        )
+        pick.get("selection")
     )
 
     if not selection:
         return None
 
-    pick[
-        "picker"
-    ] = picker
+    pick["picker"] = picker
 
-    pick[
-        "selection"
-    ] = selection
+    pick["selection"] = (
+        selection
+    )
 
-    pick[
-        "bet_type"
-    ] = normalize_bet_type(
-        pick.get(
-            "bet_type"
+    try:
+        week = int(
+            pick.get("week")
+            or default_week
+        )
+
+    except Exception:
+        week = default_week
+
+    if not week:
+        return None
+
+    pick["week"] = week
+
+    pick["bet_type"] = (
+        normalize_bet_type(
+            pick.get("bet_type")
         )
     )
 
-    if pick.get(
-        "week"
-    ) is None:
-        pick[
-            "week"
-        ] = inferred_week
-
-    try:
-        if pick.get(
-            "week"
-        ) is not None:
-            pick[
-                "week"
-            ] = int(
-                pick[
-                    "week"
-                ]
-            )
-    except Exception:
-        pick[
-            "week"
-        ] = inferred_week
+    pick["line"] = safe_float(
+        pick.get("line")
+    )
 
     side = pick.get(
         "side"
     )
 
     if side is not None:
-        side_text = clean_text(
-            side
-        )
 
         if (
-            side_text.upper()
+            str(side).upper()
             in {
                 "OVER",
                 "UNDER",
             }
         ):
-            pick[
-                "side"
-            ] = (
-                side_text.upper()
+            pick["side"] = (
+                str(side).upper()
             )
 
         else:
-            pick[
-                "side"
-            ] = side_text
-
-    line = safe_float(
-        pick.get(
-            "line"
-        )
-    )
-
-    if line is not None:
-        pick[
-            "line"
-        ] = line
+            pick["side"] = (
+                clean_text(
+                    side
+                )
+            )
 
     try:
-        pick[
-            "confidence"
-        ] = float(
-            pick.get(
-                "confidence",
-                0.95,
+        pick["confidence"] = (
+            float(
+                pick.get(
+                    "confidence"
+                )
+                or 0.95
             )
         )
-    except Exception:
-        pick[
-            "confidence"
-        ] = 0.95
 
-    pick = (
-        infer_market_from_selection(
-            pick
+    except Exception:
+        pick["confidence"] = (
+            0.95
         )
-    )
 
     return pick
 
 
 # ============================================================
-# CANONICAL DEDUPE
+# CREATE STORED ROW
 # ============================================================
 
-def normalized_matchup_key(
-    pick
-):
-    matchup = normalize_text(
-        pick.get(
-            "matchup"
-        )
-    )
-
-    team = normalize_team(
-        pick.get(
-            "team"
-        )
-    )
-
-    opponent = normalize_team(
-        pick.get(
-            "opponent"
-        )
-    )
-
-    if (
-        team
-        and opponent
-    ):
-        return "::".join(
-            sorted(
-                [
-                    team,
-                    opponent,
-                ]
-            )
-        )
-
-    if matchup:
-        # Normalize common matchup separators.
-        matchup = re.sub(
-            r"\s+(?:at|@|vs\.?|v)\s+",
-            "|",
-            matchup,
-            flags=re.I,
-        )
-
-        pieces = [
-            normalize_team(x)
-            for x in matchup.split("|")
-            if normalize_team(x)
-        ]
-
-        if len(pieces) >= 2:
-            return "::".join(
-                sorted(
-                    pieces[:2]
-                )
-            )
-
-        return matchup
-
-    return team
-
-
-def normalized_selection_key(
-    selection
-):
-    value = normalize_text(
-        selection
-    )
-
-    replacements = {
-        "wis @ nd":
-            "wisconsin @ notre dame",
-
-        "wisc @ nd":
-            "wisconsin @ notre dame",
-
-        "wisconsin @ nd":
-            "wisconsin @ notre dame",
-
-        "utah tech @ byu":
-            "utah tech @ byu",
-    }
-
-    for old, new in (
-        replacements.items()
-    ):
-        value = value.replace(
-            old,
-            new,
-        )
-
-    value = re.sub(
-        r"\s+",
-        " ",
-        value,
-    )
-
-    return value.strip()
-
-
-def canonical_pick_key(
-    pick
-):
-    """
-    Source post ID is intentionally NOT part of the key.
-
-    If Barstool repeats the exact same wager in another official
-    post, it should not count twice for the same picker/week.
-
-    The SAME wager belonging to two different pickers is allowed.
-    """
-
-    picker = (
-        normalize_picker(
-            pick.get(
-                "picker"
-            )
-        )
-        or ""
-    )
-
-    try:
-        week = int(
-            pick.get(
-                "week"
-            )
-            or 0
-        )
-    except Exception:
-        week = 0
-
-    bet_type = (
-        normalize_bet_type(
-            pick.get(
-                "bet_type"
-            )
-        )
-        or "OTHER"
-    )
-
-    matchup = (
-        normalized_matchup_key(
-            pick
-        )
-    )
-
-    side_raw = pick.get(
-        "side"
-    )
-
-    if (
-        side_raw
-        and str(side_raw).upper()
-        in {
-            "OVER",
-            "UNDER",
-        }
-    ):
-        side = str(
-            side_raw
-        ).upper()
-    else:
-        side = normalize_team(
-            side_raw
-        )
-
-    line = safe_float(
-        pick.get(
-            "line"
-        )
-    )
-
-    line_key = (
-        ""
-        if line is None
-        else f"{line:.3f}"
-    )
-
-    selection = (
-        normalized_selection_key(
-            pick.get(
-                "selection"
-            )
-        )
-    )
-
-    # Best canonical structure.
-    if (
-        matchup
-        and bet_type != "OTHER"
-    ):
-        return "|".join(
-            [
-                picker,
-                str(week),
-                bet_type,
-                matchup,
-                side,
-                line_key,
-            ]
-        )
-
-    # Fallback to normalized exact wager text.
-    return "|".join(
-        [
-            picker,
-            str(week),
-            bet_type,
-            selection,
-            side,
-            line_key,
-        ]
-    )
-
-
-def semantic_duplicate_key(
-    pick
-):
-    """
-    Secondary dedupe designed to catch repeated cards where
-    metadata differs slightly but the actual wager is identical.
-    """
-
-    picker = (
-        normalize_picker(
-            pick.get(
-                "picker"
-            )
-        )
-        or ""
-    )
-
-    try:
-        week = int(
-            pick.get(
-                "week"
-            )
-            or 0
-        )
-    except Exception:
-        week = 0
-
-    bet_type = normalize_bet_type(
-        pick.get(
-            "bet_type"
-        )
-    )
-
-    side_raw = pick.get(
-        "side"
-    )
-
-    if (
-        side_raw
-        and str(side_raw).upper()
-        in {
-            "OVER",
-            "UNDER",
-        }
-    ):
-        side = str(
-            side_raw
-        ).upper()
-    else:
-        side = normalize_team(
-            side_raw
-        )
-
-    line = safe_float(
-        pick.get(
-            "line"
-        )
-    )
-
-    line_key = (
-        ""
-        if line is None
-        else f"{line:.3f}"
-    )
-
-    selection = (
-        normalized_selection_key(
-            pick.get(
-                "selection"
-            )
-        )
-    )
-
-    # Remove matchup syntax so "BYU -51.5" remains stable.
-    selection = re.sub(
-        r"\s+",
-        " ",
-        selection,
-    )
-
-    return "|".join(
-        [
-            picker,
-            str(week),
-            bet_type,
-            side,
-            line_key,
-            selection,
-        ]
-    )
-
-
-def dedupe_existing_picks(
-    picks
-):
-    """
-    IMPORTANT:
-    This cleans already-stored duplicates too.
-
-    Preference:
-    1. Already graded row
-    2. Earlier source row
-    3. First row encountered
-    """
-
-    if not picks:
-        return []
-
-    kept = []
-    positions = {}
-
-    removed = 0
-
-    def row_score(pick):
-        result = str(
-            pick.get(
-                "result"
-            )
-            or ""
-        ).upper()
-
-        graded = (
-            result
-            in {
-                "WIN",
-                "LOSS",
-                "PUSH",
-            }
-        )
-
-        posted = str(
-            pick.get(
-                "posted_at"
-            )
-            or "9999"
-        )
-
-        return (
-            1 if graded else 0,
-            posted,
-        )
-
-    for pick in picks:
-        key = canonical_pick_key(
-            pick
-        )
-
-        if key not in positions:
-            positions[
-                key
-            ] = len(
-                kept
-            )
-
-            kept.append(
-                pick
-            )
-
-            continue
-
-        index = positions[
-            key
-        ]
-
-        current = kept[
-            index
-        ]
-
-        current_result = str(
-            current.get(
-                "result"
-            )
-            or ""
-        ).upper()
-
-        candidate_result = str(
-            pick.get(
-                "result"
-            )
-            or ""
-        ).upper()
-
-        current_graded = (
-            current_result
-            in {
-                "WIN",
-                "LOSS",
-                "PUSH",
-            }
-        )
-
-        candidate_graded = (
-            candidate_result
-            in {
-                "WIN",
-                "LOSS",
-                "PUSH",
-            }
-        )
-
-        # If duplicate copy is graded and current one isn't,
-        # preserve the graded copy.
-        if (
-            candidate_graded
-            and not current_graded
-        ):
-            kept[
-                index
-            ] = pick
-
-        removed += 1
-
-        print(
-            "REMOVED STORED DUPLICATE:",
-            pick.get(
-                "picker"
-            ),
-            "|",
-            pick.get(
-                "selection"
-            ),
-            "| source:",
-            pick.get(
-                "source_post_id"
-            ),
-        )
-
-    if removed:
-        print(
-            "Stored duplicate picks removed:",
-            removed,
-        )
-
-    return kept
-
-
-# ============================================================
-# GUARANTEED 2026 WEEK-1 RECONCILIATION
-# ============================================================
-
-def is_rico_byu_spread(
-    pick
-):
-    picker = normalize_picker(
-        pick.get(
-            "picker"
-        )
-    )
-
-    if picker != "Rico Bosco":
-        return False
-
-    try:
-        if int(
-            pick.get(
-                "week"
-            )
-            or 0
-        ) != 1:
-            return False
-    except Exception:
-        return False
-
-    line = safe_float(
-        pick.get(
-            "line"
-        )
-    )
-
-    selection = normalize_text(
-        pick.get(
-            "selection"
-        )
-    )
-
-    bet_type = normalize_bet_type(
-        pick.get(
-            "bet_type"
-        )
-    )
-
-    return (
-        abs(
-            (line or 0)
-            - (-51.5)
-        ) < 0.01
-        and (
-            "byu"
-            in selection
-            or normalize_team(
-                pick.get(
-                    "team"
-                )
-            ) == "byu"
-            or normalize_team(
-                pick.get(
-                    "side"
-                )
-            ) == "byu"
-        )
-        and bet_type
-        == "SPREAD"
-    )
-
-
-def cleanup_rico_byu_duplicate(
-    picks
-):
-    """
-    Extra narrow safety repair for the known Week 1 duplicate.
-
-    Rico's BYU -51.5 should appear exactly ONCE.
-    """
-
-    matching = [
-        i
-        for i, pick in enumerate(
-            picks
-        )
-        if is_rico_byu_spread(
-            pick
-        )
-    ]
-
-    if len(
-        matching
-    ) <= 1:
-        return picks
-
-    # Prefer a graded row.
-    keep_index = matching[
-        0
-    ]
-
-    for index in matching:
-        result = str(
-            picks[index].get(
-                "result"
-            )
-            or ""
-        ).upper()
-
-        if result in {
-            "WIN",
-            "LOSS",
-            "PUSH",
-        }:
-            keep_index = index
-            break
-
-    cleaned = []
-
-    for index, pick in enumerate(
-        picks
-    ):
-        if (
-            index in matching
-            and index != keep_index
-        ):
-            print(
-                "REMOVED RICO BYU DUPLICATE:",
-                pick.get(
-                    "source_post_id"
-                ),
-            )
-            continue
-
-        cleaned.append(
-            pick
-        )
-
-    return cleaned
-
-
-def rico_nd_under_exists(
-    picks
-):
-    for pick in picks:
-        if (
-            normalize_picker(
-                pick.get(
-                    "picker"
-                )
-            )
-            != "Rico Bosco"
-        ):
-            continue
-
-        try:
-            if int(
-                pick.get(
-                    "week"
-                )
-                or 0
-            ) != 1:
-                continue
-        except Exception:
-            continue
-
-        if (
-            normalize_bet_type(
-                pick.get(
-                    "bet_type"
-                )
-            )
-            != "TOTAL"
-        ):
-            continue
-
-        line = safe_float(
-            pick.get(
-                "line"
-            )
-        )
-
-        side = str(
-            pick.get(
-                "side"
-            )
-            or ""
-        ).upper()
-
-        selection = normalize_text(
-            pick.get(
-                "selection"
-            )
-        )
-
-        if (
-            line is not None
-            and abs(
-                line - 46.5
-            ) < 0.01
-            and side == "UNDER"
-            and (
-                (
-                    "wis"
-                    in selection
-                    or "wisconsin"
-                    in selection
-                )
-                and (
-                    "nd"
-                    in selection
-                    or "notre dame"
-                    in selection
-                )
-            )
-        ):
-            return True
-
-    return False
-
-
-def ensure_rico_nd_under(
-    picks
-):
-    """
-    The official 2026 Week 1 Rico card contains:
-
-        WIS @ ND
-        Under 46.5
-
-    An earlier extraction missed the direction and therefore
-    omitted the wager completely.
-
-    This repair is intentionally narrow and idempotent.
-    """
-
-    if rico_nd_under_exists(
-        picks
-    ):
-        return picks
-
-    source_post_id = (
-        "2095584927836217769"
-    )
-
-    source_url = (
-        "https://x.com/"
-        "barstoolpickem/status/"
-        f"{source_post_id}"
-    )
-
-    new_pick = {
-        "picker":
-            "Rico Bosco",
-
-        "sport":
-            "CFB",
-
-        "matchup":
-            "Wisconsin @ Notre Dame",
-
-        "team":
-            "Wisconsin",
-
-        "opponent":
-            "Notre Dame",
-
-        "bet_type":
-            "TOTAL",
-
-        "selection":
-            "WIS @ ND Under 46.5",
-
-        "side":
-            "UNDER",
-
-        "line":
-            46.5,
-
-        "odds":
-            None,
-
-        "week":
-            1,
-
-        "added_pick":
-            False,
-
-        "confidence":
-            1.0,
-
-        # Grader will grade this during the same workflow.
-        "status":
-            "OPEN",
-
-        "result":
-            None,
-
-        "profit_units":
-            0,
-
-        "source_post_id":
-            source_post_id,
-
-        "source_url":
-            source_url,
-
-        "source_text":
-            "Official Rico Bosco Week 1 pick card",
-
-        "source_is_reply":
-            False,
-
-        "conversation_id":
-            source_post_id,
-
-        "posted_at":
-            "2026-09-01T00:00:00Z",
-
-        "graded_at":
-            None,
-
-        "final_score":
-            None,
-
-        "event_id":
-            None,
-    }
-
-    new_pick[
-        "id"
-    ] = stable_id(
-        canonical_pick_key(
-            new_pick
-        )
-    )
-
-    picks.append(
-        new_pick
-    )
-
-    print(
-        "REPAIRED MISSING OFFICIAL PICK:",
-        "Rico Bosco | Week 1 | "
-        "WIS @ ND Under 46.5",
-    )
-
-    return picks
-
-
-def reconcile_known_week1_issues(
-    picks
-):
-    """
-    Fix the two currently confirmed data-quality issues.
-    """
-
-    picks = cleanup_rico_byu_duplicate(
-        picks
-    )
-
-    picks = ensure_rico_nd_under(
-        picks
-    )
-
-    picks = dedupe_existing_picks(
-        picks
-    )
-
-    return picks
-
-
-# ============================================================
-# EXISTING MARKET REPAIR
-# ============================================================
-
-def repair_existing_markets(
-    existing
-):
-    repaired = 0
-
-    for index, pick in enumerate(
-        existing
-    ):
-        before = (
-            pick.get(
-                "bet_type"
-            ),
-            pick.get(
-                "side"
-            ),
-            pick.get(
-                "line"
-            ),
-        )
-
-        upgraded = (
-            infer_market_from_selection(
-                pick
-            )
-        )
-
-        after = (
-            upgraded.get(
-                "bet_type"
-            ),
-            upgraded.get(
-                "side"
-            ),
-            upgraded.get(
-                "line"
-            ),
-        )
-
-        existing[
-            index
-        ] = upgraded
-
-        if before != after:
-            repaired += 1
-
-    return repaired
-
-
-# ============================================================
-# STORE NEW PICK
-# ============================================================
-
-def make_stored_pick(
-    extracted_pick,
+def stored_pick_from_ai(
+    extracted,
+    *,
     post,
     post_url,
-    picker,
-    week,
-    added_pick,
     reply_hint,
+    added_hint,
 ):
     bet_type = normalize_bet_type(
-        extracted_pick.get(
+        extracted.get(
             "bet_type"
         )
     )
 
     confidence = float(
-        extracted_pick.get(
-            "confidence",
-            0.95,
+        extracted.get(
+            "confidence"
         )
         or 0.95
     )
 
-    if confidence < 0.90:
-        status = "REVIEW"
-
-    elif bet_type in (
-        SUPPORTED_MARKETS
+    if (
+        confidence >= 0.90
+        and bet_type
+        in SUPPORTED_MARKETS
     ):
         status = "OPEN"
 
     else:
         status = "REVIEW"
 
-    key_pick = dict(
-        extracted_pick
-    )
-
-    key_pick[
-        "picker"
-    ] = picker
-
-    key_pick[
-        "week"
-    ] = week
-
-    canonical = (
-        canonical_pick_key(
-            key_pick
-        )
-    )
-
-    return {
-        "id":
-            stable_id(
-                canonical
-            ),
-
+    pick = {
         "picker":
-            picker,
+            extracted[
+                "picker"
+            ],
 
         "sport":
-            (
-                extracted_pick.get(
-                    "sport"
-                )
-                or "CFB"
-            ),
+            extracted.get(
+                "sport"
+            )
+            or "CFB",
 
         "matchup":
-            extracted_pick.get(
+            extracted.get(
                 "matchup"
             ),
 
         "team":
-            extracted_pick.get(
+            extracted.get(
                 "team"
             ),
 
         "opponent":
-            extracted_pick.get(
+            extracted.get(
                 "opponent"
             ),
 
@@ -2503,34 +2687,52 @@ def make_stored_pick(
 
         "selection":
             clean_text(
-                extracted_pick.get(
+                extracted.get(
                     "selection"
                 )
             ),
 
         "side":
-            extracted_pick.get(
+            extracted.get(
                 "side"
             ),
 
         "line":
             safe_float(
-                extracted_pick.get(
+                extracted.get(
                     "line"
                 )
             ),
 
         "odds":
-            extracted_pick.get(
+            extracted.get(
                 "odds"
             ),
 
+        "units":
+            float(
+                extracted.get(
+                    "units"
+                )
+                or 1
+            ),
+
+        "mortal_lock":
+            False,
+
         "week":
-            week,
+            int(
+                extracted[
+                    "week"
+                ]
+            ),
 
         "added_pick":
             bool(
-                added_pick
+                extracted.get(
+                    "added_pick"
+                )
+                or added_hint
             ),
 
         "confidence":
@@ -2588,9 +2790,154 @@ def make_stored_pick(
             None,
     }
 
+    pick["id"] = stable_id(
+        repr(
+            canonical_pick_key(
+                pick
+            )
+        )
+    )
+
+    return pick
+
 
 # ============================================================
-# PROCESS POSTS
+# PROCESSED POST STATE
+# ============================================================
+
+def initialize_processed_ids(
+    existing,
+    state,
+):
+    """
+    On first install of this simplified ingest, mark every
+    existing source post as already handled.
+
+    This prevents old cards/replies from being parsed again.
+    """
+
+    if state.get(
+        "processed_ids_initialized_v2"
+    ):
+        return
+
+    ids = {
+        str(
+            pick.get(
+                "source_post_id"
+            )
+        )
+        for pick in existing
+        if pick.get(
+            "source_post_id"
+        )
+    }
+
+    state[
+        "processed_post_ids"
+    ] = sorted(
+        ids,
+        key=lambda value:
+            int(value)
+            if str(value).isdigit()
+            else 0,
+    )[-1000:]
+
+    state[
+        "processed_ids_initialized_v2"
+    ] = True
+
+    print(
+        "Seeded processed post IDs:",
+        len(ids),
+    )
+
+
+# ============================================================
+# RETRY QUEUE
+# ============================================================
+
+def fetch_retry_posts(
+    state,
+    official_user_id,
+):
+    failed_ids = list(
+        state.get(
+            "failed_post_ids",
+            [],
+        )
+        or []
+    )
+
+    posts = []
+    media_map = {}
+
+    still_failed = []
+
+    for post_id in failed_ids:
+
+        try:
+            post, media = (
+                fetch_post_by_id(
+                    post_id
+                )
+            )
+
+        except Exception as exc:
+
+            print(
+                "RETRY FETCH FAILED:",
+                post_id,
+                type(exc).__name__,
+                exc,
+            )
+
+            still_failed.append(
+                post_id
+            )
+
+            continue
+
+        if not post:
+            still_failed.append(
+                post_id
+            )
+
+            continue
+
+        if (
+            str(
+                post.get(
+                    "author_id"
+                )
+                or ""
+            )
+            != str(
+                official_user_id
+            )
+        ):
+            continue
+
+        posts.append(
+            post
+        )
+
+        media_map.update(
+            media
+        )
+
+    state[
+        "failed_post_ids"
+    ] = still_failed
+
+    return (
+        posts,
+        media_map,
+    )
+
+
+# ============================================================
+# PROCESS NEW POSTS
 # ============================================================
 
 def process_posts(
@@ -2598,79 +2945,94 @@ def process_posts(
     posts,
     media_map,
     official_user_id,
-    recovery_post_ids=None,
+    state,
 ):
-    recovery_post_ids = set(
-        recovery_post_ids
-        or []
-    )
-
     parent_cache = {}
 
-    # Existing keys.
-    seen = {
+    seen_wagers = {
         canonical_pick_key(
             pick
         )
         for pick in existing
     }
 
+    processed_ids = set(
+        str(value)
+        for value in (
+            state.get(
+                "processed_post_ids",
+                [],
+            )
+            or []
+        )
+    )
+
+    failed_ids = set(
+        str(value)
+        for value in (
+            state.get(
+                "failed_post_ids",
+                [],
+            )
+            or []
+        )
+    )
+
     candidate_count = 0
-    reply_candidate_count = 0
     new_pick_count = 0
 
-    verified_posts = []
+    for post in sorted(
+        posts,
+        key=lambda item:
+            int(
+                item.get(
+                    "id"
+                )
+                or 0
+            ),
+    ):
 
-    for post in posts:
-        author_id = str(
+        post_id = str(
             post.get(
-                "author_id"
+                "id"
             )
             or ""
         )
 
+        if not post_id:
+            continue
+
+
+        # ----------------------------------------------------
+        # OFFICIAL ACCOUNT ONLY
+        # ----------------------------------------------------
+
         if (
-            author_id
-            and author_id
+            str(
+                post.get(
+                    "author_id"
+                )
+                or ""
+            )
             != str(
                 official_user_id
             )
         ):
             continue
 
-        verified_posts.append(
-            post
-        )
 
-    for post in sorted(
-        verified_posts,
-        key=lambda p:
-            int(
-                p.get(
-                    "id"
-                )
-                or 0
-            ),
-    ):
-        post_id = str(
-            post.get(
-                "id"
-            )
-        )
+        # ----------------------------------------------------
+        # DO NOT REPARSE SUCCESSFULLY HANDLED POSTS
+        # ----------------------------------------------------
 
-        reply_hint = (
-            is_reply_post(
-                post
-            )
-        )
-
-        # Historical recovery is reply-only.
         if (
             post_id
-            in recovery_post_ids
-            and not reply_hint
+            in processed_ids
+            and post_id
+            not in failed_ids
         ):
             continue
+
 
         image_urls = (
             image_urls_for_post(
@@ -2686,16 +3048,39 @@ def process_posts(
             or ""
         )
 
+
+        # ----------------------------------------------------
+        # NOT A PICK POST
+        # ----------------------------------------------------
+
         if not looks_like_pick_post(
             text,
             image_urls,
         ):
+
+            processed_ids.add(
+                post_id
+            )
+
+            failed_ids.discard(
+                post_id
+            )
+
             continue
+
 
         candidate_count += 1
 
-        if reply_hint:
-            reply_candidate_count += 1
+
+        # ----------------------------------------------------
+        # REPLY CONTEXT
+        # ----------------------------------------------------
+
+        reply_hint = (
+            is_reply_post(
+                post
+            )
+        )
 
         parent_text = ""
 
@@ -2707,6 +3092,11 @@ def process_posts(
                     parent_cache,
                 )
             )
+
+
+        # ----------------------------------------------------
+        # PICKER
+        # ----------------------------------------------------
 
         picker_hint = (
             picker_hint_from_text(
@@ -2724,6 +3114,23 @@ def process_posts(
                 )
             )
 
+
+        # ----------------------------------------------------
+        # WEEK
+        # ----------------------------------------------------
+
+        week = infer_week(
+            text,
+            post.get(
+                "created_at"
+            ),
+        )
+
+
+        # ----------------------------------------------------
+        # ADDED PICK
+        # ----------------------------------------------------
+
         added_hint = (
             is_added_post(
                 text
@@ -2739,13 +3146,6 @@ def process_posts(
         ):
             added_hint = True
 
-        week = (
-            infer_week_from_date(
-                post.get(
-                    "created_at"
-                )
-            )
-        )
 
         post_url = (
             "https://x.com/"
@@ -2753,116 +3153,108 @@ def process_posts(
             f"{post_id}"
         )
 
+
+        print(
+            "PARSING:",
+            post_id,
+            "| week:",
+            week,
+            "| reply:",
+            reply_hint,
+            "| picker:",
+            picker_hint,
+        )
+
+
+        # ----------------------------------------------------
+        # AI EXTRACTION
+        # ----------------------------------------------------
+
         try:
-            payload = (
+            raw_picks = (
                 parse_post_with_ai(
                     text=text,
-                    image_urls=image_urls,
-                    post_url=post_url,
-                    posted_at=post.get(
-                        "created_at"
-                    ),
-                    inferred_week=week,
-                    picker_hint=picker_hint,
-                    added_hint=added_hint,
-                    reply_hint=reply_hint,
-                    official_parent_text=
+                    image_urls=
+                        image_urls,
+                    post_url=
+                        post_url,
+                    posted_at=
+                        post.get(
+                            "created_at"
+                        ),
+                    inferred_week=
+                        week,
+                    picker_hint=
+                        picker_hint,
+                    reply_hint=
+                        reply_hint,
+                    parent_text=
                         parent_text,
                 )
             )
 
         except Exception as exc:
+
             print(
-                "AI EXTRACTION FAILED:",
+                "PARSE FAILED — QUEUED FOR RETRY:",
                 post_id,
                 type(exc).__name__,
                 exc,
             )
 
+            failed_ids.add(
+                post_id
+            )
+
             continue
 
-        extracted = payload.get(
-            "picks",
-            [],
+
+        # ----------------------------------------------------
+        # SUCCESSFULLY PARSED POST
+        # ----------------------------------------------------
+
+        failed_ids.discard(
+            post_id
         )
 
-        if not isinstance(
-            extracted,
-            list,
-        ):
-            continue
+        processed_ids.add(
+            post_id
+        )
 
-        for raw_pick in extracted:
 
-            normalized = (
-                normalize_extracted_pick(
+        for raw_pick in raw_picks:
+
+            extracted = (
+                normalize_ai_pick(
                     raw_pick,
-                    inferred_week=week,
+                    default_week=
+                        week,
                     picker_hint=
                         picker_hint,
                 )
             )
 
-            if not normalized:
+            if not extracted:
                 continue
 
-            picker = normalize_picker(
-                normalized.get(
-                    "picker"
-                )
-            )
-
-            if picker not in {
-                "Big Cat",
-                "Stool Presidente",
-                "Rico Bosco",
-            }:
-                continue
-
-            pick_week = (
-                normalized.get(
-                    "week"
-                )
-                or week
-            )
-
-            if not pick_week:
-                print(
-                    "SKIPPING PICK WITHOUT WEEK:",
-                    normalized.get(
-                        "selection"
-                    ),
-                )
-                continue
-
-            normalized[
-                "picker"
-            ] = picker
-
-            normalized[
-                "week"
-            ] = int(
-                pick_week
-            )
-
-            canonical = (
-                canonical_pick_key(
-                    normalized
-                )
-            )
 
             # ------------------------------------------------
-            # DEDUPE ACROSS DIFFERENT SOURCE POSTS
+            # DEDUPE BEFORE STORE
             # ------------------------------------------------
 
-            if canonical in seen:
+            key = canonical_pick_key(
+                extracted
+            )
+
+            if key in seen_wagers:
+
                 print(
                     "DUPLICATE SKIPPED:",
-                    picker,
-                    "| Week",
-                    pick_week,
+                    extracted.get(
+                        "picker"
+                    ),
                     "|",
-                    normalized.get(
+                    extracted.get(
                         "selection"
                     ),
                     "| source:",
@@ -2871,80 +3263,193 @@ def process_posts(
 
                 continue
 
-            added_pick = bool(
-                normalized.get(
-                    "added_pick"
+
+            stored = (
+                stored_pick_from_ai(
+                    extracted,
+                    post=post,
+                    post_url=
+                        post_url,
+                    reply_hint=
+                        reply_hint,
+                    added_hint=
+                        added_hint,
                 )
-            )
-
-            if added_hint:
-                added_pick = True
-
-            stored = make_stored_pick(
-                extracted_pick=
-                    normalized,
-                post=post,
-                post_url=post_url,
-                picker=picker,
-                week=int(
-                    pick_week
-                ),
-                added_pick=
-                    added_pick,
-                reply_hint=
-                    reply_hint,
             )
 
             existing.append(
                 stored
             )
 
-            seen.add(
-                canonical
+            seen_wagers.add(
+                key
             )
 
             new_pick_count += 1
 
             print(
                 "ADDED:",
-                picker,
+                stored.get(
+                    "picker"
+                ),
                 "| Week",
-                pick_week,
+                stored.get(
+                    "week"
+                ),
                 "|",
                 stored.get(
                     "selection"
                 ),
-                "| reply:",
-                reply_hint,
-                "| market:",
-                stored.get(
-                    "bet_type"
-                ),
             )
+
+
+    # Keep state files from growing forever.
+    state[
+        "processed_post_ids"
+    ] = sorted(
+        processed_ids,
+        key=lambda value:
+            int(value)
+            if str(value).isdigit()
+            else 0,
+    )[-1000:]
+
+    state[
+        "failed_post_ids"
+    ] = sorted(
+        failed_ids,
+        key=lambda value:
+            int(value)
+            if str(value).isdigit()
+            else 0,
+    )[-100:]
 
     return (
         existing,
         candidate_count,
-        reply_candidate_count,
         new_pick_count,
     )
 
 
 # ============================================================
-# INGEST
+# AUDIT
+# ============================================================
+
+def print_week_audit(
+    picks,
+    week,
+):
+    print()
+    print(
+        f"========== WEEK {week} AUDIT =========="
+    )
+
+    for picker in [
+        "Rico Bosco",
+        "Big Cat",
+        "Stool Presidente",
+    ]:
+
+        rows = [
+            pick
+            for pick in picks
+            if (
+                normalize_picker(
+                    pick.get(
+                        "picker"
+                    )
+                )
+                == picker
+                and pick_week(
+                    pick
+                )
+                == week
+            )
+        ]
+
+        wins = sum(
+            1
+            for pick in rows
+            if (
+                str(
+                    pick.get(
+                        "result"
+                    )
+                    or ""
+                ).upper()
+                == "WIN"
+            )
+        )
+
+        losses = sum(
+            1
+            for pick in rows
+            if (
+                str(
+                    pick.get(
+                        "result"
+                    )
+                    or ""
+                ).upper()
+                == "LOSS"
+            )
+        )
+
+        pushes = sum(
+            1
+            for pick in rows
+            if (
+                str(
+                    pick.get(
+                        "result"
+                    )
+                    or ""
+                ).upper()
+                == "PUSH"
+            )
+        )
+
+        pending = (
+            len(rows)
+            - wins
+            - losses
+            - pushes
+        )
+
+        print(
+            picker,
+            "| picks:",
+            len(rows),
+            "| record:",
+            f"{wins}-{losses}",
+            "| pushes:",
+            pushes,
+            "| pending:",
+            pending,
+        )
+
+    print(
+        "===================================="
+    )
+
+
+# ============================================================
+# MAIN
 # ============================================================
 
 def ingest():
+
     print()
     print(
         "===================================="
     )
     print(
-        "BARSTOOL PICK EM X INGEST"
+        "BARSTOOL PICK EM INGEST"
     )
     print(
         "===================================="
     )
+
 
     state = load_json(
         STATE_FILE,
@@ -2962,138 +3467,86 @@ def ingest():
     ):
         existing = []
 
-    # --------------------------------------------------------
-    # CLEAN CURRENT STORED DATA BEFORE ANY NEW INGESTION
-    # --------------------------------------------------------
 
-    repaired = (
-        repair_existing_markets(
-            existing
-        )
+    # ========================================================
+    # 1. REPAIR WEEK 1 ONCE
+    # ========================================================
+
+    existing = restore_week1_once(
+        existing,
+        state,
     )
 
-    if repaired:
-        print(
-            "Existing market metadata repaired:",
-            repaired,
-        )
-
-    # Generic canonical cleanup.
-    existing = (
-        dedupe_existing_picks(
-            existing
-        )
+    existing = dedupe_picks(
+        existing
     )
 
-    # Confirmed Week 1 repairs:
-    # 1. remove duplicate Rico BYU -51.5
-    # 2. guarantee Rico WIS @ ND Under 46.5 exists
-    existing = (
-        reconcile_known_week1_issues(
-            existing
-        )
+
+    # ========================================================
+    # 2. SEED PROCESSED IDS
+    #
+    # Everything already in the database is considered handled.
+    # No old reply recovery.
+    # ========================================================
+
+    initialize_processed_ids(
+        existing,
+        state,
     )
+
+
+    # ========================================================
+    # 3. RESOLVE OFFICIAL X ACCOUNT
+    # ========================================================
 
     official_user_id = (
         resolve_user_id()
     )
 
     print(
-        "Official X account:",
+        "Official account:",
         USERNAME,
-        "| user_id:",
+        "| user ID:",
         official_user_id,
     )
 
-    # --------------------------------------------------------
-    # NORMAL TIMELINE
-    # --------------------------------------------------------
 
-    should_backfill = (
-        not state.get(
-            "backfill_complete"
+    # ========================================================
+    # 4. RETRY ONLY POSTS THAT PREVIOUSLY FAILED
+    # ========================================================
+
+    retry_posts, retry_media = (
+        fetch_retry_posts(
+            state,
+            official_user_id,
         )
     )
 
-    if should_backfill:
+
+    # ========================================================
+    # 5. FETCH NEW OFFICIAL POSTS ONLY
+    # ========================================================
+
+    last_x_post_id = state.get(
+        "last_x_post_id"
+    )
+
+    if last_x_post_id:
+
         timeline_posts, timeline_media = (
             fetch_user_posts(
                 official_user_id,
-                start_time=(
-                    datetime.now(
-                        timezone.utc
-                    )
-                    - timedelta(
-                        days=
-                            BACKFILL_DAYS
-                    )
-                ),
-                max_pages=
-                    MAX_BACKFILL_PAGES,
+                since_id=
+                    last_x_post_id,
+                max_pages=2,
             )
-        )
-
-        print(
-            "Normal timeline backfill fetched:",
-            len(
-                timeline_posts
-            ),
         )
 
     else:
+
+        # Safety fallback only for a completely fresh state.
         timeline_posts, timeline_media = (
             fetch_user_posts(
-                official_user_id,
-                since_id=state.get(
-                    "last_x_post_id"
-                ),
-                max_pages=1,
-            )
-        )
-
-        print(
-            "Normal timeline incremental fetched:",
-            len(
-                timeline_posts
-            ),
-        )
-
-    timeline_ids = {
-        str(
-            post.get(
-                "id"
-            )
-        )
-        for post in timeline_posts
-        if post.get(
-            "id"
-        )
-    }
-
-    # --------------------------------------------------------
-    # ONE-TIME OFFICIAL REPLY-ONLY RECOVERY
-    #
-    # New flag so this version can make one safe historical
-    # reply pass without reparsing old top-level cards.
-    # --------------------------------------------------------
-
-    recovery_flag = (
-        "reply_only_recovery_v3_complete"
-    )
-
-    recovery_posts = []
-    recovery_media = {}
-    recovery_ids = set()
-
-    recovery_success = False
-
-    if not state.get(
-        recovery_flag
-    ):
-        try:
-            raw_recovery_posts, (
-                recovery_media
-            ) = fetch_user_posts(
                 official_user_id,
                 start_time=(
                     datetime.now(
@@ -3101,94 +3554,34 @@ def ingest():
                     )
                     - timedelta(
                         days=
-                            REPLY_RECOVERY_DAYS
+                            INITIAL_BACKFILL_DAYS
                     )
                 ),
                 max_pages=
-                    MAX_REPLY_RECOVERY_PAGES,
+                    INITIAL_BACKFILL_PAGES,
             )
+        )
 
-            # CRITICAL:
-            # recovery may contribute ONLY official replies.
-            recovery_posts = [
-                post
-                for post
-                in raw_recovery_posts
-                if (
-                    is_reply_post(
-                        post
-                    )
-                    and str(
-                        post.get(
-                            "author_id"
-                        )
-                        or ""
-                    )
-                    == str(
-                        official_user_id
-                    )
-                )
-            ]
 
-            recovery_ids = {
-                str(
-                    post.get(
-                        "id"
-                    )
-                )
-                for post
-                in recovery_posts
-                if post.get(
-                    "id"
-                )
-            }
-
-            recovery_success = True
-
-            print(
-                "Official reply-only recovery fetched:",
-                len(
-                    recovery_posts
-                ),
-            )
-
-        except Exception as exc:
-            print(
-                "REPLY RECOVERY FAILED:",
-                type(exc).__name__,
-                exc,
-            )
-
-    # --------------------------------------------------------
-    # COMBINE WITHOUT DUPLICATING POSTS
-    # --------------------------------------------------------
+    # ========================================================
+    # 6. COMBINE RETRIES + NEW POSTS
+    # ========================================================
 
     post_map = {}
 
-    for post in timeline_posts:
+    for post in (
+        retry_posts
+        + timeline_posts
+    ):
+
         post_id = str(
             post.get(
                 "id"
             )
+            or ""
         )
 
         if post_id:
-            post_map[
-                post_id
-            ] = post
-
-    for post in recovery_posts:
-        post_id = str(
-            post.get(
-                "id"
-            )
-        )
-
-        if (
-            post_id
-            and post_id
-            not in post_map
-        ):
             post_map[
                 post_id
             ] = post
@@ -3198,104 +3591,99 @@ def ingest():
     )
 
     combined_media = dict(
-        timeline_media
+        retry_media
     )
 
     combined_media.update(
-        recovery_media
+        timeline_media
     )
 
-    # Only IDs that came exclusively from recovery need the
-    # reply-only enforcement path.
-    historical_recovery_ids = (
-        recovery_ids
-        - timeline_ids
-    )
 
-    # --------------------------------------------------------
-    # PROCESS
-    # --------------------------------------------------------
+    # ========================================================
+    # 7. PROCESS
+    # ========================================================
 
     (
         existing,
         candidate_count,
-        reply_candidate_count,
         new_pick_count,
     ) = process_posts(
-        existing=existing,
-        posts=combined_posts,
-        media_map=combined_media,
-        official_user_id=
-            official_user_id,
-        recovery_post_ids=
-            historical_recovery_ids,
+        existing,
+        combined_posts,
+        combined_media,
+        official_user_id,
+        state,
     )
 
-    # --------------------------------------------------------
-    # CLEAN AGAIN AFTER NEW EXTRACTIONS
-    # --------------------------------------------------------
 
-    existing = (
-        dedupe_existing_picks(
-            existing
-        )
+    # ========================================================
+    # 8. FINAL DATABASE DEDUPE
+    # ========================================================
+
+    existing = dedupe_picks(
+        existing
     )
 
-    existing = (
-        reconcile_known_week1_issues(
-            existing
-        )
-    )
 
-    # --------------------------------------------------------
-    # ADVANCE NORMAL TIMELINE CHECKPOINT
+    # ========================================================
+    # 9. ADVANCE NORMAL TIMELINE CURSOR
     #
-    # Recovery posts do NOT control last_x_post_id.
-    # --------------------------------------------------------
+    # Failed parse IDs remain in failed_post_ids and get retried,
+    # so advancing the cursor cannot permanently lose them.
+    # ========================================================
+
+    timeline_ids = [
+        int(
+            post.get(
+                "id"
+            )
+        )
+        for post in timeline_posts
+        if (
+            post.get(
+                "id"
+            )
+            and str(
+                post.get(
+                    "id"
+                )
+            ).isdigit()
+        )
+    ]
 
     if timeline_ids:
+
         newest_id = str(
             max(
-                int(x)
-                for x
-                in timeline_ids
+                timeline_ids
             )
         )
 
-        previous_id = state.get(
+        old_id = state.get(
             "last_x_post_id"
         )
 
         if (
-            not previous_id
+            not old_id
             or int(
                 newest_id
             )
             > int(
-                previous_id
+                old_id
             )
         ):
             state[
                 "last_x_post_id"
             ] = newest_id
 
-    if should_backfill:
-        state[
-            "backfill_complete"
-        ] = True
 
-    if recovery_success:
-        state[
-            recovery_flag
-        ] = True
+    # ========================================================
+    # 10. SAVE
+    # ========================================================
 
     state[
         "updated_at"
     ] = now_iso()
-
-    # --------------------------------------------------------
-    # SAVE
-    # --------------------------------------------------------
 
     save_json(
         PICKS_FILE,
@@ -3307,9 +3695,10 @@ def ingest():
         state,
     )
 
-    # --------------------------------------------------------
+
+    # ========================================================
     # SUMMARY
-    # --------------------------------------------------------
+    # ========================================================
 
     print()
     print(
@@ -3317,43 +3706,67 @@ def ingest():
     )
 
     print(
-        "Official candidate posts inspected:",
+        "New official timeline posts:",
+        len(
+            timeline_posts
+        ),
+    )
+
+    print(
+        "Retry posts:",
+        len(
+            retry_posts
+        ),
+    )
+
+    print(
+        "Candidate pick posts parsed:",
         candidate_count,
     )
 
     print(
-        "Official reply/subtweet candidates:",
-        reply_candidate_count,
-    )
-
-    print(
-        "New picks added:",
+        "New wagers added:",
         new_pick_count,
     )
 
     print(
-        "Total stored picks:",
+        "Failed posts queued for retry:",
+        len(
+            state.get(
+                "failed_post_ids",
+                [],
+            )
+        ),
+    )
+
+    print(
+        "Total stored wagers:",
         len(
             existing
         ),
     )
 
     print(
-        "Rico WIS @ ND Under 46.5 present:",
-        rico_nd_under_exists(
-            existing
+        "Last X post ID:",
+        state.get(
+            "last_x_post_id"
         ),
     )
 
     print(
-        "Reply-only recovery v3 complete:",
+        "Week 1 reconciliation:",
         state.get(
-            recovery_flag
+            WEEK1_REPAIR_FLAG
         ),
     )
 
     print(
         "===================================="
+    )
+
+    print_week_audit(
+        existing,
+        1,
     )
 
 
