@@ -32,10 +32,14 @@ USERNAME = os.getenv(
 BACKFILL_DAYS = 8
 MAX_BACKFILL_PAGES = 3
 
-# Replies/subtweets occasionally contain additional picks.
-# Keep a slightly wider one-time recovery window.
-REPLY_BACKFILL_DAYS = 10
-MAX_REPLY_BACKFILL_PAGES = 3
+# One-time recovery window for replies/subtweets that were
+# missed before reply-aware ingestion existed.
+REPLY_RECOVERY_DAYS = 10
+MAX_REPLY_RECOVERY_PAGES = 4
+
+# Prevent excessive parent-chain lookups.
+MAX_PARENT_DEPTH = 3
+
 
 SUPPORTED_MARKETS = {
     "SPREAD",
@@ -71,9 +75,8 @@ def x_get(
         X_API + path,
         params=params or {},
         headers={
-            "Authorization": (
+            "Authorization":
                 f"Bearer {token}"
-            )
         },
         timeout=30,
     )
@@ -88,14 +91,18 @@ def resolve_user_id():
         f"/users/by/username/{USERNAME}"
     )
 
-    return payload[
-        "data"
-    ][
-        "id"
-    ]
+    return str(
+        payload[
+            "data"
+        ][
+            "id"
+        ]
+    )
 
 
-def iso_x_time(dt):
+def iso_x_time(
+    dt,
+):
     return (
         dt
         .astimezone(
@@ -108,34 +115,37 @@ def iso_x_time(dt):
 
 
 # ============================================================
-# NORMAL USER TIMELINE
+# OFFICIAL USER TIMELINE
 # ============================================================
 
-def fetch_posts(
+def fetch_user_posts(
     user_id,
     since_id=None,
-    backfill=False,
+    start_time=None,
+    max_pages=1,
 ):
     """
-    Fetch the normal authored timeline.
+    Fetch posts authored by one specific X user.
 
-    Replies are NOT explicitly excluded.
+    IMPORTANT:
+    /users/{user_id}/tweets is the account's OWN timeline.
 
-    Normal:
-        only posts newer than last_x_post_id
+    We exclude retweets but intentionally DO NOT exclude
+    replies.
 
-    Backfill:
-        several pages covering recent card history
+    We also request author_id and later verify every post
+    matches user_id before parsing. This prevents fan replies
+    from ever becoming tracker picks.
     """
 
     params = {
         "max_results": 100,
 
-        # Exclude retweets only.
-        # Do NOT exclude replies.
+        # Replies must remain included.
         "exclude": "retweets",
 
         "tweet.fields": (
+            "author_id,"
             "created_at,"
             "attachments,"
             "text,"
@@ -144,9 +154,8 @@ def fetch_posts(
             "in_reply_to_user_id"
         ),
 
-        "expansions": (
-            "attachments.media_keys"
-        ),
+        "expansions":
+            "attachments.media_keys",
 
         "media.fields": (
             "media_key,"
@@ -156,28 +165,22 @@ def fetch_posts(
         ),
     }
 
-    if backfill:
+    if since_id:
+        params[
+            "since_id"
+        ] = str(
+            since_id
+        )
 
+    if start_time:
         params[
             "start_time"
         ] = iso_x_time(
-            datetime.now(
-                timezone.utc
-            )
-            - timedelta(
-                days=BACKFILL_DAYS
-            )
+            start_time
         )
 
-    elif since_id:
-
-        params[
-            "since_id"
-        ] = since_id
-
     all_posts = []
-
-    all_media = {}
+    media_map = {}
 
     pages = 0
 
@@ -188,12 +191,44 @@ def fetch_posts(
             params,
         )
 
-        all_posts.extend(
-            payload.get(
-                "data",
-                [],
+        for post in payload.get(
+            "data",
+            [],
+        ):
+
+            # Belt-and-suspenders author verification.
+            #
+            # If X supplies author_id and it does not match
+            # the official account ID, reject it.
+            author_id = str(
+                post.get(
+                    "author_id"
+                )
+                or ""
             )
-        )
+
+            if (
+                author_id
+                and author_id
+                != str(
+                    user_id
+                )
+            ):
+
+                print(
+                    "REJECTED NON-OFFICIAL AUTHOR:",
+                    post.get(
+                        "id"
+                    ),
+                    "| author:",
+                    author_id,
+                )
+
+                continue
+
+            all_posts.append(
+                post
+            )
 
         for media in (
             payload
@@ -215,7 +250,7 @@ def fetch_posts(
 
             if media_key:
 
-                all_media[
+                media_map[
                     media_key
                 ] = media
 
@@ -235,13 +270,7 @@ def fetch_posts(
         if not next_token:
             break
 
-        if not backfill:
-            break
-
-        if (
-            pages
-            >= MAX_BACKFILL_PAGES
-        ):
+        if pages >= max_pages:
             break
 
         params[
@@ -250,295 +279,8 @@ def fetch_posts(
 
     return (
         all_posts,
-        all_media,
+        media_map,
     )
-
-
-# ============================================================
-# REPLY / SUBTWEET DISCOVERY
-# ============================================================
-
-def fetch_reply_posts(
-    since_id=None,
-    backfill=False,
-):
-    """
-    Explicitly search for replies authored by
-    @barstoolpickem.
-
-    This is a second discovery path in addition to the
-    normal user timeline.
-
-    Why:
-        The account occasionally posts additional wagers as
-        replies/subtweets inside a thread. We do not want to
-        rely only on the timeline representation to discover
-        those.
-
-    Search query:
-        from:barstoolpickem is:reply -is:retweet
-
-    The results are later merged with the normal timeline
-    and deduplicated by tweet ID.
-    """
-
-    params = {
-        "query": (
-            f"from:{USERNAME} "
-            "is:reply "
-            "-is:retweet"
-        ),
-
-        "max_results": 100,
-
-        "tweet.fields": (
-            "created_at,"
-            "attachments,"
-            "text,"
-            "referenced_tweets,"
-            "conversation_id,"
-            "in_reply_to_user_id"
-        ),
-
-        "expansions": (
-            "attachments.media_keys"
-        ),
-
-        "media.fields": (
-            "media_key,"
-            "type,"
-            "url,"
-            "preview_image_url"
-        ),
-    }
-
-    if backfill:
-
-        params[
-            "start_time"
-        ] = iso_x_time(
-            datetime.now(
-                timezone.utc
-            )
-            - timedelta(
-                days=REPLY_BACKFILL_DAYS
-            )
-        )
-
-    elif since_id:
-
-        params[
-            "since_id"
-        ] = since_id
-
-    all_posts = []
-
-    all_media = {}
-
-    pages = 0
-
-    while True:
-
-        payload = x_get(
-            "/tweets/search/recent",
-            params,
-        )
-
-        all_posts.extend(
-            payload.get(
-                "data",
-                [],
-            )
-        )
-
-        for media in (
-            payload
-            .get(
-                "includes",
-                {},
-            )
-            .get(
-                "media",
-                [],
-            )
-        ):
-
-            media_key = (
-                media.get(
-                    "media_key"
-                )
-            )
-
-            if media_key:
-
-                all_media[
-                    media_key
-                ] = media
-
-        pages += 1
-
-        next_token = (
-            payload
-            .get(
-                "meta",
-                {},
-            )
-            .get(
-                "next_token"
-            )
-        )
-
-        if not next_token:
-            break
-
-        if not backfill:
-            break
-
-        if (
-            pages
-            >= MAX_REPLY_BACKFILL_PAGES
-        ):
-            break
-
-        params[
-            "next_token"
-        ] = next_token
-
-    return (
-        all_posts,
-        all_media,
-    )
-
-
-def safe_fetch_reply_posts(
-    since_id=None,
-    backfill=False,
-):
-    """
-    Reply discovery should strengthen ingestion, not make the
-    whole tracker fail if X temporarily rejects/search fails.
-
-    Normal timeline ingestion will continue even if this
-    secondary endpoint is temporarily unavailable.
-    """
-
-    try:
-
-        posts, media = (
-            fetch_reply_posts(
-                since_id=since_id,
-                backfill=backfill,
-            )
-        )
-
-        print(
-            "Explicit reply search fetched:",
-            len(posts),
-            (
-                "backfill"
-                if backfill
-                else "incremental"
-            ),
-        )
-
-        return (
-            posts,
-            media,
-            True,
-        )
-
-    except Exception as exc:
-
-        print(
-            "REPLY SEARCH FAILED:",
-            type(exc).__name__,
-            "|",
-            exc,
-        )
-
-        return (
-            [],
-            {},
-            False,
-        )
-
-
-def merge_post_sources(
-    timeline_posts,
-    timeline_media,
-    reply_posts,
-    reply_media,
-):
-    """
-    Merge normal timeline posts and explicit reply-search
-    posts without processing the same X post twice.
-    """
-
-    posts_by_id = {}
-
-    for post in (
-        timeline_posts
-        + reply_posts
-    ):
-
-        post_id = str(
-            post.get(
-                "id"
-            )
-            or ""
-        )
-
-        if not post_id:
-            continue
-
-        posts_by_id[
-            post_id
-        ] = post
-
-    media = dict(
-        timeline_media
-    )
-
-    media.update(
-        reply_media
-    )
-
-    posts = list(
-        posts_by_id.values()
-    )
-
-    return (
-        posts,
-        media,
-    )
-
-
-def is_reply_post(post):
-    """
-    Useful for logging/debugging only.
-    """
-
-    if post.get(
-        "in_reply_to_user_id"
-    ):
-        return True
-
-    for reference in (
-        post.get(
-            "referenced_tweets"
-        )
-        or []
-    ):
-
-        if (
-            reference.get(
-                "type"
-            )
-            == "replied_to"
-        ):
-            return True
-
-    return False
 
 
 # ============================================================
@@ -549,14 +291,17 @@ def fetch_post_by_id(
     post_id,
 ):
     """
-    Used when an older stored REVIEW pick needs its original
-    source card re-read after parser improvements.
+    Fetch one X post.
+
+    author_id is included so parent context can be restricted
+    to posts authored by Barstool Pick Em itself.
     """
 
     payload = x_get(
         f"/tweets/{post_id}",
         {
             "tweet.fields": (
+                "author_id,"
                 "created_at,"
                 "attachments,"
                 "text,"
@@ -565,9 +310,8 @@ def fetch_post_by_id(
                 "in_reply_to_user_id"
             ),
 
-            "expansions": (
-                "attachments.media_keys"
-            ),
+            "expansions":
+                "attachments.media_keys",
 
             "media.fields": (
                 "media_key,"
@@ -596,19 +340,273 @@ def fetch_post_by_id(
         )
     ):
 
-        if media.get(
-            "media_key"
-        ):
+        media_key = (
+            media.get(
+                "media_key"
+            )
+        )
+
+        if media_key:
 
             media_map[
-                media[
-                    "media_key"
-                ]
+                media_key
             ] = media
 
     return (
         post,
         media_map,
+    )
+
+
+# ============================================================
+# MERGE TIMELINE SOURCES
+# ============================================================
+
+def merge_post_sources(
+    sources,
+):
+    """
+    Merge multiple fetches of the SAME official user timeline.
+
+    sources:
+        [
+            (posts, media),
+            (posts, media),
+            ...
+        ]
+
+    Deduplicate by X post ID.
+    """
+
+    posts_by_id = {}
+    media_map = {}
+
+    for posts, media in sources:
+
+        for post in posts:
+
+            post_id = str(
+                post.get(
+                    "id"
+                )
+                or ""
+            )
+
+            if post_id:
+
+                posts_by_id[
+                    post_id
+                ] = post
+
+        media_map.update(
+            media
+        )
+
+    return (
+        list(
+            posts_by_id.values()
+        ),
+        media_map,
+    )
+
+
+# ============================================================
+# REPLY DETECTION
+# ============================================================
+
+def replied_to_post_id(
+    post,
+):
+    for reference in (
+        post.get(
+            "referenced_tweets"
+        )
+        or []
+    ):
+
+        if (
+            reference.get(
+                "type"
+            )
+            == "replied_to"
+        ):
+
+            value = (
+                reference.get(
+                    "id"
+                )
+            )
+
+            if value:
+
+                return str(
+                    value
+                )
+
+    return None
+
+
+def is_reply_post(
+    post,
+):
+    if replied_to_post_id(
+        post
+    ):
+
+        return True
+
+    return bool(
+        post.get(
+            "in_reply_to_user_id"
+        )
+    )
+
+
+# ============================================================
+# OFFICIAL THREAD CONTEXT
+# ============================================================
+
+def official_parent_context(
+    post,
+    official_user_id,
+    cache,
+):
+    """
+    Retrieve parent/ancestor text ONLY when those ancestors
+    were also authored by Barstool Pick Em.
+
+    This solves cases like:
+
+        Parent:
+            Adds for @BarstoolBigCat
+
+        Reply:
+            Tulane/Duke Over 50.5
+            Oklahoma State Over 57.5
+
+    The reply itself contains the wagers but not the picker.
+    The official parent provides attribution.
+
+    If the parent is a fan or any other account, its text is
+    ignored completely.
+    """
+
+    parent_id = replied_to_post_id(
+        post
+    )
+
+    if not parent_id:
+
+        return ""
+
+    context_parts = []
+
+    current_parent_id = (
+        parent_id
+    )
+
+    depth = 0
+
+    while (
+        current_parent_id
+        and depth
+        < MAX_PARENT_DEPTH
+    ):
+
+        depth += 1
+
+        if (
+            current_parent_id
+            in cache
+        ):
+
+            parent = cache[
+                current_parent_id
+            ]
+
+        else:
+
+            try:
+
+                parent, _ = (
+                    fetch_post_by_id(
+                        current_parent_id
+                    )
+                )
+
+            except Exception as exc:
+
+                print(
+                    "PARENT FETCH FAILED:",
+                    current_parent_id,
+                    "|",
+                    type(
+                        exc
+                    ).__name__,
+                    "|",
+                    exc,
+                )
+
+                cache[
+                    current_parent_id
+                ] = None
+
+                break
+
+            cache[
+                current_parent_id
+            ] = parent
+
+        if not parent:
+            break
+
+        author_id = str(
+            parent.get(
+                "author_id"
+            )
+            or ""
+        )
+
+        # Critical safety rule:
+        # Never use a fan/other account's reply as picker
+        # attribution context.
+        if (
+            author_id
+            != str(
+                official_user_id
+            )
+        ):
+
+            print(
+                "IGNORING NON-OFFICIAL PARENT:",
+                current_parent_id,
+                "| author:",
+                author_id,
+            )
+
+            break
+
+        parent_text = str(
+            parent.get(
+                "text"
+            )
+            or ""
+        ).strip()
+
+        if parent_text:
+
+            context_parts.append(
+                parent_text
+            )
+
+        current_parent_id = (
+            replied_to_post_id(
+                parent
+            )
+        )
+
+    return "\n\n".join(
+        context_parts
     )
 
 
@@ -640,16 +638,12 @@ def infer_week_from_date(
 
     try:
 
-        dt = (
-            datetime
-            .fromisoformat(
-                str(
-                    created_at
-                )
-                .replace(
-                    "Z",
-                    "+00:00",
-                )
+        dt = datetime.fromisoformat(
+            str(
+                created_at
+            ).replace(
+                "Z",
+                "+00:00",
             )
         )
 
@@ -736,10 +730,8 @@ def infer_week_from_date(
     week_one_monday = (
         september_first
         - timedelta(
-            days=(
-                september_first
-                .weekday()
-            )
+            days=
+                september_first.weekday()
         )
     )
 
@@ -761,7 +753,7 @@ def infer_week_from_date(
 
 
 # ============================================================
-# TEXT / MARKET NORMALIZATION
+# TEXT NORMALIZATION
 # ============================================================
 
 def normalize_text(
@@ -810,6 +802,10 @@ def normalize_text(
     return value.strip()
 
 
+# ============================================================
+# MARKET NORMALIZATION
+# ============================================================
+
 def normalize_bet_type(
     value,
 ):
@@ -819,6 +815,7 @@ def normalize_bet_type(
     ).upper().strip()
 
     aliases = {
+
         "1Q_SPREAD":
             "FIRST_QUARTER_SPREAD",
 
@@ -829,18 +826,6 @@ def normalize_bet_type(
             "FIRST_QUARTER_MONEYLINE",
 
         "1Q_TEAM_TOTAL":
-            "FIRST_QUARTER_TEAM_TOTAL",
-
-        "FIRST_QUARTER_SPREAD":
-            "FIRST_QUARTER_SPREAD",
-
-        "FIRST_QUARTER_TOTAL":
-            "FIRST_QUARTER_TOTAL",
-
-        "FIRST_QUARTER_MONEYLINE":
-            "FIRST_QUARTER_MONEYLINE",
-
-        "FIRST_QUARTER_TEAM_TOTAL":
             "FIRST_QUARTER_TEAM_TOTAL",
 
         "1H_SPREAD":
@@ -854,6 +839,18 @@ def normalize_bet_type(
 
         "1H_TEAM_TOTAL":
             "FIRST_HALF_TEAM_TOTAL",
+
+        "FIRST_QUARTER_SPREAD":
+            "FIRST_QUARTER_SPREAD",
+
+        "FIRST_QUARTER_TOTAL":
+            "FIRST_QUARTER_TOTAL",
+
+        "FIRST_QUARTER_MONEYLINE":
+            "FIRST_QUARTER_MONEYLINE",
+
+        "FIRST_QUARTER_TEAM_TOTAL":
+            "FIRST_QUARTER_TEAM_TOTAL",
 
         "FIRST_HALF_SPREAD":
             "FIRST_HALF_SPREAD",
@@ -891,15 +888,6 @@ def infer_market_from_selection(
 ):
     """
     Deterministic cleanup after AI extraction.
-
-    Supports:
-        Oregon TT o37.5
-        Oregon TT u37.5
-        Indiana first half TT Over 27.5
-        Oklahoma 1Q -9.5
-        Miami 1H -13.5
-        1Q Over 14.5
-        1H Under 28.5
     """
 
     pick = dict(
@@ -966,7 +954,7 @@ def infer_market_from_selection(
         )
     )
 
-    is_team_total = bool(
+    team_total = bool(
         re.search(
             r"\b(?:"
             r"tt|"
@@ -981,7 +969,7 @@ def infer_market_from_selection(
     # TEAM TOTAL
     # --------------------------------------------------------
 
-    if is_team_total:
+    if team_total:
 
         if first_quarter:
 
@@ -1100,9 +1088,7 @@ def infer_market_from_selection(
             )
 
         elif re.search(
-            r"\b(?:"
-            r"ml|moneyline"
-            r")\b",
+            r"\b(?:ml|moneyline)\b",
             text,
             flags=re.I,
         ):
@@ -1141,7 +1127,7 @@ def infer_market_from_selection(
 
 
 # ============================================================
-# CANDIDATE POST FILTERING
+# PICK CANDIDATE FILTER
 # ============================================================
 
 def looks_like_pick_post(
@@ -1149,10 +1135,9 @@ def looks_like_pick_post(
     image_urls,
 ):
     """
-    Images are always inspected because weekly cards are
-    image posts.
+    Images are inspected because weekly cards are image posts.
 
-    Text-only replies/subtweets can also contain wagers.
+    Text-only replies/subtweets must still look like wagers.
     """
 
     if image_urls:
@@ -1186,11 +1171,10 @@ def looks_like_pick_post(
         return True
 
     # Examples:
-    #
     # Cal +2.5
     # UNLV -3
-    # central michigan +11.5
-    #
+    # Central Michigan +11.5
+
     if re.search(
         r"\b[a-z][a-z .&'-]{1,35}"
         r"\s[+-]\d+(?:\.\d+)?\b",
@@ -1201,6 +1185,10 @@ def looks_like_pick_post(
 
     return False
 
+
+# ============================================================
+# PICKER / ADDITION CONTEXT
+# ============================================================
 
 def picker_hint_from_text(
     text,
@@ -1233,9 +1221,7 @@ def picker_hint_from_text(
         in t
     ):
 
-        return (
-            "Stool Presidente"
-        )
+        return "Stool Presidente"
 
     if (
         "ricobosco"
@@ -1260,7 +1246,7 @@ def is_added_post(
         text or ""
     ).lower()
 
-    added_terms = [
+    terms = [
         "adds for",
         "add for",
         "added pick",
@@ -1271,7 +1257,7 @@ def is_added_post(
 
     return any(
         term in t
-        for term in added_terms
+        for term in terms
     )
 
 
@@ -1288,6 +1274,7 @@ def parse_post_with_ai(
     picker_hint,
     added_hint,
     reply_hint=False,
+    official_parent_text="",
 ):
     from openai import OpenAI
 
@@ -1297,10 +1284,20 @@ def parse_post_with_ai(
 You are extracting gambling picks from the official
 Barstool Pick Em X account.
 
-Only track picks belonging to:
+ONLY track picks belonging to:
 - Big Cat
 - Stool Presidente / Dave Portnoy / El Presidente / Pres
 - Rico Bosco
+
+IMPORTANT SOURCE SAFETY:
+The actual SOURCE POST below has already been verified by the
+program to be authored by the official Barstool Pick Em account.
+
+Any parent/thread text supplied below is used ONLY for context
+and has also been verified as authored by Barstool Pick Em.
+
+Never extract a wager from parent context unless that wager is
+also explicitly present in the actual SOURCE POST.
 
 SOURCE POST:
 {post_url}
@@ -1308,14 +1305,17 @@ SOURCE POST:
 POSTED AT:
 {posted_at}
 
-POST TEXT:
+ACTUAL SOURCE POST TEXT:
 {text}
 
+OFFICIAL BARSTOOL PICK EM PARENT/THREAD CONTEXT:
+{official_parent_text or "None"}
+
 CONTEXT HINTS:
-Likely picker from post text: {picker_hint}
-Likely college-football week from post date: {inferred_week}
-This appears to be a later/additional-picks post: {added_hint}
-This X post is a reply/subtweet inside a thread: {reply_hint}
+Likely picker: {picker_hint}
+Likely college-football week: {inferred_week}
+Likely added-pick post: {added_hint}
+This source post is a reply/subtweet: {reply_hint}
 
 Return JSON only using exactly this structure:
 
@@ -1341,91 +1341,77 @@ Return JSON only using exactly this structure:
   ]
 }}
 
-IMPORTANT RULES:
+RULES:
 
-1. Extract only explicit wagers.
-   Never invent a wager.
+1. Extract wagers ONLY from the ACTUAL SOURCE POST.
 
-2. A weekly card may contain MANY wagers.
-   Extract every wager visible in every image.
+2. Parent/thread context may identify WHO the reply belongs to,
+   but parent wagers must not be re-extracted from the parent.
 
-3. Multiple images may belong to different Pick Em
-   personalities. Read each card heading.
+3. A Barstool Pick Em reply/subtweet can contain a valid new
+   wager.
 
-4. Common picker labels:
-   - "Big Cat's Picks" = Big Cat
-   - Dave / Pres / El Pres / Portnoy = Stool Presidente
-   - Rico = Rico Bosco
+4. Example:
 
-5. Ignore:
-   - record lines
-   - kickoff times
+   Parent:
+   "Adds for @BarstoolBigCat"
+
+   Actual reply:
+   "Tulane/Duke Over 50.5
+    Oklahoma State Over 57.5"
+
+   Extract exactly two Big Cat wagers from the reply.
+
+5. If the parent says "Adds for @BarstoolBigCat", then a reply
+   directly underneath containing wagers should generally be
+   attributed to Big Cat.
+
+6. Never infer picks from:
+   - fan comments
    - promotional text
-   - DraftKings branding
+   - historical results
+   - kickoff times
+   - record summaries
    - commentary
    - jokes
-   - historical records
-   - final scores
-   - recaps that do not announce a new wager
 
-6. IMPORTANT THREAD / REPLY RULE:
+7. Weekly image cards can contain multiple wagers. Extract every
+   explicit wager visible.
 
-   The Barstool Pick Em account sometimes posts additional
-   picks as replies/subtweets in a thread.
+8. SPREAD:
 
-   A reply/subtweet authored by Barstool Pick Em is a valid
-   source of NEW picks.
+   "Cal +2.5"
 
-   Example:
+   bet_type = SPREAD
+   team = "Cal"
+   side = "Cal"
+   line = 2.5
 
-   "Adds for @BarstoolBigCat
+9. GAME TOTAL:
 
-   Tulane/Duke Over 50.5
-   Oklahoma State Over 57.5"
+   "FIU/USF Over 53.5"
 
-   Extract BOTH wagers as Big Cat picks.
+   bet_type = TOTAL
+   matchup = "FIU/USF"
+   side = "OVER"
+   line = 53.5
 
-   They are not duplicates merely because the post is a reply.
+10. A one-team phrase like:
+    "Texas A&M Over 53.5"
 
-7. Later posts frequently say:
-   "Adds for @BarstoolBigCat"
-   followed by one or more wagers.
+    is a GAME TOTAL unless the source explicitly says TT or
+    team total.
 
-   Every wager from such a post must have:
-   added_pick = true
+11. TEAM TOTAL:
 
-8. If a later post or reply contains a single wager, still
-   extract it when the picker is identifiable.
+    "Alabama TT over 40.5"
 
-9. Use likely week {inferred_week} when the source does not
-   explicitly state a week.
-
-10. SPREAD EXAMPLE:
-
-    "Cal +2.5"
-
-    bet_type = SPREAD
-    team = "Cal"
-    side = "Cal"
-    line = 2.5
-    selection = "Cal +2.5"
-
-11. GAME TOTAL EXAMPLE:
-
-    "FIU/USF Over 53.5"
-
-    bet_type = TOTAL
-    matchup = "FIU/USF"
+    bet_type = TEAM_TOTAL
+    team = "Alabama"
     side = "OVER"
-    line = 53.5
+    line = 40.5
 
-12. "Texas A&M Over 53.5" may identify a game total using
-    one team.
-
-    Do NOT call it a TEAM_TOTAL unless the source explicitly
-    says TT or team total.
-
-13. TEAM TOTALS:
+12. Compact team total:
 
     "Oregon TT o37.5"
 
@@ -1433,19 +1419,11 @@ IMPORTANT RULES:
     team = "Oregon"
     side = "OVER"
     line = 37.5
-    selection = "Oregon TT o37.5"
-
-    "Oregon TT u37.5"
-
-    bet_type = TEAM_TOTAL
-    team = "Oregon"
-    side = "UNDER"
-    line = 37.5
 
     o = OVER
     u = UNDER
 
-14. FIRST QUARTER:
+13. FIRST QUARTER:
 
     "Oklahoma 1Q -9.5"
 
@@ -1454,28 +1432,11 @@ IMPORTANT RULES:
     side = "Oklahoma"
     line = -9.5
 
-    "Oklahoma/Temple 1Q Over 14.5"
-
-    bet_type = FIRST_QUARTER_TOTAL
-    matchup = "Oklahoma/Temple"
-    side = "OVER"
-    line = 14.5
-
-    "Oklahoma 1Q TT o10.5"
-
-    bet_type = FIRST_QUARTER_TEAM_TOTAL
-    team = "Oklahoma"
-    side = "OVER"
-    line = 10.5
-
-15. FIRST HALF:
+14. FIRST HALF:
 
     "Miami 1H -13.5"
 
     bet_type = FIRST_HALF_SPREAD
-    team = "Miami"
-    side = "Miami"
-    line = -13.5
 
     "Indiana first half TT Over 27.5"
 
@@ -1484,25 +1445,22 @@ IMPORTANT RULES:
     side = "OVER"
     line = 27.5
 
-16. NEVER convert a first-quarter or first-half wager into a
-    full-game wager.
+15. Never turn a 1Q or 1H wager into a full-game wager.
 
-17. Mortal Lock:
-    mortal_lock = true ONLY when explicitly identified as a
-    Mortal Lock.
+16. added_pick = true when the actual post or verified parent
+    context clearly indicates these are additions.
 
-18. Preserve lines exactly.
-    Convert unicode minus signs into numeric negatives.
+17. Mortal Lock is true only when explicitly identified.
 
-19. Defaults:
-    units = 1
-    odds = null unless explicitly shown.
+18. units = 1 unless explicitly stated otherwise.
+
+19. odds = null unless explicitly displayed.
 
 20. Confidence:
-    0.95-1.00 = clearly readable and attributed
-    below 0.90 = uncertainty exists
+    0.95-1.00 = clearly readable and attributable
+    below 0.90 = meaningful uncertainty
 
-21. If there are no actual new wagers:
+21. If the actual source post contains no new wagers:
     return {{"picks":[]}}
 
 JSON only.
@@ -1511,16 +1469,15 @@ No markdown.
 
     content = [
         {
-            "type": (
-                "input_text"
-            ),
-            "text": prompt,
+            "type":
+                "input_text",
+
+            "text":
+                prompt,
         }
     ]
 
-    for image_url in (
-        image_urls
-    ):
+    for image_url in image_urls:
 
         content.append(
             {
@@ -1573,37 +1530,30 @@ No markdown.
         raw
     )
 
-    picks = []
-
-    for pick in parsed.get(
-        "picks",
-        [],
-    ):
-
-        picks.append(
-            infer_market_from_selection(
-                pick
-            )
+    return [
+        infer_market_from_selection(
+            pick
         )
-
-    return picks
+        for pick
+        in parsed.get(
+            "picks",
+            [],
+        )
+    ]
 
 
 # ============================================================
-# DEDUPE
+# DEDUPLICATION
 # ============================================================
 
 def canonical_pick_key(
     pick,
 ):
     """
-    Cross-post duplicate protection.
+    X post ID deliberately excluded.
 
-    X post ID intentionally excluded.
-
-    This means a reply can safely be processed as another
-    source without creating a duplicate if the exact wager
-    was already captured elsewhere.
+    If the exact wager gets repeated later, it should not be
+    counted twice simply because it appeared in two posts.
     """
 
     picker = (
@@ -1660,10 +1610,7 @@ def canonical_pick_key(
                 line
             )
 
-            if (
-                line
-                .is_integer()
-            ):
+            if line.is_integer():
 
                 line = int(
                     line
@@ -1714,12 +1661,9 @@ def stable_id(
     return (
         hashlib
         .sha1(
-            canonical_key
-            .encode()
+            canonical_key.encode()
         )
-        .hexdigest()[
-            :16
-        ]
+        .hexdigest()[:16]
     )
 
 
@@ -1740,11 +1684,9 @@ def existing_keys(
 
             copy[
                 "week"
-            ] = (
-                infer_week_from_date(
-                    copy.get(
-                        "posted_at"
-                    )
+            ] = infer_week_from_date(
+                copy.get(
+                    "posted_at"
                 )
             )
 
@@ -1764,20 +1706,12 @@ def existing_keys(
 
 
 # ============================================================
-# EXISTING PICK REPAIR
+# EXISTING MARKET REPAIR
 # ============================================================
 
 def repair_existing_markets(
     existing,
 ):
-    """
-    Reclassify previously stored 1Q / 1H / TT picks using
-    their stored selection string.
-
-    Only market metadata changes.
-    No result is assigned here.
-    """
-
     repaired = 0
 
     for pick in existing:
@@ -1808,9 +1742,12 @@ def repair_existing_markets(
             )
         )
 
-        if normalized.get(
-            "side"
-        ) is not None:
+        if (
+            normalized.get(
+                "side"
+            )
+            is not None
+        ):
 
             pick[
                 "side"
@@ -1818,9 +1755,12 @@ def repair_existing_markets(
                 "side"
             ]
 
-        if normalized.get(
-            "line"
-        ) is not None:
+        if (
+            normalized.get(
+                "line"
+            )
+            is not None
+        ):
 
             pick[
                 "line"
@@ -1840,10 +1780,7 @@ def repair_existing_markets(
             ),
         )
 
-        if (
-            before
-            != after
-        ):
+        if before != after:
 
             repaired += 1
 
@@ -1906,12 +1843,12 @@ def needs_source_reparse(
 
 
 def candidate_matches_existing(
-    existing_pick,
+    old_pick,
     candidate,
 ):
     old_picker = (
         normalize_picker(
-            existing_pick.get(
+            old_pick.get(
                 "picker"
             )
         )
@@ -1937,7 +1874,7 @@ def candidate_matches_existing(
     try:
 
         old_line = float(
-            existing_pick.get(
+            old_pick.get(
                 "line"
             )
         )
@@ -1960,7 +1897,7 @@ def candidate_matches_existing(
         return False
 
     old_team = normalize_text(
-        existing_pick.get(
+        old_pick.get(
             "team"
         )
     )
@@ -1985,6 +1922,7 @@ def candidate_matches_existing(
 
 def repair_missing_direction_from_source(
     existing,
+    official_user_id,
 ):
     targets = [
         pick
@@ -2016,14 +1954,13 @@ def repair_missing_direction_from_source(
 
     repaired = 0
 
-    for (
-        post_id,
-        picks,
-    ) in grouped.items():
+    parent_cache = {}
+
+    for post_id, picks in grouped.items():
 
         try:
 
-            post, mmap = (
+            post, media_map = (
                 fetch_post_by_id(
                     post_id
                 )
@@ -2032,7 +1969,29 @@ def repair_missing_direction_from_source(
             if not post:
                 continue
 
-            media_keys = (
+            # Repair only from the official source account.
+            if (
+                str(
+                    post.get(
+                        "author_id"
+                    )
+                    or ""
+                )
+                != str(
+                    official_user_id
+                )
+            ):
+
+                print(
+                    "SOURCE REPAIR REJECTED NON-OFFICIAL POST:",
+                    post_id,
+                )
+
+                continue
+
+            image_urls = []
+
+            for media_key in (
                 post
                 .get(
                     "attachments",
@@ -2042,19 +2001,11 @@ def repair_missing_direction_from_source(
                     "media_keys",
                     [],
                 )
-            )
-
-            image_urls = []
-
-            for media_key in (
-                media_keys
             ):
 
-                media = (
-                    mmap.get(
-                        media_key,
-                        {},
-                    )
+                media = media_map.get(
+                    media_key,
+                    {},
                 )
 
                 if (
@@ -2073,12 +2024,34 @@ def repair_missing_direction_from_source(
                         ]
                     )
 
+            parent_text = (
+                official_parent_context(
+                    post,
+                    official_user_id,
+                    parent_cache,
+                )
+            )
+
+            combined_context = (
+                str(
+                    post.get(
+                        "text"
+                    )
+                    or ""
+                )
+                + "\n"
+                + parent_text
+            )
+
             picker_hint = (
                 picker_hint_from_text(
-                    post.get(
-                        "text",
-                        "",
-                    )
+                    combined_context
+                )
+            )
+
+            added_hint = (
+                is_added_post(
+                    combined_context
                 )
             )
 
@@ -2092,10 +2065,11 @@ def repair_missing_direction_from_source(
 
             extracted = (
                 parse_post_with_ai(
-                    text=post.get(
-                        "text",
-                        "",
-                    ),
+                    text=
+                        post.get(
+                            "text",
+                            "",
+                        ),
 
                     image_urls=
                         image_urls,
@@ -2118,17 +2092,15 @@ def repair_missing_direction_from_source(
                         picker_hint,
 
                     added_hint=
-                        is_added_post(
-                            post.get(
-                                "text",
-                                "",
-                            )
-                        ),
+                        added_hint,
 
                     reply_hint=
                         is_reply_post(
                             post
                         ),
+
+                    official_parent_text=
+                        parent_text,
                 )
             )
 
@@ -2149,17 +2121,6 @@ def repair_missing_direction_from_source(
                 if len(
                     matches
                 ) != 1:
-
-                    print(
-                        "SOURCE REPAIR SKIPPED:",
-                        old_pick.get(
-                            "selection"
-                        ),
-                        "| candidates:",
-                        len(
-                            matches
-                        ),
-                    )
 
                     continue
 
@@ -2191,20 +2152,21 @@ def repair_missing_direction_from_source(
 
                 old_pick[
                     "bet_type"
-                ] = (
-                    normalize_bet_type(
-                        candidate.get(
-                            "bet_type"
-                        )
-                        or old_pick.get(
-                            "bet_type"
-                        )
+                ] = normalize_bet_type(
+                    candidate.get(
+                        "bet_type"
+                    )
+                    or old_pick.get(
+                        "bet_type"
                     )
                 )
 
-                if candidate.get(
-                    "line"
-                ) is not None:
+                if (
+                    candidate.get(
+                        "line"
+                    )
+                    is not None
+                ):
 
                     old_pick[
                         "line"
@@ -2223,21 +2185,6 @@ def repair_missing_direction_from_source(
                     ]
 
                 repaired += 1
-
-                print(
-                    "SOURCE MARKET REPAIRED:",
-                    old_pick.get(
-                        "picker"
-                    ),
-                    "|",
-                    old_pick.get(
-                        "selection"
-                    ),
-                    "| side:",
-                    old_pick.get(
-                        "side"
-                    ),
-                )
 
         except Exception as exc:
 
@@ -2270,24 +2217,34 @@ def ingest():
             "backfill_complete":
                 False,
 
-            "reply_backfill_complete":
+            "reply_recovery_complete":
                 False,
         },
     )
 
-    # Older state.json files will not have this field.
     if (
-        "reply_backfill_complete"
+        "reply_recovery_complete"
         not in state
     ):
 
         state[
-            "reply_backfill_complete"
+            "reply_recovery_complete"
         ] = False
 
     existing = load_json(
         PICKS_FILE,
         [],
+    )
+
+    official_user_id = (
+        resolve_user_id()
+    )
+
+    print(
+        "Official X account:",
+        USERNAME,
+        "| user_id:",
+        official_user_id,
     )
 
     # --------------------------------------------------------
@@ -2309,7 +2266,8 @@ def ingest():
 
     source_repaired = (
         repair_missing_direction_from_source(
-            existing
+            existing,
+            official_user_id,
         )
     )
 
@@ -2321,7 +2279,7 @@ def ingest():
         )
 
     # --------------------------------------------------------
-    # NORMAL TIMELINE MODE
+    # NORMAL TIMELINE
     # --------------------------------------------------------
 
     should_backfill = (
@@ -2331,91 +2289,163 @@ def ingest():
         )
     )
 
-    uid = resolve_user_id()
+    if should_backfill:
 
-    timeline_posts, timeline_media = (
-        fetch_posts(
-            uid,
+        timeline_posts, timeline_media = (
+            fetch_user_posts(
+                official_user_id,
 
-            since_id=(
-                None
-                if should_backfill
-                else state.get(
-                    "last_x_post_id"
-                )
-            ),
+                start_time=(
+                    datetime.now(
+                        timezone.utc
+                    )
+                    - timedelta(
+                        days=BACKFILL_DAYS
+                    )
+                ),
 
-            backfill=
-                should_backfill,
+                max_pages=
+                    MAX_BACKFILL_PAGES,
+            )
         )
-    )
 
-    print(
-        "Normal timeline fetched:",
-        len(
-            timeline_posts
-        ),
-        (
-            "backfill"
-            if should_backfill
-            else "incremental"
-        ),
-    )
+        print(
+            "Normal timeline backfill fetched:",
+            len(
+                timeline_posts
+            ),
+        )
+
+    else:
+
+        timeline_posts, timeline_media = (
+            fetch_user_posts(
+                official_user_id,
+
+                since_id=
+                    state.get(
+                        "last_x_post_id"
+                    ),
+
+                max_pages=1,
+            )
+        )
+
+        print(
+            "Normal timeline incremental fetched:",
+            len(
+                timeline_posts
+            ),
+        )
 
     # --------------------------------------------------------
-    # REPLY / SUBTWEET MODE
+    # ONE-TIME REPLY/SUBTWEET RECOVERY
     # --------------------------------------------------------
 
-    should_reply_backfill = (
+    recovery_posts = []
+    recovery_media = {}
+
+    should_reply_recovery = (
         not state.get(
-            "reply_backfill_complete"
+            "reply_recovery_complete"
         )
     )
 
-    reply_posts, reply_media, reply_success = (
-        safe_fetch_reply_posts(
-            since_id=(
-                None
-                if should_reply_backfill
-                else state.get(
-                    "last_x_post_id"
+    recovery_success = False
+
+    if should_reply_recovery:
+
+        try:
+
+            recovery_posts, recovery_media = (
+                fetch_user_posts(
+                    official_user_id,
+
+                    start_time=(
+                        datetime.now(
+                            timezone.utc
+                        )
+                        - timedelta(
+                            days=
+                                REPLY_RECOVERY_DAYS
+                        )
+                    ),
+
+                    max_pages=
+                        MAX_REPLY_RECOVERY_PAGES,
                 )
-            ),
+            )
 
-            backfill=
-                should_reply_backfill,
-        )
-    )
+            recovery_success = True
 
-    # Only mark the reply backfill complete if X actually
-    # returned successfully.
-    #
-    # If the endpoint temporarily fails, the next run retries.
-    #
-    if (
-        should_reply_backfill
-        and reply_success
-    ):
+            reply_count = sum(
+                is_reply_post(
+                    post
+                )
+                for post
+                in recovery_posts
+            )
 
-        state[
-            "reply_backfill_complete"
-        ] = True
+            print(
+                "Official timeline recovery fetched:",
+                len(
+                    recovery_posts
+                ),
+                "posts | replies/subtweets:",
+                reply_count,
+            )
+
+        except Exception as exc:
+
+            print(
+                "REPLY RECOVERY FAILED:",
+                type(
+                    exc
+                ).__name__,
+                "|",
+                exc,
+            )
 
     # --------------------------------------------------------
-    # MERGE BOTH SOURCES
+    # MERGE
     # --------------------------------------------------------
 
-    posts, mmap = (
+    posts, media_map = (
         merge_post_sources(
-            timeline_posts,
-            timeline_media,
-            reply_posts,
-            reply_media,
+            [
+                (
+                    timeline_posts,
+                    timeline_media,
+                ),
+                (
+                    recovery_posts,
+                    recovery_media,
+                ),
+            ]
         )
     )
+
+    # Final safety verification.
+    posts = [
+        post
+        for post in posts
+        if (
+            not post.get(
+                "author_id"
+            )
+            or str(
+                post.get(
+                    "author_id"
+                )
+            )
+            == str(
+                official_user_id
+            )
+        )
+    ]
 
     print(
-        "Unique X posts after timeline + reply merge:",
+        "Verified official posts after merge:",
         len(
             posts
         ),
@@ -2427,9 +2457,11 @@ def ingest():
         )
     )
 
-    added_count = 0
+    parent_cache = {}
+
     candidate_count = 0
     reply_candidate_count = 0
+    added_count = 0
 
     # --------------------------------------------------------
     # PROCESS OLDEST -> NEWEST
@@ -2437,14 +2469,51 @@ def ingest():
 
     for post in sorted(
         posts,
-        key=lambda item: int(
-            item[
-                "id"
-            ]
-        ),
+        key=lambda item:
+            int(
+                item[
+                    "id"
+                ]
+            ),
     ):
 
-        media_keys = (
+        # ----------------------------------------------------
+        # ABSOLUTE AUTHOR SAFETY CHECK
+        # ----------------------------------------------------
+
+        author_id = str(
+            post.get(
+                "author_id"
+            )
+            or ""
+        )
+
+        if (
+            author_id
+            and author_id
+            != str(
+                official_user_id
+            )
+        ):
+
+            print(
+                "SKIPPING NON-OFFICIAL POST:",
+                post.get(
+                    "id"
+                ),
+                "| author:",
+                author_id,
+            )
+
+            continue
+
+        # ----------------------------------------------------
+        # MEDIA
+        # ----------------------------------------------------
+
+        image_urls = []
+
+        for media_key in (
             post
             .get(
                 "attachments",
@@ -2454,17 +2523,13 @@ def ingest():
                 "media_keys",
                 [],
             )
-        )
-
-        image_urls = []
-
-        for media_key in (
-            media_keys
         ):
 
-            media = mmap.get(
-                media_key,
-                {},
+            media = (
+                media_map.get(
+                    media_key,
+                    {},
+                )
             )
 
             if (
@@ -2483,9 +2548,11 @@ def ingest():
                     ]
                 )
 
-        text = post.get(
-            "text",
-            "",
+        text = str(
+            post.get(
+                "text"
+            )
+            or ""
         )
 
         if not looks_like_pick_post(
@@ -2504,12 +2571,41 @@ def ingest():
         )
 
         if reply_hint:
+
             reply_candidate_count += 1
 
-        post_url = (
-            f"https://x.com/"
-            f"{USERNAME}/status/"
-            f"{post['id']}"
+        # ----------------------------------------------------
+        # OFFICIAL THREAD CONTEXT
+        # ----------------------------------------------------
+
+        parent_text = ""
+
+        if reply_hint:
+
+            parent_text = (
+                official_parent_context(
+                    post,
+                    official_user_id,
+                    parent_cache,
+                )
+            )
+
+        combined_context = (
+            text
+            + "\n"
+            + parent_text
+        )
+
+        picker_hint = (
+            picker_hint_from_text(
+                combined_context
+            )
+        )
+
+        added_hint = (
+            is_added_post(
+                combined_context
+            )
         )
 
         inferred_week = (
@@ -2520,40 +2616,35 @@ def ingest():
             )
         )
 
-        picker_hint = (
-            picker_hint_from_text(
-                text
-            )
-        )
-
-        added_hint = (
-            is_added_post(
-                text
-            )
+        post_url = (
+            f"https://x.com/"
+            f"{USERNAME}/status/"
+            f"{post['id']}"
         )
 
         print(
-            "Parsing candidate post",
+            "Parsing official candidate:",
             post[
                 "id"
             ],
             "| reply:",
             reply_hint,
-            "| images:",
-            len(
-                image_urls
-            ),
             "| picker_hint:",
             picker_hint,
             "| week:",
             inferred_week,
+            "| parent_context:",
+            bool(
+                parent_text
+            ),
         )
 
         try:
 
             extracted = (
                 parse_post_with_ai(
-                    text=text,
+                    text=
+                        text,
 
                     image_urls=
                         image_urls,
@@ -2577,21 +2668,24 @@ def ingest():
 
                     reply_hint=
                         reply_hint,
+
+                    official_parent_text=
+                        parent_text,
                 )
             )
 
         except Exception as exc:
 
             print(
-                "Parse failed for post",
+                "Parse failed:",
                 post[
                     "id"
                 ],
-                ":",
+                "|",
                 type(
                     exc
                 ).__name__,
-                ":",
+                "|",
                 exc,
             )
 
@@ -2602,19 +2696,17 @@ def ingest():
             len(
                 extracted
             ),
-            "picks from post",
+            "pick(s) from",
             post[
                 "id"
             ],
         )
 
         # ----------------------------------------------------
-        # PROCESS EXTRACTED PICKS
+        # STORE EXTRACTED PICKS
         # ----------------------------------------------------
 
-        for extracted_pick in (
-            extracted
-        ):
+        for extracted_pick in extracted:
 
             extracted_pick = (
                 infer_market_from_selection(
@@ -2639,10 +2731,14 @@ def ingest():
             if not picker:
 
                 print(
-                    "Skipping pick with unknown picker from post",
+                    "SKIPPING UNKNOWN PICKER:",
                     post[
                         "id"
                     ],
+                    "|",
+                    extracted_pick.get(
+                        "selection"
+                    ),
                 )
 
                 continue
@@ -2661,13 +2757,8 @@ def ingest():
                 extracted_pick.get(
                     "week"
                 )
+                or inferred_week
             )
-
-            if not week:
-
-                week = (
-                    inferred_week
-                )
 
             try:
 
@@ -2696,18 +2787,6 @@ def ingest():
 
                 confidence = 0
 
-            added_pick = bool(
-                extracted_pick.get(
-                    "added_pick"
-                )
-            )
-
-            # Replies/subtweets that explicitly say "Adds for"
-            # are added picks exactly like standalone additions.
-            if added_hint:
-
-                added_pick = True
-
             bet_type = (
                 normalize_bet_type(
                     extracted_pick.get(
@@ -2717,13 +2796,15 @@ def ingest():
                 )
             )
 
-            extracted_pick[
-                "bet_type"
-            ] = bet_type
+            added_pick = bool(
+                extracted_pick.get(
+                    "added_pick"
+                )
+            )
 
-            # ------------------------------------------------
-            # CANONICAL DEDUPE
-            # ------------------------------------------------
+            if added_hint:
+
+                added_pick = True
 
             pick_for_key = dict(
                 extracted_pick
@@ -2741,16 +2822,17 @@ def ingest():
                 "selection"
             ] = selection
 
+            pick_for_key[
+                "bet_type"
+            ] = bet_type
+
             canonical = (
                 canonical_pick_key(
                     pick_for_key
                 )
             )
 
-            if (
-                canonical
-                in seen_keys
-            ):
+            if canonical in seen_keys:
 
                 print(
                     "Duplicate skipped:",
@@ -2759,19 +2841,15 @@ def ingest():
                     week,
                     "|",
                     selection,
-                    "| source reply:",
-                    reply_hint,
                 )
 
                 continue
 
-            pid = stable_id(
-                canonical
+            pick_id = (
+                stable_id(
+                    canonical
+                )
             )
-
-            # ------------------------------------------------
-            # INITIAL STATUS
-            # ------------------------------------------------
 
             if confidence < 0.90:
 
@@ -2794,14 +2872,10 @@ def ingest():
                     "REVIEW"
                 )
 
-            # ------------------------------------------------
-            # STORE
-            # ------------------------------------------------
-
             existing.append(
                 {
                     "id":
-                        pid,
+                        pick_id,
 
                     "picker":
                         picker,
@@ -2925,46 +2999,38 @@ def ingest():
             added_count += 1
 
             print(
-                "Added:",
+                "ADDED:",
                 picker,
                 "| Week",
                 week,
                 "|",
                 selection,
-                "|",
-                (
-                    "REPLY/SUBTWEET"
-                    if reply_hint
-                    else "TOP LEVEL"
-                ),
-                "|",
-                (
-                    "ADDED PICK"
-                    if added_pick
-                    else "MAIN CARD"
-                ),
+                "| reply:",
+                reply_hint,
                 "| market:",
                 bet_type,
             )
 
     # --------------------------------------------------------
-    # UPDATE STATE
+    # STATE
     # --------------------------------------------------------
 
-    all_fetched_posts = (
+    fetched_posts = (
         timeline_posts
-        + reply_posts
+        + recovery_posts
     )
 
-    if all_fetched_posts:
+    if fetched_posts:
 
-        newest_fetched_id = max(
+        newest_id = max(
             (
-                post[
-                    "id"
-                ]
+                str(
+                    post[
+                        "id"
+                    ]
+                )
                 for post
-                in all_fetched_posts
+                in fetched_posts
             ),
             key=int,
         )
@@ -2978,7 +3044,7 @@ def ingest():
         if (
             not previous_id
             or int(
-                newest_fetched_id
+                newest_id
             )
             > int(
                 previous_id
@@ -2987,12 +3053,23 @@ def ingest():
 
             state[
                 "last_x_post_id"
-            ] = newest_fetched_id
+            ] = newest_id
 
     if should_backfill:
 
         state[
             "backfill_complete"
+        ] = True
+
+    # Only mark recovery finished after the official timeline
+    # recovery request itself succeeded.
+    if (
+        should_reply_recovery
+        and recovery_success
+    ):
+
+        state[
+            "reply_recovery_complete"
         ] = True
 
     state[
@@ -3020,12 +3097,12 @@ def ingest():
     )
 
     print(
-        "Candidate posts inspected:",
+        "Official candidate posts inspected:",
         candidate_count,
     )
 
     print(
-        "Reply/subtweet candidates:",
+        "Official reply/subtweet candidates:",
         reply_candidate_count,
     )
 
@@ -3042,9 +3119,9 @@ def ingest():
     )
 
     print(
-        "Reply backfill complete:",
+        "Reply recovery complete:",
         state.get(
-            "reply_backfill_complete"
+            "reply_recovery_complete"
         ),
     )
 
