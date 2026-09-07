@@ -1,12 +1,12 @@
 {
-  "updated_at": "2026-09-07T00:32:38.249392+00:00",
+  "updated_at": "2026-09-07T00:48:09.403935+00:00",
   "cappers": [
     {
       "picker": "Big Cat",
       "wins": 10,
-      "losses": 10,
+      "losses": 8,
       "pushes": 0,
-      "win_pct": 50.0,
+      "win_pct": 55.6,
       "mortal_wins": 0,
       "mortal_losses": 0,
       "mortal_pushes": 0
@@ -36,7 +36,7 @@
     "Big Cat": [
       {
         "week": 1,
-        "win_pct": 50.0
+        "win_pct": 55.6
       }
     ],
     "Stool Presidente": [
@@ -108,7 +108,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2096375527510581260",
       "source_text": "Adds for @BarstoolBigCat \n\nFIU/USF Over 53.5\nTexas A&amp;M Over 53.5 \nCal +2.5 \nUNLV -3",
       "posted_at": "2026-09-05T23:10:49.000Z",
-      "graded_at": "2026-09-07T00:32:37.587489+00:00",
+      "graded_at": "2026-09-07T00:48:08.691638+00:00",
       "final_score": "TA&M 50 - MOST 0",
       "event_id": "401856668"
     },
@@ -157,16 +157,16 @@
       "week": 1,
       "added_pick": true,
       "confidence": 0.99,
-      "status": "FINAL",
-      "result": "LOSS",
-      "profit_units": -1.0,
+      "status": "OPEN",
+      "result": null,
+      "profit_units": 0,
       "source_post_id": "2096375527510581260",
       "source_url": "https://x.com/barstoolpickem/status/2096375527510581260",
       "source_text": "Adds for @BarstoolBigCat \n\nFIU/USF Over 53.5\nTexas A&amp;M Over 53.5 \nCal +2.5 \nUNLV -3",
       "posted_at": "2026-09-05T23:10:49.000Z",
-      "graded_at": "2026-09-07T00:32:38.245259+00:00",
-      "final_score": "UNLV 21 - MEM 27",
-      "event_id": "401862693"
+      "graded_at": null,
+      "final_score": null,
+      "event_id": null
     },
     {
       "id": "ffb482957ec1390b",
@@ -276,7 +276,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2096235630300627085",
       "source_text": "Adds for @BarstoolBigCat \n\nIndiana first half TT over 27.5 \nSouth Carolina/Kent over 53.5",
       "posted_at": "2026-09-05T13:54:55.000Z",
-      "graded_at": "2026-09-07T00:32:35.624470+00:00",
+      "graded_at": "2026-09-07T00:48:06.615259+00:00",
       "final_score": "SC 57 - KENT 0",
       "event_id": "401856665"
     },
@@ -388,7 +388,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095596296962793687",
       "source_text": "BOB DIACO PLAYS:\n\n@stoolpresidente RUTGERS -29.5 \n\n@BarstoolBigCat TEX ST @ TEX O59.5\n\n@Return_Of_RB BYU -51.5 \n\n@hen_ease LSU -10 \n\n@jmccarthy55 Ark Pine Bluff +54.5\n\n@KevinZuppe Bama -27.5 \n—————————————————\n\n@EBoKnowss play: Stanford +24.5",
       "posted_at": "2026-09-03T19:34:26.000Z",
-      "graded_at": "2026-09-07T00:32:34.636800+00:00",
+      "graded_at": "2026-09-07T00:48:05.567989+00:00",
       "final_score": "RUTG 21 - MASS 37",
       "event_id": "401858423"
     },
@@ -416,7 +416,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095596296962793687",
       "source_text": "BOB DIACO PLAYS:\n\n@stoolpresidente RUTGERS -29.5 \n\n@BarstoolBigCat TEX ST @ TEX O59.5\n\n@Return_Of_RB BYU -51.5 \n\n@hen_ease LSU -10 \n\n@jmccarthy55 Ark Pine Bluff +54.5\n\n@KevinZuppe Bama -27.5 \n—————————————————\n\n@EBoKnowss play: Stanford +24.5",
       "posted_at": "2026-09-03T19:34:26.000Z",
-      "graded_at": "2026-09-07T00:32:34.968192+00:00",
+      "graded_at": "2026-09-07T00:48:05.920244+00:00",
       "final_score": "BYU 63 - UTU 7",
       "event_id": "401856775"
     },
@@ -444,7 +444,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584938988904892",
       "source_text": "https://t.co/VxbEfaSlJR",
       "posted_at": "2026-09-03T18:49:18.000Z",
-      "graded_at": "2026-09-07T00:32:25.413932+00:00",
+      "graded_at": "2026-09-07T00:47:55.828462+00:00",
       "final_score": "TEX 59 - TXST 7",
       "event_id": "401856667"
     },
@@ -500,7 +500,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584938988904892",
       "source_text": "https://t.co/VxbEfaSlJR",
       "posted_at": "2026-09-03T18:49:18.000Z",
-      "graded_at": "2026-09-07T00:32:26.070819+00:00",
+      "graded_at": "2026-09-07T00:47:56.526196+00:00",
       "final_score": "WAKE 38 - AKR 16",
       "event_id": "401858204"
     },
@@ -528,7 +528,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584938988904892",
       "source_text": "https://t.co/VxbEfaSlJR",
       "posted_at": "2026-09-03T18:49:18.000Z",
-      "graded_at": "2026-09-07T00:32:26.401956+00:00",
+      "graded_at": "2026-09-07T00:47:56.876683+00:00",
       "final_score": "TA&M 50 - MOST 0",
       "event_id": "401856668"
     },
@@ -549,16 +549,16 @@
       "week": 1,
       "added_pick": false,
       "confidence": 0.99,
-      "status": "FINAL",
-      "result": "LOSS",
-      "profit_units": -1.0,
+      "status": "OPEN",
+      "result": null,
+      "profit_units": 0,
       "source_post_id": "2095584938988904892",
       "source_url": "https://x.com/barstoolpickem/status/2095584938988904892",
       "source_text": "https://t.co/VxbEfaSlJR",
       "posted_at": "2026-09-03T18:49:18.000Z",
-      "graded_at": "2026-09-07T00:32:26.736778+00:00",
-      "final_score": "UNLV 21 - MEM 27",
-      "event_id": "401862693"
+      "graded_at": null,
+      "final_score": null,
+      "event_id": null
     },
     {
       "id": "9800fa0af7189ef0",
@@ -612,7 +612,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584938988904892",
       "source_text": "https://t.co/VxbEfaSlJR",
       "posted_at": "2026-09-03T18:49:18.000Z",
-      "graded_at": "2026-09-07T00:32:27.393636+00:00",
+      "graded_at": "2026-09-07T00:47:58.603211+00:00",
       "final_score": "LSU 51 - CLEM 10",
       "event_id": "401856660"
     },
@@ -640,7 +640,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584938988904892",
       "source_text": "https://t.co/VxbEfaSlJR",
       "posted_at": "2026-09-03T18:49:18.000Z",
-      "graded_at": "2026-09-07T00:32:27.726946+00:00",
+      "graded_at": "2026-09-07T00:47:58.956373+00:00",
       "final_score": "MSU 30 - TOL 20",
       "event_id": "401858429"
     },
@@ -668,7 +668,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584938988904892",
       "source_text": "https://t.co/VxbEfaSlJR",
       "posted_at": "2026-09-03T18:49:18.000Z",
-      "graded_at": "2026-09-07T00:32:28.057845+00:00",
+      "graded_at": "2026-09-07T00:47:59.307591+00:00",
       "final_score": "GT 13 - COLO 14",
       "event_id": "401856776"
     },
@@ -724,7 +724,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584938988904892",
       "source_text": "https://t.co/VxbEfaSlJR",
       "posted_at": "2026-09-03T18:49:18.000Z",
-      "graded_at": "2026-09-07T00:32:29.698642+00:00",
+      "graded_at": "2026-09-07T00:48:00.346016+00:00",
       "final_score": "RUTG 21 - MASS 37",
       "event_id": "401858423"
     },
@@ -752,7 +752,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584938988904892",
       "source_text": "https://t.co/VxbEfaSlJR",
       "posted_at": "2026-09-03T18:49:18.000Z",
-      "graded_at": "2026-09-07T00:32:30.038646+00:00",
+      "graded_at": "2026-09-07T00:48:00.699594+00:00",
       "final_score": "STAN 6 - MIA 45",
       "event_id": "401858206"
     },
@@ -780,7 +780,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584938988904892",
       "source_text": "https://t.co/VxbEfaSlJR",
       "posted_at": "2026-09-03T18:49:18.000Z",
-      "graded_at": "2026-09-07T00:32:30.370372+00:00",
+      "graded_at": "2026-09-07T00:48:01.050562+00:00",
       "final_score": "WVU 31 - CCU 24",
       "event_id": "401856780"
     },
@@ -808,7 +808,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584938988904892",
       "source_text": "https://t.co/VxbEfaSlJR",
       "posted_at": "2026-09-03T18:49:18.000Z",
-      "graded_at": "2026-09-07T00:32:30.697249+00:00",
+      "graded_at": "2026-09-07T00:48:01.400485+00:00",
       "final_score": "HOU 33 - ORST 20",
       "event_id": "401856778"
     },
@@ -836,7 +836,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584938988904892",
       "source_text": "https://t.co/VxbEfaSlJR",
       "posted_at": "2026-09-03T18:49:18.000Z",
-      "graded_at": "2026-09-07T00:32:31.026957+00:00",
+      "graded_at": "2026-09-07T00:48:01.750433+00:00",
       "final_score": "CONN 56 - LAF 7",
       "event_id": "401861962"
     },
@@ -864,7 +864,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584938988904892",
       "source_text": "https://t.co/VxbEfaSlJR",
       "posted_at": "2026-09-03T18:49:18.000Z",
-      "graded_at": "2026-09-07T00:32:31.359111+00:00",
+      "graded_at": "2026-09-07T00:48:02.099319+00:00",
       "final_score": "ALA 48 - ECU 10",
       "event_id": "401856634"
     },
@@ -892,7 +892,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584938988904892",
       "source_text": "https://t.co/VxbEfaSlJR",
       "posted_at": "2026-09-03T18:49:18.000Z",
-      "graded_at": "2026-09-07T00:32:31.692011+00:00",
+      "graded_at": "2026-09-07T00:48:02.449816+00:00",
       "final_score": "OSU 56 - BALL 3",
       "event_id": "401858432"
     },
@@ -920,7 +920,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584938988904892",
       "source_text": "https://t.co/VxbEfaSlJR",
       "posted_at": "2026-09-03T18:49:18.000Z",
-      "graded_at": "2026-09-07T00:32:32.020548+00:00",
+      "graded_at": "2026-09-07T00:48:02.799195+00:00",
       "final_score": "PITT 59 - M-OH 14",
       "event_id": "401858207"
     },
@@ -948,7 +948,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584938988904892",
       "source_text": "https://t.co/VxbEfaSlJR",
       "posted_at": "2026-09-03T18:49:18.000Z",
-      "graded_at": "2026-09-07T00:32:32.669560+00:00",
+      "graded_at": "2026-09-07T00:48:03.488777+00:00",
       "final_score": "ORE 34 - BOIS 27",
       "event_id": "401858433"
     },
@@ -1004,7 +1004,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584938988904892",
       "source_text": "https://t.co/VxbEfaSlJR",
       "posted_at": "2026-09-03T18:49:18.000Z",
-      "graded_at": "2026-09-07T00:32:33.648748+00:00",
+      "graded_at": "2026-09-07T00:48:04.529981+00:00",
       "final_score": "WASH 24 - WSU 10",
       "event_id": "401858437"
     },
@@ -1060,7 +1060,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584927836217769",
       "source_text": "Week 1 Pick Em Plays \n\nOdds and lines via @DKSports https://t.co/h9g2RpEuPu",
       "posted_at": "2026-09-03T18:49:15.000Z",
-      "graded_at": "2026-09-07T00:32:14.795643+00:00",
+      "graded_at": "2026-09-07T00:47:44.713402+00:00",
       "final_score": "RUTG 21 - MASS 37",
       "event_id": "401858423"
     },
@@ -1088,7 +1088,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584927836217769",
       "source_text": "Week 1 Pick Em Plays \n\nOdds and lines via @DKSports https://t.co/h9g2RpEuPu",
       "posted_at": "2026-09-03T18:49:15.000Z",
-      "graded_at": "2026-09-07T00:32:15.135779+00:00",
+      "graded_at": "2026-09-07T00:47:45.065610+00:00",
       "final_score": "ORE 34 - BOIS 27",
       "event_id": "401858433"
     },
@@ -1200,7 +1200,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584927836217769",
       "source_text": "Week 1 Pick Em Plays \n\nOdds and lines via @DKSports https://t.co/h9g2RpEuPu",
       "posted_at": "2026-09-03T18:49:15.000Z",
-      "graded_at": "2026-09-07T00:32:16.800179+00:00",
+      "graded_at": "2026-09-07T00:47:46.805040+00:00",
       "final_score": "LSU 51 - CLEM 10",
       "event_id": "401856660"
     },
@@ -1228,7 +1228,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584927836217769",
       "source_text": "Week 1 Pick Em Plays \n\nOdds and lines via @DKSports https://t.co/h9g2RpEuPu",
       "posted_at": "2026-09-03T18:49:15.000Z",
-      "graded_at": "2026-09-07T00:32:17.135502+00:00",
+      "graded_at": "2026-09-07T00:47:47.155683+00:00",
       "final_score": "MICH 13 - WMU 12",
       "event_id": "401858428"
     },
@@ -1256,7 +1256,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584927836217769",
       "source_text": "Week 1 Pick Em Plays \n\nOdds and lines via @DKSports https://t.co/h9g2RpEuPu",
       "posted_at": "2026-09-03T18:49:15.000Z",
-      "graded_at": "2026-09-07T00:32:17.473599+00:00",
+      "graded_at": "2026-09-07T00:47:47.506489+00:00",
       "final_score": "KU 51 - LIU 6",
       "event_id": "401856769"
     },
@@ -1284,7 +1284,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584927836217769",
       "source_text": "Week 1 Pick Em Plays \n\nOdds and lines via @DKSports https://t.co/h9g2RpEuPu",
       "posted_at": "2026-09-03T18:49:15.000Z",
-      "graded_at": "2026-09-07T00:32:17.814289+00:00",
+      "graded_at": "2026-09-07T00:47:47.860697+00:00",
       "final_score": "MSU 30 - TOL 20",
       "event_id": "401858429"
     },
@@ -1312,7 +1312,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584927836217769",
       "source_text": "Week 1 Pick Em Plays \n\nOdds and lines via @DKSports https://t.co/h9g2RpEuPu",
       "posted_at": "2026-09-03T18:49:15.000Z",
-      "graded_at": "2026-09-07T00:32:18.153107+00:00",
+      "graded_at": "2026-09-07T00:47:48.213120+00:00",
       "final_score": "WASH 24 - WSU 10",
       "event_id": "401858437"
     },
@@ -1368,7 +1368,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584927836217769",
       "source_text": "Week 1 Pick Em Plays \n\nOdds and lines via @DKSports https://t.co/h9g2RpEuPu",
       "posted_at": "2026-09-03T18:49:15.000Z",
-      "graded_at": "2026-09-07T00:32:19.148927+00:00",
+      "graded_at": "2026-09-07T00:47:49.250301+00:00",
       "final_score": "ILL 42 - UAB 23",
       "event_id": "401858424"
     },
@@ -1396,7 +1396,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584927836217769",
       "source_text": "Week 1 Pick Em Plays \n\nOdds and lines via @DKSports https://t.co/h9g2RpEuPu",
       "posted_at": "2026-09-03T18:49:15.000Z",
-      "graded_at": "2026-09-07T00:32:19.484256+00:00",
+      "graded_at": "2026-09-07T00:47:49.599769+00:00",
       "final_score": "CONN 56 - LAF 7",
       "event_id": "401861962"
     },
@@ -1424,7 +1424,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584927836217769",
       "source_text": "Week 1 Pick Em Plays \n\nOdds and lines via @DKSports https://t.co/h9g2RpEuPu",
       "posted_at": "2026-09-03T18:49:15.000Z",
-      "graded_at": "2026-09-07T00:32:19.819028+00:00",
+      "graded_at": "2026-09-07T00:47:49.945025+00:00",
       "final_score": "HOU 33 - ORST 20",
       "event_id": "401856778"
     },
@@ -1452,7 +1452,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584927836217769",
       "source_text": "Week 1 Pick Em Plays \n\nOdds and lines via @DKSports https://t.co/h9g2RpEuPu",
       "posted_at": "2026-09-03T18:49:15.000Z",
-      "graded_at": "2026-09-07T00:32:20.155253+00:00",
+      "graded_at": "2026-09-07T00:47:50.295690+00:00",
       "final_score": "PITT 59 - M-OH 14",
       "event_id": "401858207"
     },
@@ -1480,7 +1480,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584927836217769",
       "source_text": "Week 1 Pick Em Plays \n\nOdds and lines via @DKSports https://t.co/h9g2RpEuPu",
       "posted_at": "2026-09-03T18:49:15.000Z",
-      "graded_at": "2026-09-07T00:32:20.491677+00:00",
+      "graded_at": "2026-09-07T00:47:50.647600+00:00",
       "final_score": "OSU 56 - BALL 3",
       "event_id": "401858432"
     },
@@ -1592,7 +1592,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584927836217769",
       "source_text": "Week 1 Pick Em Plays \n\nOdds and lines via @DKSports https://t.co/h9g2RpEuPu",
       "posted_at": "2026-09-03T18:49:15.000Z",
-      "graded_at": "2026-09-07T00:32:21.810733+00:00",
+      "graded_at": "2026-09-07T00:47:52.028585+00:00",
       "final_score": "LSU 51 - CLEM 10",
       "event_id": "401856660"
     },
@@ -1620,7 +1620,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584927836217769",
       "source_text": "Week 1 Pick Em Plays \n\nOdds and lines via @DKSports https://t.co/h9g2RpEuPu",
       "posted_at": "2026-09-03T18:49:15.000Z",
-      "graded_at": "2026-09-07T00:32:22.143048+00:00",
+      "graded_at": "2026-09-07T00:47:52.379032+00:00",
       "final_score": "MINN 59 - EIU 7",
       "event_id": "401858422"
     },
@@ -1648,7 +1648,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584927836217769",
       "source_text": "Week 1 Pick Em Plays \n\nOdds and lines via @DKSports https://t.co/h9g2RpEuPu",
       "posted_at": "2026-09-03T18:49:15.000Z",
-      "graded_at": "2026-09-07T00:32:22.799874+00:00",
+      "graded_at": "2026-09-07T00:47:53.070541+00:00",
       "final_score": "MINN 59 - EIU 7",
       "event_id": "401858422"
     },
@@ -1676,7 +1676,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584927836217769",
       "source_text": "Week 1 Pick Em Plays \n\nOdds and lines via @DKSports https://t.co/h9g2RpEuPu",
       "posted_at": "2026-09-03T18:49:15.000Z",
-      "graded_at": "2026-09-07T00:32:23.133183+00:00",
+      "graded_at": "2026-09-07T00:47:53.418773+00:00",
       "final_score": "BYU 63 - UTU 7",
       "event_id": "401856775"
     },
@@ -1704,7 +1704,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584927836217769",
       "source_text": "Week 1 Pick Em Plays \n\nOdds and lines via @DKSports https://t.co/h9g2RpEuPu",
       "posted_at": "2026-09-03T18:49:15.000Z",
-      "graded_at": "2026-09-07T00:32:23.788875+00:00",
+      "graded_at": "2026-09-07T00:47:54.104208+00:00",
       "final_score": "BYU 63 - UTU 7",
       "event_id": "401856775"
     },
@@ -1760,7 +1760,7 @@
       "source_url": "https://x.com/barstoolpickem/status/2095584927836217769",
       "source_text": "Week 1 Pick Em Plays \n\nOdds and lines via @DKSports https://t.co/h9g2RpEuPu",
       "posted_at": "2026-09-03T18:49:15.000Z",
-      "graded_at": "2026-09-07T00:32:24.767788+00:00",
+      "graded_at": "2026-09-07T00:47:55.138693+00:00",
       "final_score": "WASH 24 - WSU 10",
       "event_id": "401858437"
     }
