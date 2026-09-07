@@ -15,6 +15,10 @@ from common import (
 )
 
 
+# ============================================================
+# CONFIG
+# ============================================================
+
 ESPN_BASE = (
     "https://site.api.espn.com/apis/site/v2/"
     "sports/football/college-football"
@@ -47,11 +51,22 @@ PARTIAL_GAME_MARKERS = (
     "second half",
 )
 
-# These abbreviations require matchup context.
+# Never resolve these without matchup/opponent context.
 AMBIGUOUS_ALIASES = {
     "osu",
 }
 
+
+# ============================================================
+# TEAM ALIASES
+# ============================================================
+#
+# IMPORTANT:
+# Do NOT use generic mascot aliases such as "Aggies".
+# Multiple schools share mascot names.
+#
+# Texas A&M intentionally includes A&M/TAMU but NOT "Aggies".
+# ============================================================
 
 ALIASES = {
     "alabama": {
@@ -95,6 +110,18 @@ ALIASES = {
         "clemson tigers",
     },
 
+    "coastal carolina": {
+        "coastal carolina",
+        "coastal",
+        "ccu",
+    },
+
+    "colorado": {
+        "colorado",
+        "colo",
+        "colorado buffaloes",
+    },
+
     "connecticut": {
         "uconn",
         "connecticut",
@@ -121,6 +148,7 @@ ALIASES = {
     "fiu": {
         "fiu",
         "florida international",
+        "florida intl",
         "fiu panthers",
     },
 
@@ -129,7 +157,6 @@ ALIASES = {
         "ga tech",
         "georgia tech",
         "gt",
-        "yellow jackets",
     },
 
     "hawaii": {
@@ -137,7 +164,6 @@ ALIASES = {
         "hawai'i",
         "haw",
         "hawaii rainbow warriors",
-        "hawaii rainbow warrior",
     },
 
     "houston": {
@@ -164,15 +190,9 @@ ALIASES = {
         "kent state golden flashes",
     },
 
-    "liberty": {
-        "liberty",
-        "liberty flames",
-    },
-
-    "liu": {
-        "liu",
-        "long island",
-        "long island university",
+    "lafayette": {
+        "lafayette",
+        "lafayette leopards",
     },
 
     "lsu": {
@@ -187,11 +207,19 @@ ALIASES = {
         "memphis tigers",
     },
 
+    "miami": {
+        "miami",
+        "miami fl",
+        "miami florida",
+        "miami hurricanes",
+    },
+
     "miami ohio": {
         "miami oh",
         "miami ohio",
         "miami (oh)",
         "miami redhawks",
+        "m-oh",
     },
 
     "michigan": {
@@ -213,11 +241,19 @@ ALIASES = {
         "minnesota golden gophers",
     },
 
+    "mississippi state": {
+        "miss st",
+        "miss state",
+        "mississippi state",
+        "mississippi st",
+        "msst",
+    },
+
     "missouri state": {
         "missouri state",
         "missouri st",
-        "most",
         "mo state",
+        "most",
     },
 
     "notre dame": {
@@ -284,6 +320,12 @@ ALIASES = {
         "south florida bulls",
     },
 
+    "stanford": {
+        "stanford",
+        "stan",
+        "stanford cardinal",
+    },
+
     "texas": {
         "tex",
         "texas",
@@ -292,8 +334,10 @@ ALIASES = {
 
     "texas a&m": {
         "a&m",
-        "aggies",
+        "a and m",
         "tamu",
+        "ta&m",
+        "ta and m",
         "texas a&m",
         "texas am",
         "texas a m",
@@ -381,6 +425,10 @@ ALIASES = {
 }
 
 
+# ============================================================
+# TEXT / TEAM NORMALIZATION
+# ============================================================
+
 def clean_text(value):
     return unescape(
         str(value or "")
@@ -439,8 +487,7 @@ def alias_group(value):
 
         group |= {
             norm(name)
-            for name
-            in names
+            for name in names
         }
 
         if normalized in group:
@@ -449,22 +496,20 @@ def alias_group(value):
     return output
 
 
-def is_ambiguous_hint(
-    value,
-):
+def is_ambiguous_hint(value):
     return (
         norm(value)
         in AMBIGUOUS_ALIASES
     )
 
 
-def competitors(
-    event,
-):
+# ============================================================
+# ESPN EVENT HELPERS
+# ============================================================
+
+def competitors(event):
     competitions = (
-        event.get(
-            "competitions"
-        )
+        event.get("competitions")
         or []
     )
 
@@ -473,16 +518,12 @@ def competitors(
 
     return (
         competitions[0]
-        .get(
-            "competitors"
-        )
+        .get("competitors")
         or []
     )
 
 
-def completed(
-    event,
-):
+def completed(event):
     return bool(
         event.get(
             "status",
@@ -492,15 +533,20 @@ def completed(
             "type",
             {},
         )
-        .get(
-            "completed"
-        )
+        .get("completed")
     )
 
 
-def espn_team_names(
-    comp,
-):
+def espn_team_names(comp):
+    """
+    Only use fields that identify the SCHOOL/team.
+
+    IMPORTANT:
+    team["name"] is intentionally excluded.
+    ESPN often uses it as a mascot-only value,
+    which caused false matches such as "Aggies".
+    """
+
     team = (
         comp.get("team")
         or {}
@@ -509,21 +555,11 @@ def espn_team_names(
     names = set()
 
     for value in (
-        team.get(
-            "displayName"
-        ),
-        team.get(
-            "shortDisplayName"
-        ),
-        team.get(
-            "name"
-        ),
-        team.get(
-            "abbreviation"
-        ),
-        team.get(
-            "location"
-        ),
+        team.get("displayName"),
+        team.get("shortDisplayName"),
+        team.get("abbreviation"),
+        team.get("location"),
+        team.get("slug"),
     ):
 
         names |= alias_group(
@@ -546,21 +582,19 @@ def comp_matches(
         return False
 
     return bool(
-        alias_group(
-            hint
-        )
-        & espn_team_names(
-            comp
-        )
+        alias_group(hint)
+        & espn_team_names(comp)
     )
 
+
+# ============================================================
+# SEASON / WEEK
+# ============================================================
 
 def season_year_for_pick(
     pick,
 ):
-    if pick.get(
-        "season"
-    ):
+    if pick.get("season"):
         return int(
             pick["season"]
         )
@@ -573,18 +607,12 @@ def season_year_for_pick(
 
         try:
 
-            return (
-                datetime
-                .fromisoformat(
-                    str(
-                        posted
-                    ).replace(
-                        "Z",
-                        "+00:00",
-                    )
+            return datetime.fromisoformat(
+                str(posted).replace(
+                    "Z",
+                    "+00:00",
                 )
-                .year
-            )
+            ).year
 
         except Exception:
             pass
@@ -598,17 +626,21 @@ def week_window(
     season_year,
     week,
 ):
-    if (
-        int(
-            season_year
-        )
-        != 2026
-    ):
+    """
+    Verified broad Week 1 collection window.
+
+    Broad window is intentional because ESPN's
+    2026 Week 1 slate spans Aug 29 through Sep 7.
+
+    We fail closed for seasons we have not
+    explicitly configured.
+    """
+
+    if int(season_year) != 2026:
 
         raise RuntimeError(
-            "No verified calendar "
-            "configured for "
-            f"{season_year}. "
+            "No verified calendar configured "
+            f"for {season_year}. "
             "Grades preserved."
         )
 
@@ -626,18 +658,19 @@ def week_window(
 
     shift = timedelta(
         days=(
-            int(week)
-            - 1
+            int(week) - 1
         ) * 7
     )
 
     return (
-        week_1_start
-        + shift,
-        week_1_end
-        + shift,
+        week_1_start + shift,
+        week_1_end + shift,
     )
 
+
+# ============================================================
+# HTTP
+# ============================================================
 
 def request_json(
     url,
@@ -666,6 +699,10 @@ def request_json(
     return response.json()
 
 
+# ============================================================
+# SCOREBOARD
+# ============================================================
+
 def fetch_scoreboard_events(
     season_year,
     week,
@@ -682,10 +719,7 @@ def fetch_scoreboard_events(
 
     current = start_date
 
-    while (
-        current
-        <= end_date
-    ):
+    while current <= end_date:
 
         date_string = (
             current.strftime(
@@ -696,25 +730,20 @@ def fetch_scoreboard_events(
         payload = request_json(
             ESPN_SCOREBOARD,
             params={
-                "dates": (
-                    date_string
-                ),
+                "dates": date_string,
                 "limit": 1000,
             },
         )
 
         daily_events = (
-            payload.get(
-                "events"
-            )
+            payload.get("events")
             or []
         )
 
         print(
             "ESPN scoreboard "
             f"{date_string}: "
-            f"{len(daily_events)} "
-            "events"
+            f"{len(daily_events)} events"
         )
 
         for event in daily_events:
@@ -728,42 +757,28 @@ def fetch_scoreboard_events(
                 continue
 
             season = (
-                event.get(
-                    "season"
-                )
+                event.get("season")
                 or {}
             )
 
             event_year = (
-                season.get(
-                    "year"
-                )
+                season.get("year")
             )
 
             season_type = (
-                season.get(
-                    "type"
-                )
+                season.get("type")
             )
 
             if (
-                event_year
-                is not None
-                and int(
-                    event_year
-                )
-                != int(
-                    season_year
-                )
+                event_year is not None
+                and int(event_year)
+                != int(season_year)
             ):
                 continue
 
             if (
-                season_type
-                is not None
-                and int(
-                    season_type
-                )
+                season_type is not None
+                and int(season_type)
                 != REGULAR_SEASON
             ):
                 continue
@@ -782,12 +797,15 @@ def fetch_scoreboard_events(
 
     print(
         "Scoreboard produced "
-        f"{len(events)} "
-        "unique events"
+        f"{len(events)} unique events"
     )
 
     return events
 
+
+# ============================================================
+# ESPN TEAM DIRECTORY / SCHEDULE FALLBACK
+# ============================================================
 
 def fetch_all_teams():
     payload = request_json(
@@ -798,9 +816,7 @@ def fetch_all_teams():
     )
 
     sports = (
-        payload.get(
-            "sports"
-        )
+        payload.get("sports")
         or []
     )
 
@@ -808,28 +824,18 @@ def fetch_all_teams():
 
     for sport in sports:
 
-        leagues = (
-            sport.get(
-                "leagues"
-            )
+        for league in (
+            sport.get("leagues")
             or []
-        )
+        ):
 
-        for league in leagues:
-
-            teams = (
-                league.get(
-                    "teams"
-                )
+            for wrapper in (
+                league.get("teams")
                 or []
-            )
-
-            for wrapper in teams:
+            ):
 
                 team = (
-                    wrapper.get(
-                        "team"
-                    )
+                    wrapper.get("team")
                     or wrapper
                 )
 
@@ -844,27 +850,20 @@ def fetch_all_teams():
 def team_aliases_from_record(
     team,
 ):
+    """
+    Same safety rule as espn_team_names():
+
+    Do NOT use mascot-only team["name"].
+    """
+
     names = set()
 
     for value in (
-        team.get(
-            "displayName"
-        ),
-        team.get(
-            "shortDisplayName"
-        ),
-        team.get(
-            "name"
-        ),
-        team.get(
-            "abbreviation"
-        ),
-        team.get(
-            "location"
-        ),
-        team.get(
-            "slug"
-        ),
+        team.get("displayName"),
+        team.get("shortDisplayName"),
+        team.get("abbreviation"),
+        team.get("location"),
+        team.get("slug"),
     ):
 
         names |= alias_group(
@@ -908,9 +907,7 @@ def resolve_espn_team_id(
             if team_id:
 
                 matches.append(
-                    str(
-                        team_id
-                    )
+                    str(team_id)
                 )
 
     matches = list(
@@ -919,10 +916,7 @@ def resolve_espn_team_id(
         )
     )
 
-    if len(
-        matches
-    ) == 1:
-
+    if len(matches) == 1:
         return matches[0]
 
     return None
@@ -948,37 +942,25 @@ def fetch_team_schedule(
     )
 
     return (
-        payload.get(
-            "events"
-        )
+        payload.get("events")
         or []
     )
 
 
-def event_date(
-    event,
-):
-    raw = event.get(
-        "date"
-    )
+def event_date(event):
+    raw = event.get("date")
 
     if not raw:
         return None
 
     try:
 
-        return (
-            datetime
-            .fromisoformat(
-                str(
-                    raw
-                ).replace(
-                    "Z",
-                    "+00:00",
-                )
+        return datetime.fromisoformat(
+            str(raw).replace(
+                "Z",
+                "+00:00",
             )
-            .date()
-        )
+        ).date()
 
     except Exception:
         return None
@@ -1009,9 +991,11 @@ def event_in_week_window(
     )
 
 
-def split_matchup(
-    value,
-):
+# ============================================================
+# PICK PARSING
+# ============================================================
+
+def split_matchup(value):
     if not value:
         return []
 
@@ -1021,16 +1005,13 @@ def split_matchup(
 
     return [
         part.strip()
-        for part
-        in re.split(
-            (
-                r"\s+"
-                r"(?:vs\.?|v\.?|at|@)"
-                r"\s+|/"
-            ),
+
+        for part in re.split(
+            r"\s+(?:vs\.?|v\.?|at|@)\s+|/",
             text,
             flags=re.I,
         )
+
         if part.strip()
     ]
 
@@ -1041,9 +1022,7 @@ def has_partial_game_marker(
     text = (
         " "
         + norm(
-            pick.get(
-                "selection"
-            )
+            pick.get("selection")
         )
         + " "
     )
@@ -1066,23 +1045,14 @@ def parse_side_team(
         return None
 
     text = re.sub(
-        (
-            r"\s+"
-            r"(?:moneyline|ml)"
-            r"\s*$"
-        ),
+        r"\s+(?:moneyline|ml)\s*$",
         "",
         text,
         flags=re.I,
     )
 
     text = re.sub(
-        (
-            r"\s+"
-            r"[+-]\d+"
-            r"(?:\.\d+)?"
-            r"\s*$"
-        ),
+        r"\s+[+-]\d+(?:\.\d+)?\s*$",
         "",
         text,
     )
@@ -1096,6 +1066,19 @@ def parse_side_team(
 def parse_total_identity(
     selection,
 ):
+    """
+    Examples:
+
+    'OSU @ HOU Over 49.5'
+        -> ['OSU', 'HOU']
+
+    'Texas A&M Over 53.5'
+        -> ['Texas A&M']
+
+    'Over 49.5'
+        -> []
+    """
+
     text = clean_text(
         selection
     )
@@ -1106,11 +1089,8 @@ def parse_total_identity(
     match = re.match(
         (
             r"^(.*?)\s+"
-            r"(over|under)"
-            r"\s+"
-            r"\d+"
-            r"(?:\.\d+)?"
-            r"\s*$"
+            r"(over|under)\s+"
+            r"\d+(?:\.\d+)?\s*$"
         ),
         text,
         flags=re.I,
@@ -1129,16 +1109,13 @@ def parse_total_identity(
 
     return [
         part.strip()
-        for part
-        in re.split(
-            (
-                r"\s+"
-                r"(?:vs\.?|v\.?|at|@)"
-                r"\s+|/"
-            ),
+
+        for part in re.split(
+            r"\s+(?:vs\.?|v\.?|at|@)\s+|/",
             prefix,
             flags=re.I,
         )
+
         if part.strip()
     ][:2]
 
@@ -1146,101 +1123,72 @@ def parse_total_identity(
 def side_identity(
     pick,
 ):
-    parsed = (
-        parse_side_team(
-            pick.get(
-                "selection"
-            )
-        )
+    """
+    Selection is primary for side bets.
+
+    A&M -40.5 -> A&M -> Texas A&M.
+    """
+
+    parsed = parse_side_team(
+        pick.get("selection")
     )
 
-    if (
-        parsed
-        and not is_ambiguous_hint(
-            parsed
-        )
-    ):
+    if parsed:
         return parsed
 
     structured = clean_text(
-        pick.get(
-            "team"
-        )
-        or pick.get(
-            "side"
-        )
+        pick.get("team")
+        or pick.get("side")
     )
 
-    if (
-        structured
-        and not is_ambiguous_hint(
-            structured
-        )
-    ):
-        return structured
-
     return (
-        parsed
-        or structured
+        structured
         or None
     )
 
 
-def structured_total_pair(
+def matchup_identity(
+    pick,
+):
+    """
+    Read the dedicated matchup field.
+
+    This is critical for records like:
+
+        selection = "Over 49.5"
+        matchup   = "OSU @ HOU"
+
+    The old grader skipped this and trusted
+    bad extracted team/opponent fields.
+    """
+
+    parts = split_matchup(
+        pick.get("matchup")
+    )
+
+    if len(parts) >= 2:
+        return parts[:2]
+
+    return []
+
+
+def structured_pair(
     pick,
 ):
     team = clean_text(
-        pick.get(
-            "team"
-        )
+        pick.get("team")
     )
 
     opponent = clean_text(
-        pick.get(
-            "opponent"
-        )
+        pick.get("opponent")
     )
 
-    if (
-        team
-        and opponent
-        and not is_ambiguous_hint(
-            team
-        )
-        and not is_ambiguous_hint(
-            opponent
-        )
-    ):
+    if team and opponent:
 
         return [
             team,
             opponent,
         ]
-
-    matchup_parts = (
-        split_matchup(
-            pick.get(
-                "matchup"
-            )
-        )
-    )
-
-    if (
-        len(
-            matchup_parts
-        ) >= 2
-        and not any(
-            is_ambiguous_hint(
-                value
-            )
-            for value
-            in matchup_parts[:2]
-        )
-    ):
-
-        return (
-            matchup_parts[:2]
-        )
 
     return []
 
@@ -1248,127 +1196,142 @@ def structured_total_pair(
 def total_identity(
     pick,
 ):
-    parsed = (
-        parse_total_identity(
-            pick.get(
-                "selection"
-            )
-        )
+    """
+    Safe priority:
+
+    1. Visible matchup inside selection.
+    2. Dedicated matchup field.
+    3. One-team identity inside selection.
+    4. Structured team/opponent.
+    5. Structured team only.
+
+    This prevents:
+        Over 49.5 + matchup OSU @ HOU
+
+    from being overwritten by:
+        team=Ohio State, opponent=Houston.
+    """
+
+    parsed = parse_total_identity(
+        pick.get("selection")
     )
 
-    if (
-        len(
-            parsed
-        ) == 2
-        and not any(
-            is_ambiguous_hint(
-                value
-            )
-            for value in parsed
-        )
-    ):
+    if len(parsed) == 2:
         return parsed
 
-    if (
-        len(
-            parsed
-        ) == 1
-        and not is_ambiguous_hint(
-            parsed[0]
-        )
-    ):
+    matchup = matchup_identity(
+        pick
+    )
+
+    if matchup:
+        return matchup
+
+    if len(parsed) == 1:
         return parsed
 
-    pair = (
-        structured_total_pair(
-            pick
-        )
+    pair = structured_pair(
+        pick
     )
 
     if pair:
         return pair
 
     team = clean_text(
-        pick.get(
-            "team"
-        )
+        pick.get("team")
     )
 
-    if (
-        team
-        and not is_ambiguous_hint(
-            team
-        )
-    ):
+    if team:
         return [
             team
         ]
 
-    return parsed
+    return []
+
+
+# ============================================================
+# REQUIRED TEAM HINTS FOR FALLBACK
+# ============================================================
+
+def safe_hints_from_identity(
+    identity,
+):
+    return [
+        value
+
+        for value in identity
+
+        if (
+            value
+            and not is_ambiguous_hint(
+                value
+            )
+        )
+    ]
 
 
 def identities_needed_for_pick(
     pick,
 ):
     bet_type = str(
-        pick.get(
-            "bet_type"
-        )
+        pick.get("bet_type")
         or ""
     ).upper()
 
     if bet_type in {
         "SPREAD",
         "MONEYLINE",
-        "TEAM_TOTAL",
     }:
 
-        identity = (
-            side_identity(
-                pick
-            )
+        identity = side_identity(
+            pick
         )
 
-        return (
-            [identity]
-            if identity
-            else []
+        if (
+            identity
+            and not is_ambiguous_hint(
+                identity
+            )
+        ):
+
+            return [
+                identity
+            ]
+
+        return []
+
+    if bet_type == "TEAM_TOTAL":
+
+        if total_direction(
+            pick
+        ) is None:
+
+            return []
+
+        identity = side_identity(
+            pick
         )
+
+        if (
+            identity
+            and not is_ambiguous_hint(
+                identity
+            )
+        ):
+
+            return [
+                identity
+            ]
+
+        return []
 
     if bet_type == "TOTAL":
 
-        parsed = (
-            parse_total_identity(
-                pick.get(
-                    "selection"
-                )
-            )
+        identity = total_identity(
+            pick
         )
 
-        # Example:
-        # OSU @ HOU
-        #
-        # OSU is ambiguous, but HOU is not.
-        # Fetch Houston so the actual opponent
-        # can tell us which OSU is intended.
-        if len(
-            parsed
-        ) == 2:
-
-            safe_hints = [
-                value
-                for value
-                in parsed
-                if not is_ambiguous_hint(
-                    value
-                )
-            ]
-
-            if safe_hints:
-                return safe_hints
-
-        return total_identity(
-            pick
+        return safe_hints_from_identity(
+            identity
         )
 
     return []
@@ -1384,9 +1347,7 @@ def collect_required_team_hints(
     for pick in picks:
 
         if (
-            pick.get(
-                "sport"
-            )
+            pick.get("sport")
             not in {
                 "CFB",
                 "NCAAF",
@@ -1398,22 +1359,16 @@ def collect_required_team_hints(
             season_year_for_pick(
                 pick
             )
-            != int(
-                season_year
-            )
+            != int(season_year)
         ):
             continue
 
         if (
             int(
-                pick.get(
-                    "week"
-                )
+                pick.get("week")
                 or 1
             )
-            != int(
-                week
-            )
+            != int(week)
         ):
             continue
 
@@ -1428,13 +1383,7 @@ def collect_required_team_hints(
             )
         ):
 
-            if (
-                hint
-                and not is_ambiguous_hint(
-                    hint
-                )
-            ):
-
+            if hint:
                 hints.append(
                     hint
                 )
@@ -1462,6 +1411,10 @@ def collect_required_team_hints(
     return output
 
 
+# ============================================================
+# SLATE COMPLETION
+# ============================================================
+
 def team_present_in_events(
     hint,
     events,
@@ -1472,12 +1425,15 @@ def team_present_in_events(
                 comp,
                 hint,
             )
+
             for comp
             in competitors(
                 event
             )
         )
-        for event in events
+
+        for event
+        in events
     )
 
 
@@ -1603,12 +1559,10 @@ def build_complete_week_slate(
 
             for event in schedule_events:
 
-                if not (
-                    event_in_week_window(
-                        event,
-                        season_year,
-                        week,
-                    )
+                if not event_in_week_window(
+                    event,
+                    season_year,
+                    week,
                 ):
                     continue
 
@@ -1622,9 +1576,7 @@ def build_complete_week_slate(
                 )
 
                 if (
-                    len(
-                        events_by_id
-                    )
+                    len(events_by_id)
                     > before
                 ):
                     added += 1
@@ -1644,8 +1596,7 @@ def build_complete_week_slate(
 
     print(
         "Combined complete slate: "
-        f"{len(events)} "
-        "unique events"
+        f"{len(events)} unique events"
     )
 
     unresolved = [
@@ -1673,6 +1624,10 @@ def build_complete_week_slate(
     return events
 
 
+# ============================================================
+# EVENT MATCHING
+# ============================================================
+
 def unique_event_for_team(
     team_hint,
     events,
@@ -1693,9 +1648,7 @@ def unique_event_for_team(
             event
         )
 
-        if len(
-            comps
-        ) != 2:
+        if len(comps) != 2:
             continue
 
         if any(
@@ -1703,6 +1656,7 @@ def unique_event_for_team(
                 comp,
                 team_hint,
             )
+
             for comp
             in comps
         ):
@@ -1711,10 +1665,7 @@ def unique_event_for_team(
                 event
             )
 
-    if len(
-        matches
-    ) == 1:
-
+    if len(matches) == 1:
         return matches[0]
 
     return None
@@ -1732,12 +1683,8 @@ def unique_event_for_pair(
         return None
 
     if (
-        is_ambiguous_hint(
-            team_a
-        )
-        or is_ambiguous_hint(
-            team_b
-        )
+        is_ambiguous_hint(team_a)
+        or is_ambiguous_hint(team_b)
     ):
         return None
 
@@ -1749,9 +1696,7 @@ def unique_event_for_pair(
             event
         )
 
-        if len(
-            comps
-        ) != 2:
+        if len(comps) != 2:
             continue
 
         found_a = any(
@@ -1759,6 +1704,7 @@ def unique_event_for_pair(
                 comp,
                 team_a,
             )
+
             for comp
             in comps
         )
@@ -1768,23 +1714,18 @@ def unique_event_for_pair(
                 comp,
                 team_b,
             )
+
             for comp
             in comps
         )
 
-        if (
-            found_a
-            and found_b
-        ):
+        if found_a and found_b:
 
             matches.append(
                 event
             )
 
-    if len(
-        matches
-    ) == 1:
-
+    if len(matches) == 1:
         return matches[0]
 
     return None
@@ -1796,21 +1737,21 @@ def resolve_ambiguous_pair(
     events,
 ):
     """
-    Resolve exactly one ambiguous side
-    using the known opponent's actual game.
+    Resolve exactly one ambiguous abbreviation
+    through its known opponent.
 
     Example:
 
         OSU @ HOU
 
-    HOU resolves to Houston.
-    Find Houston's unique game.
-    Whatever team Houston played is the
-    intended OSU in this matchup.
+    HOU -> Houston.
 
-    This is how OSU @ HOU correctly resolves
-    to Oregon State vs Houston instead of
-    trusting a bad structured Ohio State field.
+    Houston has one game in the slate.
+    ESPN says Houston's opponent is Oregon State.
+
+    Therefore OSU means Oregon State here.
+
+    No fuzzy matching.
     """
 
     a_ambiguous = (
@@ -1825,7 +1766,6 @@ def resolve_ambiguous_pair(
         )
     )
 
-    # Exactly one side must be ambiguous.
     if (
         a_ambiguous
         == b_ambiguous
@@ -1838,11 +1778,9 @@ def resolve_ambiguous_pair(
         else team_a
     )
 
-    event = (
-        unique_event_for_team(
-            anchor,
-            events,
-        )
+    event = unique_event_for_team(
+        anchor,
+        events,
     )
 
     if event is None:
@@ -1852,15 +1790,14 @@ def resolve_ambiguous_pair(
         event
     )
 
-    if len(
-        comps
-    ) != 2:
+    if len(comps) != 2:
         return None
 
     anchor_matches = [
         comp
 
-        for comp in comps
+        for comp
+        in comps
 
         if comp_matches(
             comp,
@@ -1868,144 +1805,234 @@ def resolve_ambiguous_pair(
         )
     ]
 
-    if len(
-        anchor_matches
-    ) != 1:
-
+    if len(anchor_matches) != 1:
         return None
 
+    print(
+        "CONTEXT RESOLVED:",
+        f"{team_a} @ {team_b}",
+        "->",
+        final_score_text(
+            event
+        ),
+        "| event:",
+        event.get("id"),
+    )
+
     return event
+
+
+def resolve_pair(
+    pair,
+    events,
+):
+    if len(pair) != 2:
+        return None
+
+    team_a = pair[0]
+    team_b = pair[1]
+
+    if (
+        is_ambiguous_hint(
+            team_a
+        )
+        or is_ambiguous_hint(
+            team_b
+        )
+    ):
+
+        return resolve_ambiguous_pair(
+            team_a,
+            team_b,
+            events,
+        )
+
+    return unique_event_for_pair(
+        team_a,
+        team_b,
+        events,
+    )
 
 
 def resolve_total_event(
     pick,
     events,
 ):
-    parsed = (
-        parse_total_identity(
-            pick.get(
-                "selection"
-            )
-        )
+    """
+    TOTAL matching priority:
+
+    1. Matchup explicitly inside selection.
+    2. Dedicated matchup field.
+    3. One-team selection identity.
+    4. Structured team/opponent fallback.
+    5. Structured single-team fallback.
+
+    This is the key fix for Rico OSU/HOU.
+    """
+
+    parsed = parse_total_identity(
+        pick.get("selection")
     )
 
-    # -----------------------------------
-    # 1. Visible two-team matchup
-    # -----------------------------------
+    # ------------------------------------------------
+    # 1. Explicit two-team matchup in selection
+    # ------------------------------------------------
 
-    if len(
-        parsed
-    ) == 2:
+    if len(parsed) == 2:
 
-        team_a = parsed[0]
-        team_b = parsed[1]
+        event = resolve_pair(
+            parsed,
+            events,
+        )
 
-        if (
-            is_ambiguous_hint(
-                team_a
-            )
-            or is_ambiguous_hint(
-                team_b
-            )
-        ):
+        if event is not None:
+            return event
 
-            event = (
-                resolve_ambiguous_pair(
-                    team_a,
-                    team_b,
-                    events,
-                )
-            )
+    # ------------------------------------------------
+    # 2. Dedicated matchup field
+    # ------------------------------------------------
 
-            if event is not None:
-                return event
+    matchup = matchup_identity(
+        pick
+    )
 
-        else:
+    if len(matchup) == 2:
 
-            event = (
-                unique_event_for_pair(
-                    team_a,
-                    team_b,
-                    events,
-                )
-            )
+        event = resolve_pair(
+            matchup,
+            events,
+        )
 
-            if event is not None:
-                return event
+        if event is not None:
+            return event
 
-    # -----------------------------------
-    # 2. Visible one-team total
-    # -----------------------------------
+    # ------------------------------------------------
+    # 3. One-team identity in selection
+    #
+    # Texas A&M Over 53.5
+    # ------------------------------------------------
 
     if (
-        len(
-            parsed
-        ) == 1
+        len(parsed) == 1
         and not is_ambiguous_hint(
             parsed[0]
         )
     ):
 
-        event = (
-            unique_event_for_team(
-                parsed[0],
-                events,
-            )
+        event = unique_event_for_team(
+            parsed[0],
+            events,
         )
 
         if event is not None:
             return event
 
-    # -----------------------------------
-    # 3. Structured pair fallback
-    # -----------------------------------
+    # ------------------------------------------------
+    # 4. Structured pair is LAST pair fallback.
+    #
+    # This prevents a bad extracted:
+    #
+    # team = Ohio State
+    # opponent = Houston
+    #
+    # from overriding matchup = OSU @ HOU.
+    # ------------------------------------------------
 
-    pair = (
-        structured_total_pair(
-            pick
-        )
-    )
-
-    if len(
-        pair
-    ) == 2:
-
-        event = (
-            unique_event_for_pair(
-                pair[0],
-                pair[1],
-                events,
-            )
-        )
-
-        if event is not None:
-            return event
-
-    # -----------------------------------
-    # 4. Single-team fallback
-    # -----------------------------------
-
-    identity = (
-        total_identity(
-            pick
-        )
+    pair = structured_pair(
+        pick
     )
 
     if (
-        len(
-            identity
-        ) == 1
-        and not is_ambiguous_hint(
-            identity[0]
+        len(pair) == 2
+        and not any(
+            is_ambiguous_hint(x)
+            for x in pair
         )
     ):
 
-        return (
-            unique_event_for_team(
-                identity[0],
-                events,
-            )
+        event = unique_event_for_pair(
+            pair[0],
+            pair[1],
+            events,
         )
+
+        if event is not None:
+            return event
+
+    # ------------------------------------------------
+    # 5. Structured single team
+    # ------------------------------------------------
+
+    team = clean_text(
+        pick.get("team")
+    )
+
+    if (
+        team
+        and not is_ambiguous_hint(
+            team
+        )
+    ):
+
+        event = unique_event_for_team(
+            team,
+            events,
+        )
+
+        if event is not None:
+            return event
+
+    return None
+
+
+def resolve_side_event(
+    pick,
+    events,
+):
+    """
+    Side bets are primarily identified from
+    the actual selection text.
+
+    Example:
+        A&M -40.5
+        -> A&M
+        -> Texas A&M
+
+    If the side is ambiguous, use matchup context.
+    """
+
+    identity = side_identity(
+        pick
+    )
+
+    if (
+        identity
+        and not is_ambiguous_hint(
+            identity
+        )
+    ):
+
+        event = unique_event_for_team(
+            identity,
+            events,
+        )
+
+        if event is not None:
+            return event
+
+    matchup = matchup_identity(
+        pick
+    )
+
+    if len(matchup) == 2:
+
+        event = resolve_pair(
+            matchup,
+            events,
+        )
+
+        if event is not None:
+            return event
 
     return None
 
@@ -2015,9 +2042,7 @@ def resolve_event(
     events,
 ):
     bet_type = str(
-        pick.get(
-            "bet_type"
-        )
+        pick.get("bet_type")
         or ""
     ).upper()
 
@@ -2027,31 +2052,183 @@ def resolve_event(
         "TEAM_TOTAL",
     }:
 
-        return (
-            unique_event_for_team(
-                side_identity(
-                    pick
-                ),
-                events,
-            )
+        return resolve_side_event(
+            pick,
+            events,
         )
 
     if bet_type == "TOTAL":
 
-        return (
-            resolve_total_event(
-                pick,
-                events,
-            )
+        return resolve_total_event(
+            pick,
+            events,
         )
 
     return None
 
 
+# ============================================================
+# SCORE PARSING
+# ============================================================
+
+def score_value(comp):
+    """
+    ESPN returns score in multiple shapes.
+
+    Scoreboard:
+        "score": "34"
+
+    Team schedule:
+        "score": {
+            "value": 34,
+            "displayValue": "34"
+        }
+
+    Never guess if unreadable.
+    """
+
+    raw = comp.get(
+        "score"
+    )
+
+    if raw is None:
+        return None
+
+    if isinstance(
+        raw,
+        (
+            str,
+            int,
+            float,
+        ),
+    ):
+
+        try:
+            return float(
+                raw
+            )
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+            return None
+
+    if isinstance(
+        raw,
+        dict,
+    ):
+
+        for key in (
+            "value",
+            "displayValue",
+            "score",
+        ):
+
+            value = raw.get(
+                key
+            )
+
+            if isinstance(
+                value,
+                dict,
+            ):
+
+                value = (
+                    value.get("value")
+                    or value.get(
+                        "displayValue"
+                    )
+                )
+
+            if value is None:
+                continue
+
+            try:
+                return float(
+                    value
+                )
+
+            except (
+                TypeError,
+                ValueError,
+            ):
+                continue
+
+    return None
+
+
+def final_score_text(
+    event,
+):
+    output = []
+
+    for comp in competitors(
+        event
+    ):
+
+        team = (
+            comp.get("team")
+            or {}
+        )
+
+        label = (
+            team.get("abbreviation")
+            or team.get(
+                "shortDisplayName"
+            )
+            or team.get(
+                "displayName"
+            )
+            or "Team"
+        )
+
+        score = score_value(
+            comp
+        )
+
+        if score is None:
+
+            score_text = "?"
+
+        elif float(
+            score
+        ).is_integer():
+
+            score_text = str(
+                int(score)
+            )
+
+        else:
+
+            score_text = str(
+                score
+            )
+
+        output.append(
+            f"{label} {score_text}"
+        )
+
+    return " - ".join(
+        output
+    )
+
+
+# ============================================================
+# SELECTED TEAM
+# ============================================================
+
 def selected_comp(
     pick,
     event,
 ):
+    """
+    Identify the selected side from selection text.
+
+    For A&M -40.5:
+        A&M -> Texas A&M competitor.
+    """
+
     hint = side_identity(
         pick
     )
@@ -2078,10 +2255,7 @@ def selected_comp(
         )
     ]
 
-    if len(
-        matches
-    ) == 1:
-
+    if len(matches) == 1:
         return matches[0]
 
     return None
@@ -2091,12 +2265,8 @@ def total_direction(
     pick,
 ):
     text = norm(
-        pick.get(
-            "side"
-        )
-        or pick.get(
-            "selection"
-        )
+        pick.get("side")
+        or pick.get("selection")
     )
 
     if "over" in text:
@@ -2108,166 +2278,9 @@ def total_direction(
     return None
 
 
-def score_value(
-    comp,
-):
-    """
-    ESPN exposes different score shapes.
-
-    Scoreboard may use:
-        "score": "34"
-
-    Team schedules may use:
-        "score": {
-            "value": 34,
-            "displayValue": "34"
-        }
-
-    Return a float or None.
-    Never guess.
-    """
-
-    raw = comp.get(
-        "score"
-    )
-
-    if raw is None:
-        return None
-
-    if isinstance(
-        raw,
-        (
-            str,
-            int,
-            float,
-        ),
-    ):
-
-        try:
-
-            return float(
-                raw
-            )
-
-        except (
-            TypeError,
-            ValueError,
-        ):
-
-            return None
-
-    if isinstance(
-        raw,
-        dict,
-    ):
-
-        for key in (
-            "value",
-            "displayValue",
-            "score",
-        ):
-
-            value = (
-                raw.get(
-                    key
-                )
-            )
-
-            if isinstance(
-                value,
-                dict,
-            ):
-
-                value = (
-                    value.get(
-                        "value"
-                    )
-                    or value.get(
-                        "displayValue"
-                    )
-                )
-
-            if value is None:
-                continue
-
-            try:
-
-                return float(
-                    value
-                )
-
-            except (
-                TypeError,
-                ValueError,
-            ):
-
-                continue
-
-    return None
-
-
-def final_score_text(
-    event,
-):
-    output = []
-
-    for comp in competitors(
-        event
-    ):
-
-        team = (
-            comp.get("team")
-            or {}
-        )
-
-        label = (
-            team.get(
-                "abbreviation"
-            )
-            or team.get(
-                "shortDisplayName"
-            )
-            or team.get(
-                "displayName"
-            )
-            or "Team"
-        )
-
-        score = (
-            score_value(
-                comp
-            )
-        )
-
-        if score is None:
-
-            score_text = "?"
-
-        elif float(
-            score
-        ).is_integer():
-
-            score_text = str(
-                int(
-                    score
-                )
-            )
-
-        else:
-
-            score_text = str(
-                score
-            )
-
-        output.append(
-            f"{label} "
-            f"{score_text}"
-        )
-
-    return " - ".join(
-        output
-    )
-
+# ============================================================
+# GRADING
+# ============================================================
 
 def grade_pick(
     pick,
@@ -2282,23 +2295,17 @@ def grade_pick(
         event
     )
 
-    if len(
-        comps
-    ) != 2:
+    if len(comps) != 2:
         return False
 
     scores = {}
 
     for comp in comps:
 
-        value = (
-            score_value(
-                comp
-            )
+        value = score_value(
+            comp
         )
 
-        # Never grade if the final score
-        # cannot be safely read.
         if value is None:
             return False
 
@@ -2315,9 +2322,7 @@ def grade_pick(
         ] = value
 
     bet_type = str(
-        pick.get(
-            "bet_type"
-        )
+        pick.get("bet_type")
         or ""
     ).upper()
 
@@ -2325,19 +2330,17 @@ def grade_pick(
         "line"
     )
 
-    # ----------------------------
+    # ========================================================
     # GAME TOTAL
-    # ----------------------------
+    # ========================================================
 
     if bet_type == "TOTAL":
 
         if line is None:
             return False
 
-        direction = (
-            total_direction(
-                pick
-            )
+        direction = total_direction(
+            pick
         )
 
         if direction is None:
@@ -2349,20 +2352,10 @@ def grade_pick(
 
         if direction == "OVER":
 
-            if (
-                game_total
-                > float(
-                    line
-                )
-            ):
+            if game_total > float(line):
                 result = "WIN"
 
-            elif (
-                game_total
-                < float(
-                    line
-                )
-            ):
+            elif game_total < float(line):
                 result = "LOSS"
 
             else:
@@ -2370,51 +2363,34 @@ def grade_pick(
 
         else:
 
-            if (
-                game_total
-                < float(
-                    line
-                )
-            ):
+            if game_total < float(line):
                 result = "WIN"
 
-            elif (
-                game_total
-                > float(
-                    line
-                )
-            ):
+            elif game_total > float(line):
                 result = "LOSS"
 
             else:
                 result = "PUSH"
 
-    # ----------------------------
+    # ========================================================
     # TEAM TOTAL
-    # ----------------------------
+    # ========================================================
 
-    elif (
-        bet_type
-        == "TEAM_TOTAL"
-    ):
+    elif bet_type == "TEAM_TOTAL":
 
         if line is None:
             return False
 
-        direction = (
-            total_direction(
-                pick
-            )
+        direction = total_direction(
+            pick
         )
 
         if direction is None:
             return False
 
-        selected = (
-            selected_comp(
-                pick,
-                event,
-            )
+        selected = selected_comp(
+            pick,
+            event,
         )
 
         if selected is None:
@@ -2432,28 +2408,16 @@ def grade_pick(
         ):
             return False
 
-        team_score = (
-            scores[
-                selected_id
-            ]
-        )
+        team_score = scores[
+            selected_id
+        ]
 
         if direction == "OVER":
 
-            if (
-                team_score
-                > float(
-                    line
-                )
-            ):
+            if team_score > float(line):
                 result = "WIN"
 
-            elif (
-                team_score
-                < float(
-                    line
-                )
-            ):
+            elif team_score < float(line):
                 result = "LOSS"
 
             else:
@@ -2461,39 +2425,27 @@ def grade_pick(
 
         else:
 
-            if (
-                team_score
-                < float(
-                    line
-                )
-            ):
+            if team_score < float(line):
                 result = "WIN"
 
-            elif (
-                team_score
-                > float(
-                    line
-                )
-            ):
+            elif team_score > float(line):
                 result = "LOSS"
 
             else:
                 result = "PUSH"
 
-    # ----------------------------
+    # ========================================================
     # SPREAD / MONEYLINE
-    # ----------------------------
+    # ========================================================
 
     elif bet_type in {
         "SPREAD",
         "MONEYLINE",
     }:
 
-        selected = (
-            selected_comp(
-                pick,
-                event,
-            )
+        selected = selected_comp(
+            pick,
+            event,
         )
 
         if selected is None:
@@ -2511,30 +2463,22 @@ def grade_pick(
         ):
             return False
 
-        other_candidates = [
+        others = [
             comp
 
-            for comp
-            in comps
+            for comp in comps
 
             if str(
                 comp.get("id")
                 or ""
-            )
-            != selected_id
+            ) != selected_id
         ]
 
-        if len(
-            other_candidates
-        ) != 1:
+        if len(others) != 1:
             return False
 
-        other = (
-            other_candidates[0]
-        )
-
         other_id = str(
-            other.get("id")
+            others[0].get("id")
             or ""
         )
 
@@ -2546,18 +2490,11 @@ def grade_pick(
             return False
 
         margin = (
-            scores[
-                selected_id
-            ]
-            - scores[
-                other_id
-            ]
+            scores[selected_id]
+            - scores[other_id]
         )
 
-        if (
-            bet_type
-            == "MONEYLINE"
-        ):
+        if bet_type == "MONEYLINE":
 
             if margin > 0:
                 result = "WIN"
@@ -2575,21 +2512,13 @@ def grade_pick(
 
             adjusted_margin = (
                 margin
-                + float(
-                    line
-                )
+                + float(line)
             )
 
-            if (
-                adjusted_margin
-                > 0
-            ):
+            if adjusted_margin > 0:
                 result = "WIN"
 
-            elif (
-                adjusted_margin
-                < 0
-            ):
+            elif adjusted_margin < 0:
                 result = "LOSS"
 
             else:
@@ -2598,13 +2527,8 @@ def grade_pick(
     else:
         return False
 
-    pick["result"] = (
-        result
-    )
-
-    pick["status"] = (
-        "FINAL"
-    )
+    pick["result"] = result
+    pick["status"] = "FINAL"
 
     pick["event_id"] = (
         event.get("id")
@@ -2622,13 +2546,9 @@ def grade_pick(
 
     pick["profit_units"] = (
         american_profit(
-            pick.get(
-                "odds"
-            ),
+            pick.get("odds"),
             float(
-                pick.get(
-                    "units"
-                )
+                pick.get("units")
                 or 1
             ),
             result,
@@ -2637,6 +2557,10 @@ def grade_pick(
 
     return True
 
+
+# ============================================================
+# GRADE RESET
+# ============================================================
 
 def clear_grade(
     pick,
@@ -2650,6 +2574,10 @@ def clear_grade(
     pick["profit_units"] = 0
 
 
+# ============================================================
+# MAIN
+# ============================================================
+
 def grade_open():
     picks = load_json(
         PICKS_FILE,
@@ -2662,19 +2590,14 @@ def grade_open():
                 pick
             ),
             int(
-                pick.get(
-                    "week"
-                )
+                pick.get("week")
                 or 1
             ),
         )
 
-        for pick
-        in picks
+        for pick in picks
 
-        if pick.get(
-            "sport"
-        )
+        if pick.get("sport")
         in {
             "CFB",
             "NCAAF",
@@ -2684,12 +2607,11 @@ def grade_open():
     week_cache = {}
     failed_weeks = set()
 
-    # -----------------------------------
-    # FETCH EVERYTHING FIRST
-    # -----------------------------------
+    # ========================================================
+    # FETCH FIRST
     #
-    # If ESPN retrieval fails, existing
-    # grades remain untouched.
+    # Do not alter any grades until ESPN retrieval succeeds.
+    # ========================================================
 
     for (
         season_year,
@@ -2709,8 +2631,7 @@ def grade_open():
             if not events:
 
                 raise RuntimeError(
-                    "No ESPN events "
-                    "retrieved."
+                    "No ESPN events retrieved."
                 )
 
             week_cache[
@@ -2754,9 +2675,7 @@ def grade_open():
     for pick in picks:
 
         if (
-            pick.get(
-                "sport"
-            )
+            pick.get("sport")
             not in {
                 "CFB",
                 "NCAAF",
@@ -2771,9 +2690,7 @@ def grade_open():
         )
 
         week = int(
-            pick.get(
-                "week"
-            )
+            pick.get("week")
             or 1
         )
 
@@ -2782,9 +2699,9 @@ def grade_open():
             week,
         )
 
-        # -----------------------------------
-        # PRESERVE ON ESPN FAILURE
-        # -----------------------------------
+        # ====================================================
+        # ESPN FAILURE -> PRESERVE EXISTING GRADE
+        # ====================================================
 
         if key in failed_weeks:
 
@@ -2792,27 +2709,21 @@ def grade_open():
 
             print(
                 "PRESERVED:",
-                pick.get(
-                    "picker"
-                ),
+                pick.get("picker"),
                 "|",
-                pick.get(
-                    "selection"
-                ),
+                pick.get("selection"),
             )
 
             continue
 
         bet_type = str(
-            pick.get(
-                "bet_type"
-            )
+            pick.get("bet_type")
             or ""
         ).upper()
 
-        # -----------------------------------
-        # PARTIAL-GAME BETS
-        # -----------------------------------
+        # ====================================================
+        # PARTIAL GAME -> REVIEW
+        # ====================================================
 
         if has_partial_game_marker(
             pick
@@ -2827,25 +2738,18 @@ def grade_open():
 
             print(
                 "REVIEW - partial game:",
-                pick.get(
-                    "picker"
-                ),
+                pick.get("picker"),
                 "|",
-                pick.get(
-                    "selection"
-                ),
+                pick.get("selection"),
             )
 
             continue
 
-        # -----------------------------------
-        # UNSUPPORTED TYPE
-        # -----------------------------------
+        # ====================================================
+        # UNSUPPORTED -> REVIEW
+        # ====================================================
 
-        if (
-            bet_type
-            not in SUPPORTED
-        ):
+        if bet_type not in SUPPORTED:
 
             clear_grade(
                 pick,
@@ -2856,28 +2760,22 @@ def grade_open():
 
             print(
                 "REVIEW - unsupported:",
-                pick.get(
-                    "picker"
-                ),
+                pick.get("picker"),
                 "|",
-                pick.get(
-                    "selection"
-                ),
+                pick.get("selection"),
             )
 
             continue
 
-        # -----------------------------------
-        # TEAM TOTAL SAFETY
-        # -----------------------------------
+        # ====================================================
+        # TEAM TOTAL WITHOUT DIRECTION -> REVIEW
+        # ====================================================
 
         if (
-            bet_type
-            == "TEAM_TOTAL"
+            bet_type == "TEAM_TOTAL"
             and total_direction(
                 pick
-            )
-            is None
+            ) is None
         ):
 
             clear_grade(
@@ -2890,39 +2788,30 @@ def grade_open():
             print(
                 "REVIEW - team total "
                 "direction missing:",
-                pick.get(
-                    "picker"
-                ),
+                pick.get("picker"),
                 "|",
-                pick.get(
-                    "selection"
-                ),
+                pick.get("selection"),
             )
 
             continue
 
-        events = (
-            week_cache[
-                key
-            ]
+        events = week_cache[
+            key
+        ]
+
+        event = resolve_event(
+            pick,
+            events,
         )
 
-        event = (
-            resolve_event(
-                pick,
-                events,
-            )
-        )
-
-        # ESPN slate succeeded.
-        # Recalculate previous automatic grade.
+        # ESPN succeeded, so safely recalculate.
         clear_grade(
             pick
         )
 
-        # -----------------------------------
-        # NO UNIQUE MATCH
-        # -----------------------------------
+        # ====================================================
+        # UNMATCHED
+        # ====================================================
 
         if event is None:
 
@@ -2932,8 +2821,7 @@ def grade_open():
                 total_identity(
                     pick
                 )
-                if bet_type
-                == "TOTAL"
+                if bet_type == "TOTAL"
                 else side_identity(
                     pick
                 )
@@ -2941,22 +2829,20 @@ def grade_open():
 
             print(
                 "UNMATCHED:",
-                pick.get(
-                    "picker"
-                ),
+                pick.get("picker"),
                 "|",
-                pick.get(
-                    "selection"
-                ),
+                pick.get("selection"),
+                "| matchup:",
+                pick.get("matchup"),
                 "| identity:",
                 identity,
             )
 
             continue
 
-        # -----------------------------------
-        # GAME NOT FINAL
-        # -----------------------------------
+        # ====================================================
+        # MATCHED BUT NOT FINAL
+        # ====================================================
 
         if not completed(
             event
@@ -2966,28 +2852,22 @@ def grade_open():
 
             print(
                 "NOT FINAL:",
-                pick.get(
-                    "picker"
-                ),
+                pick.get("picker"),
                 "|",
-                pick.get(
-                    "selection"
-                ),
+                pick.get("selection"),
                 "|",
                 final_score_text(
                     event
                 ),
                 "| event:",
-                event.get(
-                    "id"
-                ),
+                event.get("id"),
             )
 
             continue
 
-        # -----------------------------------
+        # ====================================================
         # GRADE
-        # -----------------------------------
+        # ====================================================
 
         if grade_pick(
             pick,
@@ -2998,25 +2878,15 @@ def grade_open():
 
             print(
                 "GRADED:",
-                pick.get(
-                    "picker"
-                ),
+                pick.get("picker"),
                 "|",
-                pick.get(
-                    "selection"
-                ),
+                pick.get("selection"),
                 "|",
-                pick.get(
-                    "result"
-                ),
+                pick.get("result"),
                 "|",
-                pick.get(
-                    "final_score"
-                ),
+                pick.get("final_score"),
                 "| event:",
-                pick.get(
-                    "event_id"
-                ),
+                pick.get("event_id"),
             )
 
         else:
@@ -3025,17 +2895,15 @@ def grade_open():
 
             print(
                 "GRADE FAILED:",
-                pick.get(
-                    "picker"
-                ),
+                pick.get("picker"),
                 "|",
-                pick.get(
-                    "selection"
+                pick.get("selection"),
+                "|",
+                final_score_text(
+                    event
                 ),
                 "| event:",
-                event.get(
-                    "id"
-                ),
+                event.get("id"),
             )
 
     save_json(
@@ -3049,27 +2917,26 @@ def grade_open():
     )
 
     print(
-        f"Safely graded: "
-        f"{graded}"
+        f"Safely graded: {graded}"
     )
 
     print(
-        f"Unmatched supported picks: "
+        "Unmatched supported picks: "
         f"{unmatched}"
     )
 
     print(
-        f"Matched but not final: "
+        "Matched but not final: "
         f"{not_final}"
     )
 
     print(
-        f"Review/specialty picks: "
+        "Review/specialty picks: "
         f"{review}"
     )
 
     print(
-        f"Preserved due to ESPN failure: "
+        "Preserved due to ESPN failure: "
         f"{preserved}"
     )
 
