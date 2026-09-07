@@ -3,7 +3,7 @@ name: Pickem Tracker
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "0 * * * *"
 
 permissions:
   contents: write
@@ -19,15 +19,86 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
+      - name: Check Pacific schedule
+        id: schedule_check
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Manual run requested — running tracker."
+            exit 0
+          fi
+
+          DAY=$(TZ=America/Los_Angeles date +%u)
+          HOUR=$(TZ=America/Los_Angeles date +%-H)
+
+          echo "Pacific day=$DAY hour=$HOUR"
+
+          RUN=false
+
+          case "$DAY" in
+            1) # Monday
+              case "$HOUR" in
+                6|22) RUN=true ;;
+              esac
+              ;;
+
+            2) # Tuesday — no runs
+              ;;
+
+            3) # Wednesday
+              case "$HOUR" in
+                22) RUN=true ;;
+              esac
+              ;;
+
+            4) # Thursday
+              case "$HOUR" in
+                16|19|23) RUN=true ;;
+              esac
+              ;;
+
+            5) # Friday
+              case "$HOUR" in
+                16|18|20|23) RUN=true ;;
+              esac
+              ;;
+
+            6) # Saturday
+              case "$HOUR" in
+                10|12|13|15|17|19|21|23) RUN=true ;;
+              esac
+              ;;
+
+            7) # Sunday
+              case "$HOUR" in
+                2|10|14|17) RUN=true ;;
+              esac
+              ;;
+          esac
+
+          echo "run=$RUN" >> "$GITHUB_OUTPUT"
+
+          if [ "$RUN" = "true" ]; then
+            echo "Scheduled Pacific run — proceeding."
+          else
+            echo "Not a scheduled Pacific run — stopping before API usage."
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.schedule_check.outputs.run == 'true'
 
       - uses: actions/setup-python@v5
+        if: steps.schedule_check.outputs.run == 'true'
         with:
           python-version: "3.12"
 
-      - run: pip install -r requirements.txt
+      - name: Install dependencies
+        if: steps.schedule_check.outputs.run == 'true'
+        run: pip install -r requirements.txt
 
       - name: Update tracker
+        if: steps.schedule_check.outputs.run == 'true'
         env:
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -36,6 +107,7 @@ jobs:
         run: python python_scripts/run_all.py
 
       - name: Save data
+        if: steps.schedule_check.outputs.run == 'true'
         run: |
           git config user.name "pickem-bot"
           git config user.email "pickem-bot@users.noreply.github.com"
@@ -44,11 +116,14 @@ jobs:
           git push
 
       - uses: actions/configure-pages@v5
+        if: steps.schedule_check.outputs.run == 'true'
 
       - uses: actions/upload-pages-artifact@v4
+        if: steps.schedule_check.outputs.run == 'true'
         with:
           path: "."
 
       - name: Deploy
         id: deployment
+        if: steps.schedule_check.outputs.run == 'true'
         uses: actions/deploy-pages@v4
