@@ -2,7 +2,6 @@
 <html lang="en">
 
 <head>
-
 <meta charset="utf-8">
 
 <meta
@@ -30,10 +29,9 @@
   --red:#ff6b6b;
   --gold:#f6c85f;
 
-  /* Barstool brand accent */
   --barstool:#ed1c24;
   --barstoolSoft:rgba(237,28,36,.10);
-  --barstoolBorder:rgba(237,28,36,.55);
+  --barstoolBorder:rgba(237,28,36,.65);
 }
 
 *{
@@ -89,7 +87,7 @@ button,
 
 .headerTop{
   display:flex;
-  align-items:flex-start;
+  align-items:center;
   justify-content:space-between;
   gap:18px;
 }
@@ -114,54 +112,42 @@ h1{
 
 
 /* =========================================================
-   BARSTOOL BRAND MARK
+   BARSTOOL LOGO
 ========================================================= */
 
-.brandMark{
+.brandLogo{
   flex:0 0 auto;
 
-  width:58px;
-  height:58px;
+  width:74px;
+  height:74px;
 
-  border-radius:50%;
-
-  background:
-    linear-gradient(
-      145deg,
-      #f3262e,
-      #c90f17
-    );
-
-  border:
-    1px solid
-    rgba(255,255,255,.12);
+  overflow:hidden;
 
   display:flex;
   align-items:center;
   justify-content:center;
 
-  box-shadow:
-    0 7px 20px rgba(0,0,0,.25),
-    inset 0 1px 0 rgba(255,255,255,.10);
+  border-radius:50%;
+
+  background:#131e31;
 }
 
-.brandMark img{
+.brandLogo img{
   display:block;
-  width:38px;
-  height:38px;
-  object-fit:contain;
 
-  /* force transparent logo artwork to white */
-  filter:
-    brightness(0)
-    invert(1);
-}
+  width:100%;
+  height:100%;
 
-.updated{
-  margin-top:3px;
-  font-size:11px;
-  color:var(--muted);
-  white-space:nowrap;
+  object-fit:cover;
+
+  /*
+    The uploaded JPEG has significant navy padding.
+    Scaling it here makes the actual stool/star logo
+    fill the header mark.
+  */
+  transform:scale(1.85);
+
+  transform-origin:center;
 }
 
 
@@ -310,13 +296,8 @@ h1{
   align-items:center;
   gap:4px;
 
-  border:
-    1px solid
-    rgba(246,200,95,.35);
-
-  background:
-    rgba(246,200,95,.08);
-
+  border:1px solid rgba(246,200,95,.35);
+  background:rgba(246,200,95,.08);
   color:var(--gold);
 
   border-radius:999px;
@@ -340,9 +321,7 @@ h1{
 
   border-radius:999px;
 
-  border:
-    1px solid
-    var(--border2);
+  border:1px solid var(--border2);
 
   color:var(--muted);
 
@@ -355,11 +334,8 @@ h1{
 .rankTag.first{
   color:var(--gold);
 
-  border-color:
-    rgba(246,200,95,.4);
-
-  background:
-    rgba(246,200,95,.08);
+  border-color:rgba(246,200,95,.4);
+  background:rgba(246,200,95,.08);
 }
 
 .name{
@@ -390,9 +366,7 @@ h1{
 .section{
   margin-top:14px;
 
-  border:
-    1px solid
-    var(--border);
+  border:1px solid var(--border);
 
   background:var(--panel);
 
@@ -497,9 +471,7 @@ h1{
 
   padding:13px 0;
 
-  border-bottom:
-    1px solid
-    var(--border);
+  border-bottom:1px solid var(--border);
 
   cursor:pointer;
 }
@@ -529,9 +501,7 @@ h1{
 
   background:var(--panel2);
 
-  border:
-    1px solid
-    var(--border);
+  border:1px solid var(--border);
 
   color:var(--muted);
 
@@ -540,13 +510,9 @@ h1{
 }
 
 .rank.first{
-  border-color:
-    rgba(246,200,95,.4);
-
+  border-color:rgba(246,200,95,.4);
   color:var(--gold);
-
-  background:
-    rgba(246,200,95,.08);
+  background:rgba(246,200,95,.08);
 }
 
 .weekName{
@@ -669,9 +635,7 @@ h1{
 
 .weekbtn,
 .filterbtn{
-  border:
-    1px solid
-    var(--border);
+  border:1px solid var(--border);
 
   background:var(--panel);
 
@@ -689,17 +653,10 @@ h1{
   cursor:pointer;
 }
 
-
-/* Barstool red selected controls */
-
 .weekbtn.active{
   background:var(--barstool);
   border-color:var(--barstool);
   color:#fff;
-
-  box-shadow:
-    0 0 0 1px
-    rgba(237,28,36,.12);
 }
 
 .filterbtn.active{
@@ -716,9 +673,7 @@ h1{
 .pickerBlock{
   margin:0 0 14px;
 
-  border:
-    1px solid
-    var(--border);
+  border:1px solid var(--border);
 
   border-radius:18px;
 
@@ -730,9 +685,7 @@ h1{
 .pickerTitle{
   padding:14px 15px;
 
-  border-bottom:
-    1px solid
-    var(--border);
+  border-bottom:1px solid var(--border);
 
   display:flex;
   justify-content:space-between;
@@ -757,9 +710,7 @@ h1{
 
   padding:13px 15px;
 
-  border-bottom:
-    1px solid
-    var(--border);
+  border-bottom:1px solid var(--border);
 }
 
 .pick:last-child{
@@ -783,9 +734,7 @@ h1{
 .badge{
   display:inline-block;
 
-  border:
-    1px solid
-    var(--border2);
+  border:1px solid var(--border2);
 
   border-radius:999px;
 
@@ -828,18 +777,9 @@ h1{
     padding-right:16px;
   }
 
-  .updated{
-    display:none;
-  }
-
-  .brandMark{
-    width:52px;
-    height:52px;
-  }
-
-  .brandMark img{
-    width:34px;
-    height:34px;
+  .brandLogo{
+    width:68px;
+    height:68px;
   }
 
   .cards{
@@ -917,7 +857,6 @@ h1{
 }
 
 </style>
-
 </head>
 
 
@@ -930,136 +869,111 @@ h1{
      OVERVIEW
 ======================================================== -->
 
-<section
-  id="overview"
-  class="view active">
+<section id="overview" class="view active">
 
 
-  <header class="header">
+<header class="header">
 
-    <div class="headerTop">
+  <div class="headerTop">
 
-      <div class="headerCopy">
+    <div class="headerCopy">
 
-        <div
-          id="seasonLabel"
-          class="eyebrow">
-          2026 SEASON
-        </div>
-
-        <h1>
-          Barstool Pick Em
-        </h1>
-
+      <div id="seasonLabel" class="eyebrow">
+        2026 SEASON
       </div>
 
-
-      <div
-        class="brandMark"
-        aria-label="Barstool Sports">
-
-        <img
-          src="https://chumley.barstoolsports.com/union/2021/02/02/barstool_icon.85479689.png"
-          alt="Barstool Sports logo">
-
-      </div>
+      <h1>
+        Barstool Pick Em
+      </h1>
 
     </div>
 
 
     <div
-      id="statusStrip"
-      class="statusStrip">
+      class="brandLogo"
+      aria-label="Barstool Sports">
+
+      <img
+        src="assets/IMG_1095.jpeg"
+        alt="Barstool Sports">
+
     </div>
-
-  </header>
-
-
-  <div class="metricHead">
-
-    <h2>
-      Overall
-    </h2>
-
-    <span>
-      Season record
-    </span>
 
   </div>
 
 
-  <div
-    id="cards"
-    class="cards">
+  <div id="statusStrip" class="statusStrip"></div>
+
+</header>
+
+
+<div class="metricHead">
+
+  <h2>Overall</h2>
+
+  <span>Season record</span>
+
+</div>
+
+
+<div id="cards" class="cards"></div>
+
+
+<section class="section">
+
+  <div class="sectionInner">
+
+    <div class="sectionHead">
+
+      <h2>Season Race</h2>
+
+      <span>Cumulative win %</span>
+
+    </div>
+
+    <div class="chartWrap">
+
+      <svg
+        id="race"
+        viewBox="0 0 900 280"
+        role="img"
+        aria-label="Cumulative win percentage by week">
+      </svg>
+
+    </div>
+
   </div>
 
+</section>
 
-  <section class="section">
 
-    <div class="sectionInner">
+<section class="section">
 
-      <div class="sectionHead">
+  <div class="sectionInner">
 
-        <h2>
-          Season Race
-        </h2>
+    <div class="sectionHead">
 
-        <span>
-          Cumulative win %
-        </span>
+      <h2 id="weekBoardTitle">
+        This Week
+      </h2>
 
-      </div>
-
-      <div class="chartWrap">
-
-        <svg
-          id="race"
-          viewBox="0 0 900 280"
-          role="img"
-          aria-label="Cumulative win percentage by week">
-        </svg>
-
-      </div>
+      <span>
+        Weekly leaderboard
+      </span>
 
     </div>
 
-  </section>
+
+    <div id="weekBoard" class="weekBoard"></div>
+
+  </div>
+
+</section>
 
 
-  <section class="section">
-
-    <div class="sectionInner">
-
-      <div class="sectionHead">
-
-        <h2 id="weekBoardTitle">
-          This Week
-        </h2>
-
-        <span>
-          Weekly leaderboard
-        </span>
-
-      </div>
-
-
-      <div
-        id="weekBoard"
-        class="weekBoard">
-      </div>
-
-    </div>
-
-  </section>
-
-
-  <button
-    id="openCards"
-    class="fullbtn">
-
-    Full Card View →
-
-  </button>
+<button id="openCards" class="fullbtn">
+  Full Card View →
+</button>
 
 
 </section>
@@ -1069,67 +983,51 @@ h1{
      FULL CARD VIEW
 ======================================================== -->
 
-<section
-  id="full"
-  class="view">
+<section id="full" class="view">
 
 
-  <button
-    id="back"
-    class="back">
-
-    ← Overview
-
-  </button>
+<button id="back" class="back">
+  ← Overview
+</button>
 
 
-  <header class="header">
+<header class="header">
 
-    <div class="headerTop">
+  <div class="headerTop">
 
-      <div>
+    <div>
 
-        <div class="eyebrow">
-          2026 SEASON
-        </div>
-
-        <h1>
-          Full Card View
-        </h1>
-
+      <div class="eyebrow">
+        2026 SEASON
       </div>
 
-
-      <div
-        class="brandMark"
-        aria-label="Barstool Sports">
-
-        <img
-          src="https://chumley.barstoolsports.com/union/2021/02/02/barstool_icon.85479689.png"
-          alt="Barstool Sports logo">
-
-      </div>
+      <h1>
+        Full Card View
+      </h1>
 
     </div>
 
-  </header>
 
+    <div
+      class="brandLogo"
+      aria-label="Barstool Sports">
 
-  <div
-    id="weeks"
-    class="weeks">
+      <img
+        src="assets/IMG_1095.jpeg"
+        alt="Barstool Sports">
+
+    </div>
+
   </div>
 
-
-  <div
-    id="filters"
-    class="filters">
-  </div>
+</header>
 
 
-  <div
-    id="cardBody">
-  </div>
+<div id="weeks" class="weeks"></div>
+
+<div id="filters" class="filters"></div>
+
+<div id="cardBody"></div>
 
 
 </section>
@@ -1157,12 +1055,6 @@ const COLORS={
   "Rico Bosco":"#f6c85f"
 };
 
-const AVATARS={
-  "Big Cat":"assets/bigcat.jpg",
-  "Stool Presidente":"assets/pres.jpg",
-  "Rico Bosco":"assets/rico.jpg"
-};
-
 const INITIALS={
   "Big Cat":"BC",
   "Stool Presidente":"DP",
@@ -1177,17 +1069,13 @@ let DATA={
   picks:[]
 };
 
-
 let selectedWeek=null;
 
 let selectedFilter="All";
 
-
 const $=
   selector=>
-    document.querySelector(
-      selector
-    );
+    document.querySelector(selector);
 
 
 /* =========================================================
@@ -1235,22 +1123,16 @@ function finalized(p){
       "WIN",
       "LOSS",
       "PUSH"
-    ].includes(
-      p.result
-    )
+    ].includes(p.result)
   );
 
 }
 
 
-function statsForPicks(
-  picks
-){
+function statsForPicks(picks){
 
   const finals=
-    picks.filter(
-      finalized
-    );
+    picks.filter(finalized);
 
   const wins=
     finals.filter(
@@ -1273,7 +1155,6 @@ function statsForPicks(
     wins/(wins+losses)*100
     :
     0;
-
 
   return {
     wins,
@@ -1304,18 +1185,12 @@ function latestWeek(){
 
 function formatUpdatedTime(){
 
-  if(
-    !DATA.updated_at
-  ){
-    return "Update time unavailable";
+  if(!DATA.updated_at){
+    return "Unavailable";
   }
 
-
   const d=
-    new Date(
-      DATA.updated_at
-    );
-
+    new Date(DATA.updated_at);
 
   return d.toLocaleTimeString(
     [],
@@ -1329,7 +1204,7 @@ function formatUpdatedTime(){
 
 
 /* =========================================================
-   STATUS STRIP
+   STATUS
 ========================================================= */
 
 function renderStatus(){
@@ -1337,22 +1212,15 @@ function renderStatus(){
   const week=
     latestWeek();
 
-
   const weekPicks=
     DATA.picks.filter(
       p=>+p.week===week
     );
 
-
   const pending=
     weekPicks.filter(
       p=>!finalized(p)
     ).length;
-
-
-  const updated=
-    formatUpdatedTime();
-
 
   const completionPill=
     pending===0
@@ -1374,9 +1242,7 @@ function renderStatus(){
 
         <span class="dot open"></span>
 
-        <strong>
-          ${pending}
-        </strong>
+        <strong>${pending}</strong>
 
         pending
 
@@ -1387,8 +1253,7 @@ function renderStatus(){
   $("#statusStrip").innerHTML=
     `
 
-      <div
-        class="statusPill weekAccent">
+      <div class="statusPill weekAccent">
 
         <strong>
           Week ${week}
@@ -1402,7 +1267,7 @@ function renderStatus(){
         Updated as of
 
         <strong>
-          ${updated}
+          ${formatUpdatedTime()}
         </strong>
 
       </div>
@@ -1416,7 +1281,7 @@ function renderStatus(){
 
 
 /* =========================================================
-   OVERALL STANDINGS
+   OVERALL CARDS
 ========================================================= */
 
 function sortedCappers(){
@@ -1446,9 +1311,7 @@ function sortedCappers(){
 }
 
 
-function openPicker(
-  picker
-){
+function openPicker(picker){
 
   selectedWeek=
     latestWeek();
@@ -1466,7 +1329,6 @@ function renderCards(){
   const sorted=
     sortedCappers();
 
-
   $("#cards").innerHTML=
     sorted.map(
       (c,index)=>{
@@ -1475,22 +1337,12 @@ function renderCards(){
           index+1;
 
         const pct=
-          Number(
-            c.win_pct||0
-          );
-
+          Number(c.win_pct||0);
 
         return `
           <article
-            class="
-              card
-              ${rank===1?"leader":""}
-            "
-            onclick="
-              openPicker(
-                '${c.picker}'
-              )
-            ">
+            class="card ${rank===1?"leader":""}"
+            onclick="openPicker('${c.picker}')">
 
 
             ${
@@ -1498,9 +1350,7 @@ function renderCards(){
               ?
               `
                 <div class="leaderTag">
-
                   ★ LEADER
-
                 </div>
               `
               :
@@ -1509,10 +1359,7 @@ function renderCards(){
 
 
             <div
-              class="
-                rankTag
-                ${rank===1?"first":""}
-              ">
+              class="rankTag ${rank===1?"first":""}">
 
               #${rank}
 
@@ -1560,10 +1407,8 @@ function renderWeekBoard(){
   const week=
     latestWeek();
 
-
   $("#weekBoardTitle").textContent=
     `Week ${week}`;
-
 
   const ranked=
     PICKERS
@@ -1578,12 +1423,9 @@ function renderWeekBoard(){
               p.picker===picker
           );
 
-
         return {
           picker,
-          ...statsForPicks(
-            picks
-          )
+          ...statsForPicks(picks)
         };
 
       }
@@ -1601,22 +1443,14 @@ function renderWeekBoard(){
         const rank=
           index+1;
 
-
         return `
           <div
             class="weekRow"
-            onclick="
-              openPicker(
-                '${c.picker}'
-              )
-            ">
+            onclick="openPicker('${c.picker}')">
 
 
             <div
-              class="
-                rank
-                ${rank===1?"first":""}
-              ">
+              class="rank ${rank===1?"first":""}">
 
               ${rank}
 
@@ -1630,6 +1464,7 @@ function renderWeekBoard(){
               </strong>
 
               <span>
+
                 ${c.finals}
                 graded
                 ${
@@ -1639,6 +1474,7 @@ function renderWeekBoard(){
                   :
                   "picks"
                 }
+
               </span>
 
             </div>
@@ -1682,7 +1518,6 @@ function renderRace(){
   const svg=
     $("#race");
 
-
   const weeks=
     (
       DATA.weeks
@@ -1695,7 +1530,6 @@ function renderRace(){
     )
     .map(Number);
 
-
   const width=900;
   const height=280;
 
@@ -1704,17 +1538,14 @@ function renderRace(){
   const top=34;
   const bottom=45;
 
-
   const chartW=
     width-left-right;
 
   const chartH=
     height-top-bottom;
 
-
   const yMin=30;
   const yMax=85;
-
 
   const yTicks=[
     30,
@@ -1727,9 +1558,7 @@ function renderRace(){
 
   function xForIndex(i){
 
-    if(
-      weeks.length===1
-    ){
+    if(weeks.length===1){
       return left+chartW/2;
     }
 
@@ -1758,7 +1587,6 @@ function renderRace(){
         )
       );
 
-
     return (
       top
       +
@@ -1777,16 +1605,11 @@ function renderRace(){
   let html="";
 
 
-  /* grid */
-
   yTicks.forEach(
     tick=>{
 
       const y=
-        yForPct(
-          tick
-        );
-
+        yForPct(tick);
 
       html+=`
         <line
@@ -1796,7 +1619,6 @@ function renderRace(){
           y1="${y}"
           y2="${y}">
         </line>
-
 
         <text
           class="axistext"
@@ -1812,8 +1634,6 @@ function renderRace(){
     }
   );
 
-
-  /* week labels */
 
   weeks.forEach(
     (week,i)=>{
@@ -1838,9 +1658,7 @@ function renderRace(){
     picker=>{
 
       const history=
-        DATA.win_pct_history[
-          picker
-        ]
+        DATA.win_pct_history[picker]
         ||
         [];
 
@@ -1852,9 +1670,7 @@ function renderRace(){
             let value=0;
 
 
-            if(
-              Array.isArray(history)
-            ){
+            if(Array.isArray(history)){
 
               const found=
                 history.find(
@@ -1890,9 +1706,7 @@ function renderRace(){
               ){
 
                 value=
-                  Number(
-                    history[i]
-                  );
+                  Number(history[i]);
 
               }
 
@@ -1928,12 +1742,8 @@ function renderRace(){
 
               const c=
                 DATA.cappers.find(
-                  x=>
-                    x.picker
-                    ===
-                    picker
+                  x=>x.picker===picker
                 );
-
 
               value=
                 Number(
@@ -1959,9 +1769,7 @@ function renderRace(){
         COLORS[picker];
 
 
-      if(
-        points.length>1
-      ){
+      if(points.length>1){
 
         const path=
           points
@@ -1970,7 +1778,6 @@ function renderRace(){
               `${i?"L":"M"} ${p.x} ${p.y}`
           )
           .join(" ");
-
 
         html+=`
           <path
@@ -1986,13 +1793,10 @@ function renderRace(){
       const last=
         points.at(-1);
 
-
       if(!last){
         return;
       }
 
-
-      /* endpoint face */
 
       html+=`
         <circle
@@ -2038,27 +1842,20 @@ function renderRace(){
 
 
 /* =========================================================
-   FULL CARD VIEW
+   VIEW CONTROL
 ========================================================= */
 
 function showFull(){
 
   $("#overview")
   .classList
-  .remove(
-    "active"
-  );
-
+  .remove("active");
 
   $("#full")
   .classList
-  .add(
-    "active"
-  );
-
+  .add("active");
 
   renderFull();
-
 
   window.scrollTo({
     top:0,
@@ -2072,17 +1869,11 @@ function showOverview(){
 
   $("#full")
   .classList
-  .remove(
-    "active"
-  );
-
+  .remove("active");
 
   $("#overview")
   .classList
-  .add(
-    "active"
-  );
-
+  .add("active");
 
   window.scrollTo({
     top:0,
@@ -2186,30 +1977,19 @@ function renderFilters(){
    RESULT ICON
 ========================================================= */
 
-function resultIcon(
-  pick
-){
+function resultIcon(pick){
 
-  if(
-    pick.result==="WIN"
-  ){
+  if(pick.result==="WIN"){
     return "💰";
   }
 
-
-  if(
-    pick.result==="LOSS"
-  ){
+  if(pick.result==="LOSS"){
     return "❌";
   }
 
-
-  if(
-    pick.result==="PUSH"
-  ){
+  if(pick.result==="PUSH"){
     return "➖";
   }
-
 
   return "⏳";
 
@@ -2220,16 +2000,12 @@ function resultIcon(
    PICK META
 ========================================================= */
 
-function pickMeta(
-  pick
-){
+function pickMeta(pick){
 
   const pieces=[];
 
 
-  if(
-    pick.added_pick
-  ){
+  if(pick.added_pick){
 
     pieces.push(
       `<span class="badge">
@@ -2240,9 +2016,7 @@ function pickMeta(
   }
 
 
-  if(
-    pick.final_score
-  ){
+  if(pick.final_score){
 
     pieces.push(
       pick.final_score
@@ -2251,9 +2025,7 @@ function pickMeta(
   }
 
 
-  if(
-    pick.source_url
-  ){
+  if(pick.source_url){
 
     pieces.push(
       `
@@ -2272,9 +2044,7 @@ function pickMeta(
   }
 
 
-  return pieces.join(
-    " · "
-  );
+  return pieces.join(" · ");
 
 }
 
@@ -2308,15 +2078,12 @@ function renderCardBody(){
 
         const rows=
           picks.filter(
-            p=>
-              p.picker===picker
+            p=>p.picker===picker
           );
 
 
         const stats=
-          statsForPicks(
-            rows
-          );
+          statsForPicks(rows);
 
 
         const titleRecord=
@@ -2330,15 +2097,11 @@ function renderCardBody(){
         let body="";
 
 
-        if(
-          rows.length===0
-        ){
+        if(rows.length===0){
 
           body=`
             <div class="empty">
-
               No picks found.
-
             </div>
           `;
 
@@ -2352,7 +2115,6 @@ function renderCardBody(){
 
                 <div class="pick">
 
-
                   <div>
 
                     <div class="sel">
@@ -2360,7 +2122,6 @@ function renderCardBody(){
                       ${pick.selection||""}
 
                     </div>
-
 
                     <div class="meta">
 
@@ -2370,13 +2131,11 @@ function renderCardBody(){
 
                   </div>
 
-
                   <div class="result">
 
                     ${resultIcon(pick)}
 
                   </div>
-
 
                 </div>
 
@@ -2391,7 +2150,6 @@ function renderCardBody(){
 
           <section class="pickerBlock">
 
-
             <div class="pickerTitle">
 
               <span>
@@ -2404,9 +2162,7 @@ function renderCardBody(){
 
             </div>
 
-
             ${body}
-
 
           </section>
 
@@ -2428,18 +2184,13 @@ function renderCardBody(){
 
 function renderFull(){
 
-  if(
-    selectedWeek===null
-  ){
+  if(selectedWeek===null){
     selectedWeek=
       latestWeek();
   }
 
-
   renderWeeks();
-
   renderFilters();
-
   renderCardBody();
 
 }
@@ -2462,9 +2213,7 @@ async function loadData(){
       );
 
 
-    if(
-      !response.ok
-    ){
+    if(!response.ok){
 
       throw new Error(
         `Dashboard fetch failed: ${response.status}`
@@ -2477,28 +2226,17 @@ async function loadData(){
       await response.json();
 
 
-    if(
-      !Array.isArray(
-        DATA.picks
-      )
-    ){
+    if(!Array.isArray(DATA.picks)){
       DATA.picks=[];
     }
 
-
-    if(
-      !Array.isArray(
-        DATA.cappers
-      )
-    ){
+    if(!Array.isArray(DATA.cappers)){
       DATA.cappers=[];
     }
 
 
     if(
-      !Array.isArray(
-        DATA.weeks
-      )
+      !Array.isArray(DATA.weeks)
       ||
       !DATA.weeks.length
     ){
@@ -2519,9 +2257,7 @@ async function loadData(){
     }
 
 
-    if(
-      !DATA.win_pct_history
-    ){
+    if(!DATA.win_pct_history){
       DATA.win_pct_history={};
     }
 
@@ -2531,32 +2267,24 @@ async function loadData(){
 
 
     renderStatus();
-
     renderCards();
-
     renderRace();
-
     renderWeekBoard();
 
   }
 
   catch(error){
 
-    console.error(
-      error
-    );
+    console.error(error);
 
 
     document.body.innerHTML=`
 
-      <main
-        class="shell">
+      <main class="shell">
 
-        <section
-          class="section">
+        <section class="section">
 
-          <div
-            class="sectionInner">
+          <div class="sectionInner">
 
             <h2>
               Unable to load tracker
@@ -2623,5 +2351,4 @@ loadData();
 </script>
 
 </body>
-
 </html>
