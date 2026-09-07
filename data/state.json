@@ -1,8 +1,9 @@
 {
   "last_x_post_id": "2096615762718867641",
-  "updated_at": "2026-09-07T05:58:09.499980+00:00",
+  "updated_at": "2026-09-07T17:30:05.118874+00:00",
   "backfill_complete": true,
   "reply_backfill_complete": false,
   "reply_recovery_complete": true,
-  "reply_only_recovery_v2_complete": true
+  "reply_only_recovery_v2_complete": true,
+  "reply_only_recovery_v3_complete": true
 }
