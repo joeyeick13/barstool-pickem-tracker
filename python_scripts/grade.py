@@ -16,7 +16,7 @@ from common import (
 
 
 # ============================================================
-# ESPN
+# ESPN CONFIG
 # ============================================================
 
 ESPN_BASE = (
@@ -25,7 +25,6 @@ ESPN_BASE = (
 )
 
 ESPN_SCOREBOARD = f"{ESPN_BASE}/scoreboard"
-ESPN_TEAMS = f"{ESPN_BASE}/teams"
 ESPN_SUMMARY = f"{ESPN_BASE}/summary"
 
 ESPN_CORE = (
@@ -34,8 +33,10 @@ ESPN_CORE = (
     "college-football"
 )
 
-REGULAR_SEASON = 2
 
+# ============================================================
+# SUPPORTED MARKETS
+# ============================================================
 
 SUPPORTED = {
     "SPREAD",
@@ -55,19 +56,17 @@ SUPPORTED = {
 }
 
 
-AMBIGUOUS_ALIASES = {
-    "osu",
-}
-
-
 # ============================================================
-# SAFE TEAM ALIASES
+# TEAM ALIASES
+#
+# Fail closed whenever something is genuinely ambiguous.
 # ============================================================
 
 ALIASES = {
     "alabama": {
         "alabama",
         "bama",
+        "ala",
     },
 
     "arkansas state": {
@@ -85,6 +84,7 @@ ALIASES = {
     "ball state": {
         "ball state",
         "ball st",
+        "ball",
     },
 
     "baylor": {
@@ -107,9 +107,26 @@ ALIASES = {
         "california",
     },
 
+    "central michigan": {
+        "central michigan",
+        "central mich",
+        "cmu",
+    },
+
     "clemson": {
         "clem",
         "clemson",
+    },
+
+    "coastal carolina": {
+        "coastal carolina",
+        "coastal",
+        "ccu",
+    },
+
+    "colorado": {
+        "colorado",
+        "colo",
     },
 
     "connecticut": {
@@ -122,14 +139,14 @@ ALIASES = {
         "duke",
     },
 
-    "eastern illinois": {
-        "eiu",
-        "eastern illinois",
-    },
-
     "east carolina": {
         "ecu",
         "east carolina",
+    },
+
+    "eastern illinois": {
+        "eiu",
+        "eastern illinois",
     },
 
     "fiu": {
@@ -138,10 +155,16 @@ ALIASES = {
         "florida intl",
     },
 
+    "fresno state": {
+        "fresno",
+        "fresno state",
+        "fresno st",
+    },
+
     "georgia tech": {
-        "gatech",
-        "ga tech",
         "georgia tech",
+        "ga tech",
+        "gatech",
         "gt",
     },
 
@@ -152,18 +175,19 @@ ALIASES = {
     },
 
     "houston": {
-        "hou",
         "houston",
+        "hou",
     },
 
     "illinois": {
-        "ill",
         "illinois",
+        "ill",
     },
 
     "indiana": {
         "indiana",
         "ind",
+        "iu",
     },
 
     "kansas": {
@@ -175,6 +199,16 @@ ALIASES = {
         "kent",
         "kent state",
         "kent st",
+    },
+
+    "lafayette": {
+        "lafayette",
+        "laf",
+    },
+
+    "liu": {
+        "liu",
+        "long island",
     },
 
     "lsu": {
@@ -202,8 +236,8 @@ ALIASES = {
     },
 
     "michigan": {
-        "mich",
         "michigan",
+        "mich",
     },
 
     "michigan state": {
@@ -214,16 +248,8 @@ ALIASES = {
     },
 
     "minnesota": {
-        "minn",
         "minnesota",
-    },
-
-    "mississippi state": {
-        "miss st",
-        "miss state",
-        "mississippi state",
-        "mississippi st",
-        "msst",
+        "minn",
     },
 
     "missouri state": {
@@ -233,9 +259,19 @@ ALIASES = {
         "most",
     },
 
+    "new mexico": {
+        "new mexico",
+        "unm",
+    },
+
+    "north texas": {
+        "north texas",
+        "unt",
+    },
+
     "notre dame": {
-        "nd",
         "notre dame",
+        "nd",
     },
 
     "ohio state": {
@@ -249,15 +285,15 @@ ALIASES = {
     },
 
     "oklahoma state": {
-        "ok state",
-        "ok st",
         "oklahoma state",
         "oklahoma st",
+        "ok state",
+        "ok st",
     },
 
     "oregon": {
-        "ore",
         "oregon",
+        "ore",
     },
 
     "oregon state": {
@@ -267,8 +303,8 @@ ALIASES = {
     },
 
     "pittsburgh": {
-        "pitt",
         "pittsburgh",
+        "pitt",
     },
 
     "rutgers": {
@@ -277,14 +313,14 @@ ALIASES = {
         "ru",
     },
 
-    "south carolina": {
-        "south carolina",
-        "scar",
+    "south florida": {
+        "south florida",
+        "usf",
     },
 
-    "south florida": {
-        "usf",
-        "south florida",
+    "stanford": {
+        "stanford",
+        "stan",
     },
 
     "temple": {
@@ -293,31 +329,31 @@ ALIASES = {
     },
 
     "texas": {
-        "tex",
         "texas",
+        "tex",
     },
 
     "texas a&m": {
-        "a&m",
-        "a and m",
-        "tamu",
-        "ta&m",
-        "ta and m",
         "texas a&m",
         "texas am",
-        "texas a m",
         "texas a and m",
+        "texas a m",
+        "tamu",
+        "ta&m",
+        "a&m",
+        "a and m",
     },
 
     "texas state": {
         "texas state",
+        "texas st",
         "tex st",
         "txst",
     },
 
     "toledo": {
-        "tol",
         "toledo",
+        "tol",
     },
 
     "tulane": {
@@ -350,36 +386,55 @@ ALIASES = {
     "utah tech": {
         "utah tech",
         "ut tech",
+        "utu",
+    },
+
+    "utep": {
+        "utep",
+        "texas el paso",
+    },
+
+    "wake forest": {
+        "wake forest",
+        "wake",
     },
 
     "washington": {
+        "washington",
         "wash",
         "uw",
-        "washington",
     },
 
     "washington state": {
-        "wazzu",
-        "wsu",
         "washington state",
         "washington st",
+        "wash state",
+        "wazzu",
+        "wsu",
     },
 
     "west virginia": {
-        "wvu",
         "west virginia",
+        "wvu",
     },
 
     "western michigan": {
-        "wmu",
         "western michigan",
+        "western mich",
+        "wmu",
     },
 
     "wisconsin": {
-        "wis",
-        "wisc",
         "wisconsin",
+        "wisc",
+        "wis",
     },
+}
+
+
+# Bare OSU is intentionally not assigned.
+AMBIGUOUS_ALIASES = {
+    "osu",
 }
 
 
@@ -421,73 +476,16 @@ def norm(value):
     ).strip()
 
 
-def alias_group(value):
-    normalized = norm(
-        value
-    )
+def safe_float(value):
+    if value is None:
+        return None
 
-    if not normalized:
-        return set()
+    try:
+        return float(value)
 
-    if normalized in AMBIGUOUS_ALIASES:
-        return {
-            normalized
-        }
+    except Exception:
+        return None
 
-    output = {
-        normalized
-    }
-
-    for canonical, names in ALIASES.items():
-
-        group = {
-            norm(canonical)
-        }
-
-        group |= {
-            norm(name)
-            for name in names
-        }
-
-        if normalized in group:
-            output |= group
-
-    return output
-
-
-def is_ambiguous_hint(value):
-    return (
-        norm(value)
-        in AMBIGUOUS_ALIASES
-    )
-
-
-def request_json(
-    url,
-    params=None,
-):
-    response = requests.get(
-        url,
-        params=params,
-        timeout=30,
-        headers={
-            "Accept": (
-                "application/json, "
-                "text/plain, */*"
-            ),
-            "Origin": "https://www.espn.com",
-            "Referer": "https://www.espn.com/",
-        },
-    )
-
-    response.raise_for_status()
-
-    return response.json()
-
-
-# ============================================================
-# DATETIME / WEEK
-# ============================================================
 
 def parse_datetime(value):
     if not value:
@@ -514,104 +512,181 @@ def parse_datetime(value):
     )
 
 
-def pick_posted_datetime(pick):
-    return parse_datetime(
-        pick.get("posted_at")
-    )
-
-
-def event_datetime(event):
-    return parse_datetime(
-        event.get("date")
-    )
-
-
-def season_year_for_pick(pick):
-    if pick.get("season"):
-        return int(
-            pick["season"]
-        )
-
-    posted = pick_posted_datetime(
-        pick
-    )
-
-    if posted:
-        return posted.year
-
-    return datetime.now(
-        timezone.utc
-    ).year
-
-
-def week_window(
-    season_year,
-    week,
+def request_json(
+    url,
+    params=None,
 ):
+    response = requests.get(
+        url,
+        params=params,
+        timeout=30,
+        headers={
+            "Accept": (
+                "application/json, "
+                "text/plain, */*"
+            ),
+            "Origin":
+                "https://www.espn.com",
+            "Referer":
+                "https://www.espn.com/",
+        },
+    )
+
+    response.raise_for_status()
+
+    return response.json()
+
+
+# ============================================================
+# OFFICIAL RESULT LOCK
+# ============================================================
+
+def is_official_result(pick):
     """
-    Verified 2026 mapping.
+    PAT HILL STANDINGS is final authority.
 
-    Week 1:
-        Aug 22 - Sep 7
+    Once this field is true, grade.py is not allowed to alter:
+      - result
+      - status
+      - score
+      - event
+      - profit
+      - grading timestamp
 
-    Week 2:
-        Sep 8 - Sep 13
-
-    Week 3:
-        Sep 14 - Sep 20
-
-    Week 4+:
-        Monday-Sunday.
+    ESPN becomes irrelevant for this row.
     """
 
-    if int(season_year) != 2026:
-        raise RuntimeError(
-            "Season calendar has not "
-            f"been verified for {season_year}. "
-            "Existing grades preserved."
-        )
-
-    week = int(
-        week
-    )
-
-    if week == 1:
-        return (
-            date(2026, 8, 22),
-            date(2026, 9, 7),
-        )
-
-    if week == 2:
-        return (
-            date(2026, 9, 8),
-            date(2026, 9, 13),
-        )
-
-    week_3_start = date(
-        2026,
-        9,
-        14,
-    )
-
-    start = (
-        week_3_start
-        + timedelta(
-            days=(
-                week - 3
-            ) * 7
+    return bool(
+        pick.get(
+            "official_reconciled"
         )
     )
 
+
+def official_result_valid(pick):
     return (
-        start,
-        start + timedelta(
-            days=6
-        ),
+        is_official_result(
+            pick
+        )
+        and str(
+            pick.get(
+                "result"
+            )
+            or ""
+        ).upper()
+        in {
+            "WIN",
+            "LOSS",
+            "PUSH",
+        }
     )
 
 
 # ============================================================
-# BET MARKET NORMALIZATION
+# TEAM MATCHING
+# ============================================================
+
+def alias_group(value):
+    normalized = norm(
+        value
+    )
+
+    if not normalized:
+        return set()
+
+    if normalized in AMBIGUOUS_ALIASES:
+        return {
+            normalized
+        }
+
+    output = {
+        normalized
+    }
+
+    for canonical, names in (
+        ALIASES.items()
+    ):
+
+        group = {
+            norm(canonical)
+        }
+
+        group |= {
+            norm(name)
+            for name in names
+        }
+
+        if normalized in group:
+            output |= group
+
+    return output
+
+
+def is_ambiguous_hint(value):
+    return (
+        norm(value)
+        in AMBIGUOUS_ALIASES
+    )
+
+
+def team_name_candidates(comp):
+    team = (
+        comp.get("team")
+        or {}
+    )
+
+    names = set()
+
+    for value in (
+        team.get(
+            "displayName"
+        ),
+        team.get(
+            "shortDisplayName"
+        ),
+        team.get(
+            "abbreviation"
+        ),
+        team.get(
+            "location"
+        ),
+        team.get(
+            "slug"
+        ),
+    ):
+        names |= alias_group(
+            value
+        )
+
+    # Mascot-only team["name"] intentionally excluded.
+
+    return names
+
+
+def comp_matches_hint(
+    comp,
+    hint,
+):
+    if not hint:
+        return False
+
+    if is_ambiguous_hint(
+        hint
+    ):
+        return False
+
+    return bool(
+        alias_group(
+            hint
+        )
+        & team_name_candidates(
+            comp
+        )
+    )
+
+
+# ============================================================
+# MARKET NORMALIZATION
 # ============================================================
 
 def normalize_bet_type(value):
@@ -620,31 +695,29 @@ def normalize_bet_type(value):
     ).upper().strip()
 
     aliases = {
-        "1Q_SPREAD": (
-            "FIRST_QUARTER_SPREAD"
-        ),
-        "1Q_TOTAL": (
-            "FIRST_QUARTER_TOTAL"
-        ),
-        "1Q_MONEYLINE": (
-            "FIRST_QUARTER_MONEYLINE"
-        ),
-        "1Q_TEAM_TOTAL": (
-            "FIRST_QUARTER_TEAM_TOTAL"
-        ),
+        "1Q_SPREAD":
+            "FIRST_QUARTER_SPREAD",
 
-        "1H_SPREAD": (
-            "FIRST_HALF_SPREAD"
-        ),
-        "1H_TOTAL": (
-            "FIRST_HALF_TOTAL"
-        ),
-        "1H_MONEYLINE": (
-            "FIRST_HALF_MONEYLINE"
-        ),
-        "1H_TEAM_TOTAL": (
-            "FIRST_HALF_TEAM_TOTAL"
-        ),
+        "1Q_TOTAL":
+            "FIRST_QUARTER_TOTAL",
+
+        "1Q_MONEYLINE":
+            "FIRST_QUARTER_MONEYLINE",
+
+        "1Q_TEAM_TOTAL":
+            "FIRST_QUARTER_TEAM_TOTAL",
+
+        "1H_SPREAD":
+            "FIRST_HALF_SPREAD",
+
+        "1H_TOTAL":
+            "FIRST_HALF_TOTAL",
+
+        "1H_MONEYLINE":
+            "FIRST_HALF_MONEYLINE",
+
+        "1H_TEAM_TOTAL":
+            "FIRST_HALF_TEAM_TOTAL",
     }
 
     return aliases.get(
@@ -655,13 +728,21 @@ def normalize_bet_type(value):
 
 def normalize_existing_pick_market(pick):
     """
-    Upgrade old stored market labels from selection text.
+    Upgrade older extracted market labels.
 
-    Never assigns a result.
+    IMPORTANT:
+    Officially reconciled rows are left untouched.
     """
 
+    if is_official_result(
+        pick
+    ):
+        return
+
     text = str(
-        pick.get("selection")
+        pick.get(
+            "selection"
+        )
         or ""
     ).lower()
 
@@ -675,8 +756,11 @@ def normalize_existing_pick_market(pick):
 
     first_quarter = bool(
         re.search(
-            r"\b(?:1q|1st\s*q|"
-            r"first\s*quarter)\b",
+            r"\b(?:"
+            r"1q|"
+            r"1st\s*q|"
+            r"first\s*quarter"
+            r")\b",
             text,
             flags=re.I,
         )
@@ -684,8 +768,11 @@ def normalize_existing_pick_market(pick):
 
     first_half = bool(
         re.search(
-            r"\b(?:1h|1st\s*h|"
-            r"first\s*half)\b",
+            r"\b(?:"
+            r"1h|"
+            r"1st\s*h|"
+            r"first\s*half"
+            r")\b",
             text,
             flags=re.I,
         )
@@ -693,7 +780,10 @@ def normalize_existing_pick_market(pick):
 
     team_total = bool(
         re.search(
-            r"\b(?:tt|team\s*total)\b",
+            r"\b(?:"
+            r"tt|"
+            r"team\s*total"
+            r")\b",
             text,
             flags=re.I,
         )
@@ -702,33 +792,42 @@ def normalize_existing_pick_market(pick):
     if team_total:
 
         if first_quarter:
-            pick["bet_type"] = (
+            pick[
+                "bet_type"
+            ] = (
                 "FIRST_QUARTER_TEAM_TOTAL"
             )
 
         elif first_half:
-            pick["bet_type"] = (
+            pick[
+                "bet_type"
+            ] = (
                 "FIRST_HALF_TEAM_TOTAL"
             )
 
         else:
-            pick["bet_type"] = (
-                "TEAM_TOTAL"
-            )
+            pick[
+                "bet_type"
+            ] = "TEAM_TOTAL"
 
         compact = re.search(
-            r"\b(?:tt|team\s*total)\s*"
-            r"(o|u)\s*"
+            r"\b(?:tt|team\s*total)"
+            r"\s*(o|u)\s*"
             r"([0-9]+(?:\.[0-9]+)?)",
             text,
             flags=re.I,
         )
 
         if compact:
+
             pick["side"] = (
                 "OVER"
-                if compact.group(1).lower()
-                == "o"
+                if (
+                    compact
+                    .group(1)
+                    .lower()
+                    == "o"
+                )
                 else "UNDER"
             )
 
@@ -737,16 +836,19 @@ def normalize_existing_pick_market(pick):
             )
 
         verbose = re.search(
-            r"\b(?:tt|team\s*total)\s*"
-            r"(over|under)\s*"
+            r"\b(?:tt|team\s*total)"
+            r"\s*(over|under)\s*"
             r"([0-9]+(?:\.[0-9]+)?)",
             text,
             flags=re.I,
         )
 
         if verbose:
+
             pick["side"] = (
-                verbose.group(1).upper()
+                verbose
+                .group(1)
+                .upper()
             )
 
             pick["line"] = float(
@@ -755,7 +857,11 @@ def normalize_existing_pick_market(pick):
 
         return
 
-    if first_quarter or first_half:
+
+    if (
+        first_quarter
+        or first_half
+    ):
 
         prefix = (
             "FIRST_QUARTER"
@@ -767,15 +873,21 @@ def normalize_existing_pick_market(pick):
             r"\b(?:over|under)\b",
             text,
         ):
-            pick["bet_type"] = (
+            pick[
+                "bet_type"
+            ] = (
                 f"{prefix}_TOTAL"
             )
 
         elif re.search(
-            r"\b(?:ml|moneyline)\b",
+            r"\b(?:"
+            r"ml|moneyline"
+            r")\b",
             text,
         ):
-            pick["bet_type"] = (
+            pick[
+                "bet_type"
+            ] = (
                 f"{prefix}_MONEYLINE"
             )
 
@@ -784,20 +896,27 @@ def normalize_existing_pick_market(pick):
             r"\d+(?:\.\d+)?",
             text,
         ):
-            pick["bet_type"] = (
+            pick[
+                "bet_type"
+            ] = (
                 f"{prefix}_SPREAD"
             )
 
         return
 
+
     pick["bet_type"] = (
         normalize_bet_type(
-            pick.get("bet_type")
+            pick.get(
+                "bet_type"
+            )
         )
     )
 
 
-def market_period(bet_type):
+def market_period(
+    bet_type
+):
     bet_type = (
         normalize_bet_type(
             bet_type
@@ -817,7 +936,9 @@ def market_period(bet_type):
     return "FULL_GAME"
 
 
-def base_market(bet_type):
+def base_market(
+    bet_type
+):
     bet_type = (
         normalize_bet_type(
             bet_type
@@ -828,6 +949,7 @@ def base_market(bet_type):
         "FIRST_QUARTER_",
         "FIRST_HALF_",
     ):
+
         if bet_type.startswith(
             prefix
         ):
@@ -857,7 +979,9 @@ def total_direction(pick):
         return "UNDER"
 
     text = str(
-        pick.get("selection")
+        pick.get(
+            "selection"
+        )
         or ""
     ).lower()
 
@@ -874,8 +998,8 @@ def total_direction(pick):
         return "UNDER"
 
     compact = re.search(
-        r"\b(?:tt|team\s*total)\s*"
-        r"(o|u)\s*"
+        r"\b(?:tt|team\s*total)"
+        r"\s*(o|u)\s*"
         r"\d+(?:\.\d+)?",
         text,
         flags=re.I,
@@ -884,8 +1008,12 @@ def total_direction(pick):
     if compact:
         return (
             "OVER"
-            if compact.group(1).lower()
-            == "o"
+            if (
+                compact
+                .group(1)
+                .lower()
+                == "o"
+            )
             else "UNDER"
         )
 
@@ -893,12 +1021,140 @@ def total_direction(pick):
 
 
 # ============================================================
-# EVENT HELPERS
+# SEASON / WEEK WINDOWS
+# ============================================================
+
+def pick_posted_datetime(pick):
+    return parse_datetime(
+        pick.get(
+            "posted_at"
+        )
+    )
+
+
+def season_year_for_pick(pick):
+    if pick.get(
+        "season"
+    ):
+        return int(
+            pick["season"]
+        )
+
+    posted = (
+        pick_posted_datetime(
+            pick
+        )
+    )
+
+    if posted:
+        return posted.year
+
+    return datetime.now(
+        timezone.utc
+    ).year
+
+
+def week_window(
+    season_year,
+    week,
+):
+    """
+    2026 verified Pick Em week structure.
+
+    Week 1:
+      Aug 22 - Sep 7
+
+    Week 2:
+      Sep 8 - Sep 13
+
+    Week 3 onward:
+      Monday-Sunday
+    """
+
+    season_year = int(
+        season_year
+    )
+
+    week = int(
+        week
+    )
+
+    if season_year == 2026:
+
+        if week == 1:
+            return (
+                date(
+                    2026,
+                    8,
+                    22,
+                ),
+                date(
+                    2026,
+                    9,
+                    7,
+                ),
+            )
+
+        if week == 2:
+            return (
+                date(
+                    2026,
+                    9,
+                    8,
+                ),
+                date(
+                    2026,
+                    9,
+                    13,
+                ),
+            )
+
+        week3 = date(
+            2026,
+            9,
+            14,
+        )
+
+        start = (
+            week3
+            + timedelta(
+                days=(
+                    week - 3
+                ) * 7
+            )
+        )
+
+        return (
+            start,
+            start
+            + timedelta(
+                days=6
+            ),
+        )
+
+
+    # --------------------------------------------------------
+    # FUTURE-SEASON SAFE FALLBACK
+    #
+    # We would rather leave a pick OPEN than misgrade it.
+    # --------------------------------------------------------
+
+    raise RuntimeError(
+        "Season calendar has not "
+        f"been verified for {season_year}. "
+        "Existing grades preserved."
+    )
+
+
+# ============================================================
+# ESPN EVENT HELPERS
 # ============================================================
 
 def competitions(event):
     return (
-        event.get("competitions")
+        event.get(
+            "competitions"
+        )
         or []
     )
 
@@ -920,13 +1176,15 @@ def competitors(event):
 
 
 def event_status(event):
-    top = (
-        event.get("status")
+    status = (
+        event.get(
+            "status"
+        )
         or {}
     )
 
-    if top:
-        return top
+    if status:
+        return status
 
     comps = competitions(
         event
@@ -934,7 +1192,9 @@ def event_status(event):
 
     if comps:
         return (
-            comps[0].get("status")
+            comps[0].get(
+                "status"
+            )
             or {}
         )
 
@@ -944,86 +1204,76 @@ def event_status(event):
 def completed(event):
     return bool(
         (
-            event_status(event)
+            event_status(
+                event
+            )
             .get("type")
             or {}
-        ).get("completed")
-    )
-
-
-def event_status_name(event):
-    return str(
-        (
-            event_status(event)
-            .get("type")
-            or {}
-        ).get("name")
-        or ""
-    )
-
-
-def event_status_state(event):
-    return str(
-        (
-            event_status(event)
-            .get("type")
-            or {}
-        ).get("state")
-        or ""
+        ).get(
+            "completed"
+        )
     )
 
 
 def score_value(comp):
-    raw = comp.get(
+    value = comp.get(
         "score"
     )
 
-    if raw is None:
+    if value is None:
         return None
 
     if isinstance(
-        raw,
+        value,
         (
             str,
             int,
             float,
         ),
     ):
+
         try:
             return float(
-                raw
+                value
             )
+
         except Exception:
             return None
 
+
     if isinstance(
-        raw,
+        value,
         dict,
     ):
+
         for key in (
             "value",
             "displayValue",
             "score",
         ):
-            value = raw.get(
+
+            candidate = value.get(
                 key
             )
 
             if isinstance(
-                value,
+                candidate,
                 dict,
             ):
-                value = (
-                    value.get("value")
-                    or value.get(
+                candidate = (
+                    candidate.get(
+                        "value"
+                    )
+                    or candidate.get(
                         "displayValue"
                     )
                 )
 
             try:
-                if value is not None:
+
+                if candidate is not None:
                     return float(
-                        value
+                        candidate
                     )
 
             except Exception:
@@ -1032,34 +1282,22 @@ def score_value(comp):
     return None
 
 
-def event_has_scores(event):
-    comps = competitors(
-        event
-    )
-
-    return (
-        len(comps) == 2
-        and all(
-            score_value(comp)
-            is not None
-            for comp in comps
-        )
-    )
-
-
 def final_score_text(event):
     output = []
 
     for comp in competitors(
         event
     ):
+
         team = (
             comp.get("team")
             or {}
         )
 
         label = (
-            team.get("abbreviation")
+            team.get(
+                "abbreviation"
+            )
             or team.get(
                 "shortDisplayName"
             )
@@ -1069,23 +1307,23 @@ def final_score_text(event):
             or "Team"
         )
 
-        value = score_value(
+        score = score_value(
             comp
         )
 
-        if value is None:
+        if score is None:
             display = "?"
 
         elif float(
-            value
+            score
         ).is_integer():
             display = str(
-                int(value)
+                int(score)
             )
 
         else:
             display = str(
-                value
+                score
             )
 
         output.append(
@@ -1097,647 +1335,189 @@ def final_score_text(event):
     )
 
 
-def espn_team_names(comp):
-    """
-    Mascot-only team["name"] intentionally excluded.
-    """
-
-    team = (
-        comp.get("team")
-        or {}
-    )
-
-    names = set()
-
-    for value in (
-        team.get("displayName"),
-        team.get("shortDisplayName"),
-        team.get("abbreviation"),
-        team.get("location"),
-        team.get("slug"),
-    ):
-        names |= alias_group(
-            value
-        )
-
-    return names
-
-
-def comp_matches(
-    comp,
-    hint,
-):
-    if (
-        not hint
-        or is_ambiguous_hint(
-            hint
-        )
-    ):
-        return False
-
-    return bool(
-        alias_group(hint)
-        & espn_team_names(
+def event_team_sets(event):
+    return [
+        team_name_candidates(
             comp
         )
-    )
-
-
-# ============================================================
-# EVENT MERGING
-# ============================================================
-
-def event_quality(event):
-    quality = 0
-
-    if completed(
-        event
-    ):
-        quality += 1000
-
-    if (
-        event_status_state(
+        for comp in competitors(
             event
-        ).lower()
-        == "post"
-    ):
-        quality += 500
-
-    if event_has_scores(
-        event
-    ):
-        quality += 300
-
-    if (
-        "FINAL"
-        in event_status_name(
-            event
-        ).upper()
-    ):
-        quality += 200
-
-    if event.get("date"):
-        quality += 20
-
-    quality += (
-        len(
-            competitors(
-                event
-            )
         )
-        * 10
-    )
-
-    return quality
+    ]
 
 
-def merge_event(
-    events_by_id,
+def event_contains_team(
     event,
-    source="unknown",
+    hint,
 ):
-    event_id = str(
-        event.get("id")
-        or ""
-    )
-
-    if not event_id:
+    if not hint:
         return False
 
-    existing = (
-        events_by_id.get(
-            event_id
-        )
-    )
-
-    if existing is None:
-        events_by_id[
-            event_id
-        ] = event
-
-        return True
-
-    old_quality = event_quality(
-        existing
-    )
-
-    new_quality = event_quality(
-        event
-    )
-
-    if new_quality > old_quality:
-        events_by_id[
-            event_id
-        ] = event
-
-        print(
-            "EVENT UPGRADED:",
-            event_id,
-            "| source:",
-            source,
-            "|",
-            old_quality,
-            "->",
-            new_quality,
-        )
-
-        return True
-
-    return False
-
-
-# ============================================================
-# SCOREBOARD
-# ============================================================
-
-def fetch_scoreboard_events(
-    season_year,
-    week,
-):
-    start_date, end_date = (
-        week_window(
-            season_year,
-            week,
-        )
-    )
-
-    events_by_id = {}
-
-    current = start_date
-
-    while current <= end_date:
-
-        ymd = current.strftime(
-            "%Y%m%d"
-        )
-
-        payload = request_json(
-            ESPN_SCOREBOARD,
-            {
-                "dates": ymd,
-                "limit": 1000,
-            },
-        )
-
-        daily = (
-            payload.get("events")
-            or []
-        )
-
-        print(
-            "ESPN scoreboard",
-            ymd,
-            ":",
-            len(daily),
-            "events",
-        )
-
-        for event in daily:
-
-            season = (
-                event.get("season")
-                or {}
-            )
-
-            year = season.get(
-                "year"
-            )
-
-            season_type = (
-                season.get("type")
-            )
-
-            if (
-                year is not None
-                and int(year)
-                != int(season_year)
-            ):
-                continue
-
-            if (
-                season_type
-                is not None
-                and int(
-                    season_type
-                )
-                != REGULAR_SEASON
-            ):
-                continue
-
-            merge_event(
-                events_by_id,
-                event,
-                "scoreboard",
-            )
-
-        current += timedelta(
-            days=1
-        )
-
-    return list(
-        events_by_id.values()
-    )
-
-
-# ============================================================
-# ESPN TEAM DIRECTORY / SCHEDULE
-# ============================================================
-
-def fetch_all_teams():
-    payload = request_json(
-        ESPN_TEAMS,
-        {
-            "limit": 1000
-        },
-    )
-
-    output = []
-
-    for sport in (
-        payload.get("sports")
-        or []
+    if is_ambiguous_hint(
+        hint
     ):
-        for league in (
-            sport.get("leagues")
-            or []
-        ):
-            for wrapper in (
-                league.get("teams")
-                or []
-            ):
-                team = (
-                    wrapper.get("team")
-                    or wrapper
-                )
-
-                if team:
-                    output.append(
-                        team
-                    )
-
-    return output
-
-
-def team_aliases_from_record(
-    team,
-):
-    names = set()
-
-    for value in (
-        team.get("displayName"),
-        team.get("shortDisplayName"),
-        team.get("abbreviation"),
-        team.get("location"),
-        team.get("slug"),
-    ):
-        names |= alias_group(
-            value
-        )
-
-    return names
-
-
-def resolve_espn_team_id(
-    hint,
-    teams,
-):
-    if (
-        not hint
-        or is_ambiguous_hint(
-            hint
-        )
-    ):
-        return None
+        return False
 
     target = alias_group(
         hint
     )
 
-    matches = []
-
-    for team in teams:
-
-        if (
-            target
-            & team_aliases_from_record(
-                team
-            )
-        ):
-            team_id = (
-                team.get("id")
-            )
-
-            if team_id:
-                matches.append(
-                    str(team_id)
-                )
-
-    matches = list(
-        dict.fromkeys(
-            matches
+    matches = [
+        names
+        for names in event_team_sets(
+            event
         )
-    )
-
-    if len(matches) == 1:
-        return matches[0]
-
-    if len(matches) > 1:
-        print(
-            "AMBIGUOUS TEAM ID:",
-            hint,
-            "|",
-            matches,
-        )
-
-    return None
-
-
-def fetch_team_schedule(
-    team_id,
-    season_year,
-):
-    payload = request_json(
-        (
-            f"{ESPN_TEAMS}/"
-            f"{team_id}/schedule"
-        ),
-        {
-            "season": (
-                season_year
-            ),
-            "seasontype": (
-                REGULAR_SEASON
-            ),
-        },
-    )
-
-    return (
-        payload.get("events")
-        or []
-    )
-
-
-def event_in_week_window(
-    event,
-    season_year,
-    week,
-):
-    dt = event_datetime(
-        event
-    )
-
-    if not dt:
-        return False
-
-    start, end = week_window(
-        season_year,
-        week,
-    )
-
-    return (
-        start
-        <= dt.date()
-        <= end
-    )
-
-
-def schedule_events_for_hint(
-    hint,
-    all_teams,
-    season_year,
-    week,
-    cache,
-):
-    if (
-        not hint
-        or is_ambiguous_hint(
-            hint
-        )
-    ):
-        return []
-
-    key = (
-        norm(hint),
-        season_year,
-        week,
-    )
-
-    if key in cache:
-        return cache[
-            key
-        ]
-
-    team_id = (
-        resolve_espn_team_id(
-            hint,
-            all_teams,
-        )
-    )
-
-    if not team_id:
-        cache[key] = []
-
-        return []
-
-    try:
-        schedule = (
-            fetch_team_schedule(
-                team_id,
-                season_year,
-            )
-        )
-
-    except Exception as exc:
-        print(
-            "TEAM SCHEDULE FAILED:",
-            hint,
-            "|",
-            exc,
-        )
-
-        cache[key] = []
-
-        return []
-
-    output = [
-        event
-        for event in schedule
-        if event_in_week_window(
-            event,
-            season_year,
-            week,
-        )
+        if target & names
     ]
 
-    cache[key] = output
+    return len(
+        matches
+    ) == 1
 
-    print(
-        "TEAM SCHEDULE:",
-        hint,
-        "| events:",
-        len(output),
+
+def event_contains_pair(
+    event,
+    team_a,
+    team_b,
+):
+    if (
+        not team_a
+        or not team_b
+    ):
+        return False
+
+    if (
+        is_ambiguous_hint(
+            team_a
+        )
+        or is_ambiguous_hint(
+            team_b
+        )
+    ):
+        return False
+
+    sets = event_team_sets(
+        event
     )
 
-    return output
+    if len(sets) != 2:
+        return False
+
+    a = alias_group(
+        team_a
+    )
+
+    b = alias_group(
+        team_b
+    )
+
+    return (
+        (
+            bool(
+                a & sets[0]
+            )
+            and bool(
+                b & sets[1]
+            )
+        )
+        or
+        (
+            bool(
+                a & sets[1]
+            )
+            and bool(
+                b & sets[0]
+            )
+        )
+    )
 
 
 # ============================================================
-# SELECTION PARSING
+# MATCHUP PARSING
 # ============================================================
 
 def split_matchup(value):
-    if not value:
-        return []
-
-    return [
-        part.strip()
-        for part in re.split(
-            r"\s+(?:vs\.?|v\.?|"
-            r"at|@)\s+|/",
-            clean_text(value),
-            flags=re.I,
-        )
-        if part.strip()
-    ]
-
-
-def strip_period_tokens(text):
-    text = re.sub(
-        r"\b(?:1q|1st\s*q|"
-        r"first\s*quarter|"
-        r"1h|1st\s*h|"
-        r"first\s*half)\b",
-        " ",
-        text,
-        flags=re.I,
-    )
-
-    return re.sub(
-        r"\s+",
-        " ",
-        text,
-    ).strip()
-
-
-def parse_side_team(selection):
     text = clean_text(
-        selection
+        value
     )
 
     if not text:
-        return None
-
-    text = strip_period_tokens(
-        text
-    )
-
-    # Team-total tail
-    text = re.sub(
-        r"\s+(?:tt|team\s*total)"
-        r"\s*(?:o|u|over|under)?"
-        r"\s*\d+(?:\.\d+)?\s*$",
-        "",
-        text,
-        flags=re.I,
-    )
-
-    # Moneyline tail
-    text = re.sub(
-        r"\s+(?:moneyline|ml)\s*$",
-        "",
-        text,
-        flags=re.I,
-    )
-
-    # Spread tail
-    text = re.sub(
-        r"\s+[+-]\d+(?:\.\d+)?\s*$",
-        "",
-        text,
-    )
-
-    # Total tail
-    text = re.sub(
-        r"\s+(?:over|under)"
-        r"\s+\d+(?:\.\d+)?\s*$",
-        "",
-        text,
-        flags=re.I,
-    )
-
-    return (
-        text.strip()
-        or None
-    )
-
-
-def parse_total_identity(
-    selection,
-):
-    text = clean_text(
-        selection
-    )
-
-    text = strip_period_tokens(
-        text
-    )
-
-    if re.search(
-        r"\b(?:tt|team\s*total)\b",
-        text,
-        flags=re.I,
-    ):
         return []
 
-    match = re.match(
-        r"^(.*?)\s+"
-        r"(?:over|under)\s+"
-        r"\d+(?:\.\d+)?\s*$",
+    pieces = re.split(
+        r"\s*@\s*"
+        r"|\s*/\s*"
+        r"|\s+vs\.?\s+"
+        r"|\s+v\.?\s+"
+        r"|\s+at\s+",
         text,
         flags=re.I,
     )
-
-    if not match:
-        return []
-
-    prefix = (
-        match.group(1)
-        .strip()
-    )
-
-    if not prefix:
-        return []
 
     return [
-        part.strip()
-        for part in re.split(
-            r"\s+(?:vs\.?|v\.?|"
-            r"at|@)\s+|/",
-            prefix,
-            flags=re.I,
-        )
-        if part.strip()
+        piece.strip()
+        for piece in pieces
+        if piece.strip()
     ][:2]
 
 
-def matchup_identity(pick):
-    parts = split_matchup(
-        pick.get("matchup")
+def selection_matchup_hints(
+    pick
+):
+    selection = clean_text(
+        pick.get(
+            "selection"
+        )
     )
 
-    if len(parts) >= 2:
-        return parts[:2]
+    pieces = split_matchup(
+        selection
+    )
+
+    if len(pieces) == 2:
+
+        # Strip wager information from second team.
+        pieces[1] = re.split(
+            r"\b(?:"
+            r"over|under|"
+            r"1q|1h|"
+            r"tt|team total"
+            r")\b"
+            r"|[+-]\s*\d",
+            pieces[1],
+            maxsplit=1,
+            flags=re.I,
+        )[0].strip()
+
+        if (
+            pieces[0]
+            and pieces[1]
+        ):
+            return pieces
 
     return []
 
 
-def structured_pair(pick):
+def structured_matchup_hints(
+    pick
+):
+    matchup = split_matchup(
+        pick.get(
+            "matchup"
+        )
+    )
+
+    if len(matchup) == 2:
+        return matchup
+
     team = clean_text(
         pick.get("team")
     )
 
     opponent = clean_text(
-        pick.get("opponent")
+        pick.get(
+            "opponent"
+        )
     )
 
     if team and opponent:
@@ -1749,423 +1529,252 @@ def structured_pair(pick):
     return []
 
 
+# ============================================================
+# SELECTED TEAM
+# ============================================================
+
 def side_identity(pick):
+    """
+    Determine selected team for spreads, moneylines
+    and team totals.
+    """
+
+    market = base_market(
+        pick.get(
+            "bet_type"
+        )
+    )
+
     team = clean_text(
-        pick.get("team")
+        pick.get(
+            "team"
+        )
     )
 
     if team:
         return team
 
-    return parse_side_team(
-        pick.get("selection")
-    )
 
-
-def total_identity(pick):
-    parsed = parse_total_identity(
-        pick.get("selection")
-    )
-
-    if len(parsed) == 2:
-        return parsed
-
-    matchup = matchup_identity(
-        pick
-    )
-
-    if len(matchup) == 2:
-        return matchup
-
-    if len(parsed) == 1:
-        return parsed
-
-    pair = structured_pair(
-        pick
-    )
-
-    if pair:
-        return pair
-
-    team = clean_text(
-        pick.get("team")
-    )
-
-    if team:
-        return [
-            team
-        ]
-
-    return []
-
-
-# ============================================================
-# EVENT MATCHING
-# ============================================================
-
-def matching_events_for_team(
-    team_hint,
-    events,
-):
-    if (
-        not team_hint
-        or is_ambiguous_hint(
-            team_hint
-        )
-    ):
-        return []
-
-    matches = []
-
-    for event in events:
-        comps = competitors(
-            event
-        )
-
-        if len(comps) != 2:
-            continue
-
-        if any(
-            comp_matches(
-                comp,
-                team_hint,
-            )
-            for comp in comps
-        ):
-            matches.append(
-                event
-            )
-
-    return matches
-
-
-def unique_event_for_team(
-    team_hint,
-    events,
-):
-    matches = (
-        matching_events_for_team(
-            team_hint,
-            events,
+    side = clean_text(
+        pick.get(
+            "side"
         )
     )
-
-    if len(matches) == 1:
-        return matches[0]
-
-    return None
-
-
-def unique_event_for_pair(
-    team_a,
-    team_b,
-    events,
-):
-    if (
-        not team_a
-        or not team_b
-    ):
-        return None
 
     if (
-        is_ambiguous_hint(
-            team_a
-        )
-        or is_ambiguous_hint(
-            team_b
-        )
+        side
+        and side.upper()
+        not in {
+            "OVER",
+            "UNDER",
+        }
     ):
-        return None
+        return side
 
-    matches = []
 
-    for event in events:
+    selection = clean_text(
+        pick.get(
+            "selection"
+        )
+    )
 
-        comps = competitors(
-            event
+
+    if market == "TEAM_TOTAL":
+
+        match = re.search(
+            r"^(.+?)\s+"
+            r"(?:tt|team\s+total)\b",
+            selection,
+            flags=re.I,
         )
 
-        if len(comps) != 2:
-            continue
-
-        a = any(
-            comp_matches(
-                comp,
-                team_a,
-            )
-            for comp in comps
-        )
-
-        b = any(
-            comp_matches(
-                comp,
-                team_b,
-            )
-            for comp in comps
-        )
-
-        if a and b:
-            matches.append(
-                event
+        if match:
+            return (
+                match
+                .group(1)
+                .strip()
             )
 
-    if len(matches) == 1:
-        return matches[0]
-
-    return None
-
-
-def resolve_ambiguous_pair(
-    team_a,
-    team_b,
-    events,
-):
-    a_ambiguous = (
-        is_ambiguous_hint(
-            team_a
-        )
-    )
-
-    b_ambiguous = (
-        is_ambiguous_hint(
-            team_b
-        )
-    )
-
-    # Exactly one side must be ambiguous.
-    if a_ambiguous == b_ambiguous:
-        return None
-
-    anchor = (
-        team_b
-        if a_ambiguous
-        else team_a
-    )
-
-    return unique_event_for_team(
-        anchor,
-        events,
-    )
-
-
-def resolve_pair(
-    pair,
-    events,
-):
-    if len(pair) != 2:
-        return None
-
-    a, b = pair
-
-    if (
-        is_ambiguous_hint(a)
-        or is_ambiguous_hint(b)
-    ):
-        return (
-            resolve_ambiguous_pair(
-                a,
-                b,
-                events,
-            )
-        )
-
-    return unique_event_for_pair(
-        a,
-        b,
-        events,
-    )
-
-
-def event_for_team_by_post_time(
-    team_hint,
-    pick,
-    events,
-):
-    matches = (
-        matching_events_for_team(
-            team_hint,
-            events,
-        )
-    )
-
-    if len(matches) == 1:
-        return matches[0]
-
-    if not matches:
-        return None
-
-    posted = (
-        pick_posted_datetime(
-            pick
-        )
-    )
-
-    if not posted:
-        return None
-
-    candidates = []
-
-    for event in matches:
-
-        kickoff = (
-            event_datetime(
-                event
-            )
-        )
-
-        if not kickoff:
-            continue
-
-        if kickoff >= (
-            posted
-            - timedelta(hours=3)
-        ):
-            distance = abs(
-                (
-                    kickoff
-                    - posted
-                ).total_seconds()
-            )
-
-            candidates.append(
-                (
-                    distance,
-                    kickoff,
-                    event,
-                )
-            )
-
-    if not candidates:
-        return None
-
-    candidates.sort(
-        key=lambda item: (
-            item[0],
-            item[1],
-        )
-    )
-
-    if len(candidates) > 1:
-
-        if abs(
-            candidates[1][0]
-            - candidates[0][0]
-        ) < 3600:
-
-            return None
-
-    event = (
-        candidates[0][2]
-    )
-
-    print(
-        "POST-TIME RESOLVED:",
-        team_hint,
-        "|",
-        pick.get("selection"),
-        "| event:",
-        event.get("id"),
-    )
-
-    return event
-
-
-# ============================================================
-# REQUIRED IDENTITIES / COMPLETE SLATE
-# ============================================================
-
-def pair_from_pick(pick):
-    market = base_market(
-        pick.get("bet_type")
-    )
-
-    if market == "TOTAL":
-        identity = total_identity(
-            pick
-        )
-
-        if len(identity) == 2:
-            return identity
-
-    matchup = matchup_identity(
-        pick
-    )
-
-    if len(matchup) == 2:
-        return matchup
-
-    pair = structured_pair(
-        pick
-    )
-
-    if len(pair) == 2:
-        return pair
-
-    return []
-
-
-def identities_needed_for_pick(
-    pick,
-):
-    market = base_market(
-        pick.get("bet_type")
-    )
 
     if market in {
         "SPREAD",
         "MONEYLINE",
-        "TEAM_TOTAL",
     }:
-        identity = side_identity(
-            pick
+
+        text = re.sub(
+            r"\b(?:"
+            r"1q|1h|"
+            r"first quarter|"
+            r"first half"
+            r")\b",
+            "",
+            selection,
+            flags=re.I,
+        ).strip()
+
+        spread = re.search(
+            r"^(.+?)\s+"
+            r"[+-]\s*"
+            r"\d+(?:\.\d+)?"
+            r"\s*$",
+            text,
+            flags=re.I,
+        )
+
+        if spread:
+
+            value = (
+                spread
+                .group(1)
+                .strip()
+            )
+
+            # If source contains matchup, keep only
+            # selected team portion.
+            pieces = split_matchup(
+                value
+            )
+
+            if pieces:
+                return pieces[-1]
+
+            return value
+
+
+    return None
+
+
+def selected_comp(
+    pick,
+    event,
+):
+    hint = side_identity(
+        pick
+    )
+
+    if (
+        not hint
+        or is_ambiguous_hint(
+            hint
+        )
+    ):
+        return None
+
+    matches = [
+        comp
+        for comp in competitors(
+            event
+        )
+        if comp_matches_hint(
+            comp,
+            hint,
+        )
+    ]
+
+    if len(matches) == 1:
+        return matches[0]
+
+    return None
+
+
+# ============================================================
+# ESPN SCOREBOARD FETCH
+# ============================================================
+
+def fetch_day_events(day):
+    datestring = (
+        day.strftime(
+            "%Y%m%d"
+        )
+    )
+
+    params = {
+        "dates":
+            datestring,
+
+        "limit":
+            1000,
+    }
+
+    payload = request_json(
+        ESPN_SCOREBOARD,
+        params,
+    )
+
+    return (
+        payload.get(
+            "events"
+        )
+        or []
+    )
+
+
+def event_quality(event):
+    score = 0
+
+    if completed(
+        event
+    ):
+        score += 100
+
+    if len(
+        competitors(
+            event
+        )
+    ) == 2:
+        score += 20
+
+    if all(
+        score_value(comp)
+        is not None
+        for comp in competitors(
+            event
+        )
+    ):
+        score += 20
+
+    if competitions(
+        event
+    ):
+        score += 5
+
+    return score
+
+
+def merge_events(events):
+    by_id = {}
+
+    for event in events:
+
+        event_id = str(
+            event.get(
+                "id"
+            )
+            or ""
+        )
+
+        if not event_id:
+            continue
+
+        old = by_id.get(
+            event_id
         )
 
         if (
-            identity
-            and not is_ambiguous_hint(
-                identity
+            old is None
+            or event_quality(
+                event
+            )
+            > event_quality(
+                old
             )
         ):
-            return [
-                identity
-            ]
+            by_id[
+                event_id
+            ] = event
 
-        return []
-
-    if market == "TOTAL":
-        return [
-            value
-            for value in total_identity(
-                pick
-            )
-            if not is_ambiguous_hint(
-                value
-            )
-        ]
-
-    return []
-
-
-def pick_belongs_to_week(
-    pick,
-    season_year,
-    week,
-):
-    return (
-        pick.get("sport")
-        in {
-            "CFB",
-            "NCAAF",
-        }
-        and season_year_for_pick(
-            pick
-        )
-        == int(season_year)
-        and int(
-            pick.get("week")
-            or 1
-        )
-        == int(week)
+    return list(
+        by_id.values()
     )
 
 
@@ -2174,370 +1783,196 @@ def build_complete_week_slate(
     season_year,
     week,
 ):
-    initial = (
-        fetch_scoreboard_events(
-            season_year,
-            week,
-        )
+    """
+    Fetch the complete date window for one Pick Em week.
+
+    We intentionally avoid fuzzy score matching.
+    """
+
+    start, end = week_window(
+        season_year,
+        week,
     )
 
-    events_by_id = {}
+    all_events = []
 
-    for event in initial:
-        merge_event(
-            events_by_id,
-            event,
-            "scoreboard",
-        )
+    current = start
 
-    required_hints = []
+    while current <= end:
 
-    seen = set()
+        try:
 
-    for pick in picks:
-
-        if not pick_belongs_to_week(
-            pick,
-            season_year,
-            week,
-        ):
-            continue
-
-        for hint in (
-            identities_needed_for_pick(
-                pick
-            )
-        ):
-            key = norm(
-                hint
+            events = fetch_day_events(
+                current
             )
 
-            if (
-                key
-                and key not in seen
-            ):
-                seen.add(
-                    key
-                )
-
-                required_hints.append(
-                    hint
-                )
-
-    missing = [
-        hint
-        for hint in required_hints
-        if not matching_events_for_team(
-            hint,
-            list(
-                events_by_id.values()
-            ),
-        )
-    ]
-
-    print(
-        "Missing from scoreboard:",
-        len(missing),
-        "team identities",
-    )
-
-    all_teams = None
-    schedule_cache = {}
-
-    if missing:
-
-        all_teams = fetch_all_teams()
-
-        print(
-            "Loaded",
-            len(all_teams),
-            "ESPN teams",
-        )
-
-        for hint in missing:
-
-            schedule_events = (
-                schedule_events_for_hint(
-                    hint,
-                    all_teams,
-                    season_year,
-                    week,
-                    schedule_cache,
-                )
+            all_events.extend(
+                events
             )
 
-            for event in schedule_events:
-
-                merge_event(
-                    events_by_id,
-                    event,
-                    (
-                        "team-fallback:"
-                        + hint
-                    ),
-                )
-
-    # Explicit matchup recovery pass.
-    for pick in picks:
-
-        if not pick_belongs_to_week(
-            pick,
-            season_year,
-            week,
-        ):
-            continue
-
-        pair = pair_from_pick(
-            pick
-        )
-
-        if len(pair) != 2:
-            continue
-
-        if resolve_pair(
-            pair,
-            list(
-                events_by_id.values()
-            ),
-        ):
-            continue
-
-        safe_hints = [
-            hint
-            for hint in pair
-            if not is_ambiguous_hint(
-                hint
-            )
-        ]
-
-        if not safe_hints:
-            continue
-
-        if all_teams is None:
-            all_teams = (
-                fetch_all_teams()
-            )
-
-        print(
-            "MATCHUP RECOVERY:",
-            pair,
-        )
-
-        for hint in safe_hints:
-
-            schedule_events = (
-                schedule_events_for_hint(
-                    hint,
-                    all_teams,
-                    season_year,
-                    week,
-                    schedule_cache,
-                )
-            )
-
-            for event in schedule_events:
-
-                merge_event(
-                    events_by_id,
-                    event,
-                    (
-                        "matchup-recovery:"
-                        + hint
-                    ),
-                )
-
-        recovered = resolve_pair(
-            pair,
-            list(
-                events_by_id.values()
-            ),
-        )
-
-        if recovered:
+        except Exception as exc:
 
             print(
-                "MATCHUP RECOVERED:",
-                pair,
-                "->",
-                final_score_text(
-                    recovered
-                ),
-                "| event:",
-                recovered.get("id"),
+                "ESPN DAY FETCH FAILED:",
+                current,
+                "|",
+                exc,
             )
 
-    events = list(
-        events_by_id.values()
+        current += timedelta(
+            days=1
+        )
+
+    merged = merge_events(
+        all_events
     )
+
+    if not merged:
+        raise RuntimeError(
+            "No ESPN events retrieved "
+            f"for {season_year} Week {week}."
+        )
 
     print(
         "Combined complete slate:",
-        len(events),
+        len(
+            merged
+        ),
         "unique events",
     )
 
-    return events
+    return merged
 
 
 # ============================================================
-# PICK -> EVENT
+# EVENT RESOLUTION
 # ============================================================
-
-def resolve_total_event(
-    pick,
-    events,
-):
-    parsed = parse_total_identity(
-        pick.get("selection")
-    )
-
-    if len(parsed) == 2:
-
-        event = resolve_pair(
-            parsed,
-            events,
-        )
-
-        if event:
-            return event
-
-    matchup = matchup_identity(
-        pick
-    )
-
-    if len(matchup) == 2:
-
-        event = resolve_pair(
-            matchup,
-            events,
-        )
-
-        if event:
-            return event
-
-    pair = structured_pair(
-        pick
-    )
-
-    if len(pair) == 2:
-
-        event = resolve_pair(
-            pair,
-            events,
-        )
-
-        if event:
-            return event
-
-    if len(parsed) == 1:
-
-        return (
-            event_for_team_by_post_time(
-                parsed[0],
-                pick,
-                events,
-            )
-        )
-
-    team = clean_text(
-        pick.get("team")
-    )
-
-    if team:
-
-        return (
-            event_for_team_by_post_time(
-                team,
-                pick,
-                events,
-            )
-        )
-
-    return None
-
-
-def resolve_side_event(
-    pick,
-    events,
-):
-    # Matchup context first.
-    matchup = matchup_identity(
-        pick
-    )
-
-    if len(matchup) == 2:
-
-        event = resolve_pair(
-            matchup,
-            events,
-        )
-
-        if event:
-            return event
-
-    # Structured pair second.
-    pair = structured_pair(
-        pick
-    )
-
-    if len(pair) == 2:
-
-        event = resolve_pair(
-            pair,
-            events,
-        )
-
-        if event:
-            return event
-
-    # Single-team selection last.
-    team = side_identity(
-        pick
-    )
-
-    if (
-        team
-        and not is_ambiguous_hint(
-            team
-        )
-    ):
-
-        return (
-            event_for_team_by_post_time(
-                team,
-                pick,
-                events,
-            )
-        )
-
-    return None
-
 
 def resolve_event(
     pick,
     events,
 ):
-    market = base_market(
-        pick.get("bet_type")
+    """
+    Conservative matching priority:
+
+    1. Explicit matchup
+    2. Matchup encoded in selection
+    3. team + opponent
+    4. selected team only
+
+    A single-team match is accepted only if exactly one event
+    in the entire week matches.
+    """
+
+    # --------------------------------------------------------
+    # 1. Dedicated matchup field
+    # --------------------------------------------------------
+
+    hints = split_matchup(
+        pick.get(
+            "matchup"
+        )
     )
 
-    if market == "TOTAL":
+    if len(hints) == 2:
 
-        return resolve_total_event(
-            pick,
-            events,
+        matches = [
+            event
+            for event in events
+            if event_contains_pair(
+                event,
+                hints[0],
+                hints[1],
+            )
+        ]
+
+        if len(matches) == 1:
+            return matches[0]
+
+
+    # --------------------------------------------------------
+    # 2. Selection matchup
+    # --------------------------------------------------------
+
+    hints = (
+        selection_matchup_hints(
+            pick
         )
+    )
 
-    if market in {
-        "SPREAD",
-        "MONEYLINE",
-        "TEAM_TOTAL",
-    }:
+    if len(hints) == 2:
 
-        return resolve_side_event(
-            pick,
-            events,
+        matches = [
+            event
+            for event in events
+            if event_contains_pair(
+                event,
+                hints[0],
+                hints[1],
+            )
+        ]
+
+        if len(matches) == 1:
+            return matches[0]
+
+
+    # --------------------------------------------------------
+    # 3. Structured team/opponent
+    # --------------------------------------------------------
+
+    team = clean_text(
+        pick.get("team")
+    )
+
+    opponent = clean_text(
+        pick.get(
+            "opponent"
         )
+    )
+
+    if team and opponent:
+
+        matches = [
+            event
+            for event in events
+            if event_contains_pair(
+                event,
+                team,
+                opponent,
+            )
+        ]
+
+        if len(matches) == 1:
+            return matches[0]
+
+
+    # --------------------------------------------------------
+    # 4. Selected team
+    # --------------------------------------------------------
+
+    selected = side_identity(
+        pick
+    )
+
+    if (
+        selected
+        and not is_ambiguous_hint(
+            selected
+        )
+    ):
+
+        matches = [
+            event
+            for event in events
+            if event_contains_team(
+                event,
+                selected,
+            )
+        ]
+
+        if len(matches) == 1:
+            return matches[0]
+
 
     return None
 
@@ -2546,115 +1981,18 @@ def resolve_event(
 # EVENT HYDRATION
 # ============================================================
 
-def fetch_event_summary(
-    event_id,
-):
-    return request_json(
-        ESPN_SUMMARY,
-        {
-            "event": event_id
-        },
-    )
-
-
-def event_from_summary(
-    payload,
-    fallback,
-):
-    header = (
-        payload.get("header")
-        or {}
-    )
-
-    comps = (
-        header.get("competitions")
-        or []
-    )
-
-    if not comps:
-        return fallback
-
-    competition = (
-        comps[0]
-    )
-
-    event = dict(
-        fallback
-    )
-
-    event["id"] = str(
-        competition.get("id")
-        or header.get("id")
-        or fallback.get("id")
-    )
-
-    if competition.get("date"):
-
-        event["date"] = (
-            competition["date"]
-        )
-
-    if competition.get("status"):
-
-        event["status"] = (
-            competition["status"]
-        )
-
-    event["competitions"] = [
-        competition
-    ]
-
-    return event
-
-
 def hydrate_event(
     event,
     cache,
 ):
     event_id = str(
-        event.get("id")
+        event.get(
+            "id"
+        )
         or ""
     )
 
     if not event_id:
-        return event
-
-    if completed(
-        event
-    ):
-        return event
-
-    state = (
-        event_status_state(
-            event
-        ).lower()
-    )
-
-    name = (
-        event_status_name(
-            event
-        ).upper()
-    )
-
-    missing_status = (
-        not state
-        and not name
-    )
-
-    suspicious = (
-        event_has_scores(
-            event
-        )
-        and state not in {
-            "pre",
-            "in",
-        }
-    )
-
-    if not (
-        missing_status
-        or suspicious
-    ):
         return event
 
     if event_id in cache:
@@ -2664,54 +2002,71 @@ def hydrate_event(
 
     try:
 
-        payload = (
-            fetch_event_summary(
+        payload = request_json(
+            ESPN_SUMMARY,
+            {
+                "event":
+                    event_id
+            },
+        )
+
+        header = (
+            payload.get(
+                "header"
+            )
+            or {}
+        )
+
+        competitions_list = (
+            header.get(
+                "competitions"
+            )
+            or []
+        )
+
+        if competitions_list:
+
+            hydrated = dict(
+                event
+            )
+
+            hydrated[
+                "competitions"
+            ] = (
+                competitions_list
+            )
+
+            hydrated[
+                "status"
+            ] = (
+                header.get(
+                    "status"
+                )
+                or event.get(
+                    "status"
+                )
+            )
+
+            cache[
                 event_id
-            )
-        )
+            ] = hydrated
 
-        hydrated = (
-            event_from_summary(
-                payload,
-                event,
-            )
-        )
-
-        cache[event_id] = (
-            hydrated
-        )
-
-        print(
-            "EVENT HYDRATED:",
-            event_id,
-            "| completed:",
-            completed(
-                hydrated
-            ),
-            "| status:",
-            event_status_name(
-                hydrated
-            ),
-            "|",
-            final_score_text(
-                hydrated
-            ),
-        )
-
-        return hydrated
+            return hydrated
 
     except Exception as exc:
 
         print(
-            "EVENT HYDRATION FAILED:",
+            "ESPN SUMMARY FAILED:",
             event_id,
             "|",
             exc,
         )
 
-        cache[event_id] = event
+    cache[
+        event_id
+    ] = event
 
-        return event
+    return event
 
 
 # ============================================================
@@ -2726,36 +2081,25 @@ def competition_id(event):
     if comps:
 
         value = (
-            comps[0].get("id")
+            comps[0].get(
+                "id"
+            )
         )
 
         if value:
-
             return str(
                 value
             )
 
     return str(
-        event.get("id")
+        event.get(
+            "id"
+        )
         or ""
     )
 
 
 def extract_linescores(raw):
-    """
-    Convert ESPN linescore payload into:
-
-        {
-            1: 7.0,
-            2: 10.0,
-            3: 3.0,
-            4: 7.0
-        }
-
-    Supports both embedded scoreboard linescores and
-    ESPN Core linescore objects.
-    """
-
     output = {}
 
     for index, item in enumerate(
@@ -2770,7 +2114,9 @@ def extract_linescores(raw):
             continue
 
         period = (
-            item.get("period")
+            item.get(
+                "period"
+            )
             or item.get(
                 "sequenceNumber"
             )
@@ -2784,21 +2130,23 @@ def extract_linescores(raw):
             period,
             dict,
         ):
-
             period = (
-                period.get("number")
-                or period.get("value")
+                period.get(
+                    "number"
+                )
+                or period.get(
+                    "value"
+                )
             )
 
         try:
-
             period = int(
                 period
             )
 
         except Exception:
-
             continue
+
 
         value = None
 
@@ -2808,15 +2156,14 @@ def extract_linescores(raw):
             "displayValue",
         ):
 
-            candidate = item.get(
-                key
+            candidate = (
+                item.get(key)
             )
 
             if isinstance(
                 candidate,
                 dict,
             ):
-
                 candidate = (
                     candidate.get(
                         "value"
@@ -2837,11 +2184,10 @@ def extract_linescores(raw):
                     break
 
             except Exception:
+                continue
 
-                pass
 
         if value is not None:
-
             output[
                 period
             ] = value
@@ -2851,7 +2197,9 @@ def extract_linescores(raw):
 
 def embedded_linescores(comp):
     return extract_linescores(
-        comp.get("linescores")
+        comp.get(
+            "linescores"
+        )
         or []
     )
 
@@ -2861,7 +2209,9 @@ def fetch_team_linescores(
     comp,
 ):
     event_id = str(
-        event.get("id")
+        event.get(
+            "id"
+        )
         or ""
     )
 
@@ -2869,13 +2219,15 @@ def fetch_team_linescores(
         event
     )
 
-    team = (
-        comp.get("team")
-        or {}
-    )
-
     team_id = str(
-        team.get("id")
+        (
+            comp.get(
+                "team"
+            )
+            or {}
+        ).get(
+            "id"
+        )
         or ""
     )
 
@@ -2896,12 +2248,15 @@ def fetch_team_linescores(
     payload = request_json(
         url,
         {
-            "limit": 100
+            "limit":
+                100
         },
     )
 
     return (
-        payload.get("items")
+        payload.get(
+            "items"
+        )
         or payload.get(
             "linescores"
         )
@@ -2915,15 +2270,21 @@ def get_period_scores(
     cache,
 ):
     event_id = str(
-        event.get("id")
+        event.get(
+            "id"
+        )
         or ""
     )
 
     team_id = str(
         (
-            comp.get("team")
+            comp.get(
+                "team"
+            )
             or {}
-        ).get("id")
+        ).get(
+            "id"
+        )
         or ""
     )
 
@@ -2933,13 +2294,12 @@ def get_period_scores(
     )
 
     if key in cache:
-
         return cache[
             key
         ]
 
-    # First prefer ESPN linescores already embedded
-    # in scoreboard/summary data.
+
+    # Embedded scores first.
     embedded = (
         embedded_linescores(
             comp
@@ -2954,8 +2314,8 @@ def get_period_scores(
 
         return embedded
 
-    # Otherwise use ESPN's exact competitor
-    # period-linescore endpoint.
+
+    # Exact ESPN competitor period endpoint second.
     try:
 
         raw = fetch_team_linescores(
@@ -2967,9 +2327,7 @@ def get_period_scores(
             raw
         )
 
-        cache[key] = (
-            scores
-        )
+        cache[key] = scores
 
         return scores
 
@@ -2996,7 +2354,6 @@ def score_for_market(
     cache,
 ):
     if period == "FULL_GAME":
-
         return score_value(
             comp
         )
@@ -3010,7 +2367,6 @@ def score_for_market(
     if period == (
         "FIRST_QUARTER"
     ):
-
         return lines.get(
             1
         )
@@ -3031,12 +2387,9 @@ def score_for_market(
             q1 is None
             or q2 is None
         ):
-
             return None
 
-        return (
-            q1 + q2
-        )
+        return q1 + q2
 
     return None
 
@@ -3058,7 +2411,9 @@ def period_score_text(
         )
 
         label = (
-            team.get("abbreviation")
+            team.get(
+                "abbreviation"
+            )
             or team.get(
                 "shortDisplayName"
             )
@@ -3076,19 +2431,16 @@ def period_score_text(
         )
 
         if value is None:
-
             display = "?"
 
         elif float(
             value
         ).is_integer():
-
             display = str(
                 int(value)
             )
 
         else:
-
             display = str(
                 value
             )
@@ -3097,10 +2449,16 @@ def period_score_text(
             f"{label} {display}"
         )
 
+
     prefix = {
-        "FIRST_QUARTER": "1Q",
-        "FIRST_HALF": "1H",
-        "FULL_GAME": "FINAL",
+        "FIRST_QUARTER":
+            "1Q",
+
+        "FIRST_HALF":
+            "1H",
+
+        "FULL_GAME":
+            "FINAL",
     }.get(
         period,
         period,
@@ -3116,46 +2474,32 @@ def period_score_text(
 
 
 # ============================================================
-# SELECTED TEAM
+# CLEAR PROVISIONAL GRADE
 # ============================================================
 
-def selected_comp(
+def clear_grade(
     pick,
-    event,
+    status="OPEN",
 ):
-    hint = side_identity(
+    """
+    NEVER call this for official results.
+    """
+
+    if is_official_result(
         pick
-    )
-
-    if (
-        not hint
-        or is_ambiguous_hint(
-            hint
-        )
     ):
+        return
 
-        return None
-
-    matches = [
-        comp
-        for comp in competitors(
-            event
-        )
-        if comp_matches(
-            comp,
-            hint,
-        )
-    ]
-
-    if len(matches) == 1:
-
-        return matches[0]
-
-    return None
+    pick["result"] = None
+    pick["status"] = status
+    pick["event_id"] = None
+    pick["graded_at"] = None
+    pick["final_score"] = None
+    pick["profit_units"] = 0
 
 
 # ============================================================
-# GRADING
+# GRADE ONE PICK
 # ============================================================
 
 def grade_pick(
@@ -3164,62 +2508,69 @@ def grade_pick(
     linescore_cache,
 ):
     """
-    Fail closed.
+    Conservative / fail-closed grading.
 
-    1Q = period 1 only.
-
-    1H = period 1 + period 2.
-
-    Period team totals use the selected team's points only.
-
-    We intentionally wait until the entire game is FINAL
-    before assigning any result. That avoids accidentally
-    grading from an incomplete ESPN live-feed period.
+    Official result rows can never enter this function.
     """
+
+    if is_official_result(
+        pick
+    ):
+        return False
 
     if not completed(
         event
     ):
-
         return False
+
 
     comps = competitors(
         event
     )
 
     if len(comps) != 2:
-
         return False
 
-    raw_type = (
-        normalize_bet_type(
-            pick.get("bet_type")
+
+    bet_type = normalize_bet_type(
+        pick.get(
+            "bet_type"
         )
     )
 
     period = market_period(
-        raw_type
+        bet_type
     )
 
     market = base_market(
-        raw_type
+        bet_type
     )
+
+
+    # --------------------------------------------------------
+    # GET REQUIRED SCORES
+    # --------------------------------------------------------
 
     scores = {}
 
     for comp in comps:
 
         comp_key = str(
-            comp.get("id")
+            comp.get(
+                "id"
+            )
             or (
-                comp.get("team")
+                comp.get(
+                    "team"
+                )
                 or {}
-            ).get("id")
+            ).get(
+                "id"
+            )
             or ""
         )
 
         if not comp_key:
-
             return False
 
         value = score_for_market(
@@ -3233,13 +2584,15 @@ def grade_pick(
 
             print(
                 "PERIOD SCORE UNAVAILABLE:",
-                pick.get("picker"),
+                pick.get(
+                    "picker"
+                ),
                 "|",
-                pick.get("selection"),
-                "| period:",
+                pick.get(
+                    "selection"
+                ),
+                "|",
                 period,
-                "| event:",
-                event.get("id"),
             )
 
             return False
@@ -3248,18 +2601,21 @@ def grade_pick(
             comp_key
         ] = value
 
-    line = pick.get(
-        "line"
+
+    line = safe_float(
+        pick.get(
+            "line"
+        )
     )
 
-    # --------------------------------------------------------
-    # TOTAL
-    # --------------------------------------------------------
+
+    # ========================================================
+    # GAME TOTAL
+    # ========================================================
 
     if market == "TOTAL":
 
         if line is None:
-
             return False
 
         direction = (
@@ -3269,25 +2625,20 @@ def grade_pick(
         )
 
         if not direction:
-
             return False
 
         actual = sum(
             scores.values()
         )
 
-        if actual == float(
-            line
-        ):
-
+        if actual == line:
             result = "PUSH"
 
         elif direction == "OVER":
 
             result = (
                 "WIN"
-                if actual
-                > float(line)
+                if actual > line
                 else "LOSS"
             )
 
@@ -3295,21 +2646,20 @@ def grade_pick(
 
             result = (
                 "WIN"
-                if actual
-                < float(line)
+                if actual < line
                 else "LOSS"
             )
 
-    # --------------------------------------------------------
+
+    # ========================================================
     # TEAM TOTAL
-    # --------------------------------------------------------
+    # ========================================================
 
     elif market == (
         "TEAM_TOTAL"
     ):
 
         if line is None:
-
             return False
 
         direction = (
@@ -3319,7 +2669,6 @@ def grade_pick(
         )
 
         if not direction:
-
             return False
 
         selected = selected_comp(
@@ -3328,38 +2677,38 @@ def grade_pick(
         )
 
         if not selected:
-
             return False
 
         selected_key = str(
-            selected.get("id")
+            selected.get(
+                "id"
+            )
             or (
-                selected.get("team")
+                selected.get(
+                    "team"
+                )
                 or {}
-            ).get("id")
+            ).get(
+                "id"
+            )
             or ""
         )
 
         if selected_key not in scores:
-
             return False
 
         actual = scores[
             selected_key
         ]
 
-        if actual == float(
-            line
-        ):
-
+        if actual == line:
             result = "PUSH"
 
         elif direction == "OVER":
 
             result = (
                 "WIN"
-                if actual
-                > float(line)
+                if actual > line
                 else "LOSS"
             )
 
@@ -3367,14 +2716,14 @@ def grade_pick(
 
             result = (
                 "WIN"
-                if actual
-                < float(line)
+                if actual < line
                 else "LOSS"
             )
 
-    # --------------------------------------------------------
+
+    # ========================================================
     # SPREAD / MONEYLINE
-    # --------------------------------------------------------
+    # ========================================================
 
     elif market in {
         "SPREAD",
@@ -3387,42 +2736,60 @@ def grade_pick(
         )
 
         if not selected:
-
             return False
 
         selected_key = str(
-            selected.get("id")
+            selected.get(
+                "id"
+            )
             or (
-                selected.get("team")
+                selected.get(
+                    "team"
+                )
                 or {}
-            ).get("id")
+            ).get(
+                "id"
+            )
             or ""
         )
 
-        others = [
+        opponents = [
             comp
             for comp in comps
             if str(
-                comp.get("id")
+                comp.get(
+                    "id"
+                )
                 or (
-                    comp.get("team")
+                    comp.get(
+                        "team"
+                    )
                     or {}
-                ).get("id")
+                ).get(
+                    "id"
+                )
                 or ""
             )
             != selected_key
         ]
 
-        if len(others) != 1:
-
+        if len(opponents) != 1:
             return False
 
+        opponent = opponents[0]
+
         opponent_key = str(
-            others[0].get("id")
+            opponent.get(
+                "id"
+            )
             or (
-                others[0].get("team")
+                opponent.get(
+                    "team"
+                )
                 or {}
-            ).get("id")
+            ).get(
+                "id"
+            )
             or ""
         )
 
@@ -3432,69 +2799,68 @@ def grade_pick(
             or opponent_key
             not in scores
         ):
-
             return False
 
+
         margin = (
-            scores[selected_key]
+            scores[
+                selected_key
+            ]
             - scores[
                 opponent_key
             ]
         )
+
 
         if market == (
             "MONEYLINE"
         ):
 
             if margin > 0:
-
                 result = "WIN"
 
             elif margin < 0:
-
                 result = "LOSS"
 
             else:
-
                 result = "PUSH"
+
 
         else:
 
             if line is None:
-
                 return False
 
             adjusted = (
-                margin
-                + float(line)
+                margin + line
             )
 
             if adjusted > 0:
-
                 result = "WIN"
 
             elif adjusted < 0:
-
                 result = "LOSS"
 
             else:
-
                 result = "PUSH"
 
-    else:
 
+    else:
         return False
 
-    pick["result"] = (
-        result
-    )
 
-    pick["status"] = (
-        "FINAL"
-    )
+    # ========================================================
+    # SAVE PROVISIONAL ESPN RESULT
+    # ========================================================
+
+    pick["result"] = result
+
+    pick["status"] = "FINAL"
 
     pick["event_id"] = (
-        event.get("id")
+        event.get(
+            "id"
+        )
     )
 
     pick["graded_at"] = (
@@ -3519,11 +2885,16 @@ def grade_pick(
             )
         )
 
+
     pick["profit_units"] = (
         american_profit(
-            pick.get("odds"),
+            pick.get(
+                "odds"
+            ),
             float(
-                pick.get("units")
+                pick.get(
+                    "units"
+                )
                 or 1
             ),
             result,
@@ -3533,35 +2904,109 @@ def grade_pick(
     return True
 
 
-def clear_grade(
-    pick,
-    status="OPEN",
-):
-    pick["result"] = None
-    pick["status"] = status
-    pick["event_id"] = None
-    pick["graded_at"] = None
-    pick["final_score"] = None
-    pick["profit_units"] = 0
-
-
 # ============================================================
-# MAIN
+# MAIN GRADER
 # ============================================================
 
 def grade_open():
+
     picks = load_json(
         PICKS_FILE,
         [],
     )
 
-    # Upgrade older saved 1Q / 1H / TT labels
-    # before any event matching takes place.
+    if not isinstance(
+        picks,
+        list,
+    ):
+        picks = []
+
+
+    # ========================================================
+    # 1. NORMALIZE ONLY PROVISIONAL PICKS
+    # ========================================================
+
     for pick in picks:
+
+        if is_official_result(
+            pick
+        ):
+            continue
 
         normalize_existing_pick_market(
             pick
         )
+
+
+    # ========================================================
+    # 2. VALIDATE OFFICIAL RESULTS
+    #
+    # We never repair or alter them here.
+    # We only report them.
+    # ========================================================
+
+    official_locked = 0
+    official_invalid = 0
+
+    for pick in picks:
+
+        if not is_official_result(
+            pick
+        ):
+            continue
+
+        official_locked += 1
+
+        if not official_result_valid(
+            pick
+        ):
+
+            official_invalid += 1
+
+            print(
+                "WARNING - OFFICIAL ROW INVALID:",
+                pick.get(
+                    "picker"
+                ),
+                "|",
+                pick.get(
+                    "selection"
+                ),
+                "| result:",
+                pick.get(
+                    "result"
+                ),
+            )
+
+
+    # ========================================================
+    # 3. ESPN WEEKS NEEDED
+    #
+    # THE IMPORTANT CHANGE:
+    #
+    # Officially reconciled picks are completely excluded here.
+    #
+    # Therefore an officially reconciled Week 1 generates
+    # ZERO Week 1 ESPN work.
+    # ========================================================
+
+    provisional_picks = [
+        pick
+        for pick in picks
+        if (
+            pick.get(
+                "sport"
+            )
+            in {
+                "CFB",
+                "NCAAF",
+            }
+            and not is_official_result(
+                pick
+            )
+        )
+    ]
+
 
     required_weeks = sorted({
         (
@@ -3569,24 +3014,56 @@ def grade_open():
                 pick
             ),
             int(
-                pick.get("week")
+                pick.get(
+                    "week"
+                )
                 or 1
             ),
         )
-        for pick in picks
-        if pick.get("sport")
-        in {
-            "CFB",
-            "NCAAF",
-        }
+        for pick in provisional_picks
     })
 
+
+    print()
+    print(
+        "========== GRADER PRECHECK =========="
+    )
+
+    print(
+        "Official results locked:",
+        official_locked,
+    )
+
+    print(
+        "Official invalid rows:",
+        official_invalid,
+    )
+
+    print(
+        "Provisional picks eligible for ESPN:",
+        len(
+            provisional_picks
+        ),
+    )
+
+    print(
+        "ESPN weeks required:",
+        required_weeks,
+    )
+
+    print(
+        "====================================="
+    )
+
+
+    # ========================================================
+    # 4. FETCH ESPN DATA ONLY FOR PROVISIONAL WEEKS
+    # ========================================================
+
     week_cache = {}
+
     failed_weeks = set()
 
-    # --------------------------------------------------------
-    # FETCH ALL ESPN DATA FIRST
-    # --------------------------------------------------------
 
     for (
         season_year,
@@ -3597,7 +3074,7 @@ def grade_open():
 
             events = (
                 build_complete_week_slate(
-                    picks,
+                    provisional_picks,
                     season_year,
                     week,
                 )
@@ -3609,12 +3086,14 @@ def grade_open():
                     "No ESPN events retrieved."
                 )
 
+
             week_cache[
                 (
                     season_year,
                     week,
                 )
             ] = events
+
 
             print(
                 "Loaded",
@@ -3624,6 +3103,7 @@ def grade_open():
                 "Week",
                 week,
             )
+
 
         except Exception as exc:
 
@@ -3643,30 +3123,53 @@ def grade_open():
                 exc,
             )
 
+
+    # ========================================================
+    # 5. GRADE
+    # ========================================================
+
     graded = 0
     unmatched = 0
     not_final = 0
     review = 0
     preserved = 0
     period_missing = 0
+    skipped_official = 0
 
     pending_events = {}
 
     summary_cache = {}
+
     linescore_cache = {}
 
-    # --------------------------------------------------------
-    # GRADE
-    # --------------------------------------------------------
 
     for pick in picks:
 
-        if pick.get("sport") not in {
+
+        # ====================================================
+        # ABSOLUTE OFFICIAL RESULT LOCK
+        #
+        # NOTHING BELOW THIS LINE MAY TOUCH THESE ROWS.
+        # ====================================================
+
+        if is_official_result(
+            pick
+        ):
+
+            skipped_official += 1
+
+            continue
+
+
+        if pick.get(
+            "sport"
+        ) not in {
             "CFB",
             "NCAAF",
         }:
 
             continue
+
 
         season_year = (
             season_year_for_pick(
@@ -3675,7 +3178,9 @@ def grade_open():
         )
 
         week = int(
-            pick.get("week")
+            pick.get(
+                "week"
+            )
             or 1
         )
 
@@ -3684,24 +3189,35 @@ def grade_open():
             week,
         )
 
-        # If ESPN retrieval failed, preserve the previous state.
+
+        # ----------------------------------------------------
+        # ESPN failed -> preserve prior data.
+        # ----------------------------------------------------
+
         if key in failed_weeks:
 
             preserved += 1
 
             continue
 
+
         bet_type = (
             normalize_bet_type(
-                pick.get("bet_type")
+                pick.get(
+                    "bet_type"
+                )
             )
         )
 
-        pick["bet_type"] = (
-            bet_type
-        )
+        pick[
+            "bet_type"
+        ] = bet_type
 
-        # Truly unsupported market.
+
+        # ----------------------------------------------------
+        # Unsupported market
+        # ----------------------------------------------------
+
         if bet_type not in SUPPORTED:
 
             clear_grade(
@@ -3713,17 +3229,24 @@ def grade_open():
 
             print(
                 "REVIEW - unsupported:",
-                pick.get("picker"),
+                pick.get(
+                    "picker"
+                ),
                 "|",
-                pick.get("selection"),
+                pick.get(
+                    "selection"
+                ),
                 "| type:",
                 bet_type,
             )
 
             continue
 
-        # Team totals cannot be graded without
-        # an explicit Over/Under direction.
+
+        # ----------------------------------------------------
+        # Team total needs explicit direction.
+        # ----------------------------------------------------
+
         if (
             base_market(
                 bet_type
@@ -3742,27 +3265,42 @@ def grade_open():
             review += 1
 
             print(
-                "REVIEW - team total direction missing:",
-                pick.get("picker"),
+                "REVIEW - team total "
+                "direction missing:",
+                pick.get(
+                    "picker"
+                ),
                 "|",
-                pick.get("selection"),
+                pick.get(
+                    "selection"
+                ),
             )
 
             continue
 
-        events = week_cache[
-            key
-        ]
+
+        events = (
+            week_cache.get(
+                key,
+                []
+            )
+        )
+
 
         event = resolve_event(
             pick,
             events,
         )
 
-        # Recalculate every supported pick each run.
+
+        # ----------------------------------------------------
+        # Recalculate PROVISIONAL pick only.
+        # ----------------------------------------------------
+
         clear_grade(
             pick
         )
+
 
         if event is None:
 
@@ -3770,23 +3308,35 @@ def grade_open():
 
             print(
                 "UNMATCHED:",
-                pick.get("picker"),
+                pick.get(
+                    "picker"
+                ),
                 "|",
-                pick.get("selection"),
+                pick.get(
+                    "selection"
+                ),
                 "| matchup:",
-                pick.get("matchup"),
+                pick.get(
+                    "matchup"
+                ),
                 "| team:",
-                pick.get("team"),
+                pick.get(
+                    "team"
+                ),
                 "| type:",
-                pick.get("bet_type"),
+                pick.get(
+                    "bet_type"
+                ),
             )
 
             continue
+
 
         event = hydrate_event(
             event,
             summary_cache,
         )
+
 
         if not completed(
             event
@@ -3795,15 +3345,20 @@ def grade_open():
             not_final += 1
 
             event_id = str(
-                event.get("id")
+                event.get(
+                    "id"
+                )
                 or "unknown"
             )
 
             pending_events.setdefault(
                 event_id,
                 {
-                    "event": event,
-                    "picks": [],
+                    "event":
+                        event,
+
+                    "picks":
+                        [],
                 },
             )
 
@@ -3811,35 +3366,25 @@ def grade_open():
                 event_id
             ]["picks"].append(
                 {
-                    "picker": (
-                        pick.get("picker")
-                    ),
-                    "selection": (
+                    "picker":
+                        pick.get(
+                            "picker"
+                        ),
+
+                    "selection":
                         pick.get(
                             "selection"
-                        )
-                    ),
+                        ),
                 }
             )
 
-            print(
-                "NOT FINAL:",
-                pick.get("picker"),
-                "|",
-                pick.get("selection"),
-                "|",
-                final_score_text(
-                    event
-                ),
-                "| status:",
-                event_status_name(
-                    event
-                ),
-                "| event:",
-                event.get("id"),
-            )
-
             continue
+
+
+        period = market_period(
+            bet_type
+        )
+
 
         success = grade_pick(
             pick,
@@ -3847,49 +3392,52 @@ def grade_open():
             linescore_cache,
         )
 
+
         if success:
 
             graded += 1
 
             print(
                 "GRADED:",
-                pick.get("picker"),
+                pick.get(
+                    "picker"
+                ),
                 "|",
-                pick.get("selection"),
+                pick.get(
+                    "selection"
+                ),
                 "|",
-                pick.get("result"),
+                pick.get(
+                    "result"
+                ),
                 "|",
-                pick.get("final_score"),
+                pick.get(
+                    "final_score"
+                ),
                 "| event:",
-                pick.get("event_id"),
+                pick.get(
+                    "event_id"
+                ),
             )
+
 
         else:
 
-            period = market_period(
-                bet_type
-            )
-
-            if period != (
-                "FULL_GAME"
-            ):
+            # A completed event was found, but a period score or
+            # another required exact value wasn't available.
+            if period != "FULL_GAME":
 
                 period_missing += 1
 
-                clear_grade(
-                    pick,
-                    "REVIEW",
-                )
-
                 print(
-                    "REVIEW - PERIOD DATA UNAVAILABLE:",
-                    pick.get("picker"),
+                    "PERIOD DATA UNAVAILABLE:",
+                    pick.get(
+                        "picker"
+                    ),
                     "|",
-                    pick.get("selection"),
-                    "|",
-                    period,
-                    "| event:",
-                    event.get("id"),
+                    pick.get(
+                        "selection"
+                    ),
                 )
 
             else:
@@ -3897,35 +3445,48 @@ def grade_open():
                 unmatched += 1
 
                 print(
-                    "GRADE FAILED:",
-                    pick.get("picker"),
-                    "|",
-                    pick.get("selection"),
-                    "|",
-                    final_score_text(
-                        event
+                    "GRADE FAILED CLOSED:",
+                    pick.get(
+                        "picker"
                     ),
-                    "| event:",
-                    event.get("id"),
+                    "|",
+                    pick.get(
+                        "selection"
+                    ),
                 )
+
+
+    # ========================================================
+    # 6. SAVE
+    # ========================================================
 
     save_json(
         PICKS_FILE,
         picks,
     )
 
+
     # ========================================================
-    # SUMMARY
+    # 7. SUMMARY
     # ========================================================
 
     print()
-
     print(
         "========== GRADING SUMMARY =========="
     )
 
     print(
-        "Safely graded:",
+        "Official Barstool results preserved:",
+        skipped_official,
+    )
+
+    print(
+        "Official rows with invalid result:",
+        official_invalid,
+    )
+
+    print(
+        "Safely ESPN graded:",
         graded,
     )
 
@@ -3961,63 +3522,8 @@ def grade_open():
         ),
     )
 
-    if pending_events:
-
-        print()
-
-        print(
-            "========== TRUE PENDING GAMES =========="
-        )
-
-        for (
-            event_id,
-            info,
-        ) in pending_events.items():
-
-            event = info[
-                "event"
-            ]
-
-            print(
-                "EVENT:",
-                event_id,
-                "|",
-                final_score_text(
-                    event
-                ),
-                "| status:",
-                event_status_name(
-                    event
-                ),
-                "| kickoff:",
-                event.get("date"),
-                "| tracked picks:",
-                len(
-                    info["picks"]
-                ),
-            )
-
-            for tracked in (
-                info["picks"]
-            ):
-
-                print(
-                    "   -",
-                    tracked[
-                        "picker"
-                    ],
-                    "|",
-                    tracked[
-                        "selection"
-                    ],
-                )
-
-        print(
-            "========================================"
-        )
-
     print(
-        "========================================"
+        "====================================="
     )
 
 
