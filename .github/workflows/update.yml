@@ -43,7 +43,9 @@ jobs:
               esac
               ;;
 
-            2) # Tuesday — no runs
+            2) # Tuesday — 
+            case "$HOUR" in
+                10, 12, 15, 20) RUN=true
               ;;
 
             3) # Wednesday
