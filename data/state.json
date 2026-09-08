@@ -1,6 +1,6 @@
 {
   "last_x_post_id": "2097368652068594097",
-  "updated_at": "2026-09-08T19:49:30.347911+00:00",
+  "updated_at": "2026-09-08T20:24:03.930413+00:00",
   "backfill_complete": true,
   "reply_backfill_complete": false,
   "reply_recovery_complete": true,
@@ -29,5 +29,5 @@
   ],
   "last_official_reconciled_week": 1,
   "last_official_result_post_id": "2097352674010165426",
-  "last_official_reconciled_at": "2026-09-08T19:31:51.421106+00:00"
+  "last_official_reconciled_at": "2026-09-08T20:24:03.929130+00:00"
 }
