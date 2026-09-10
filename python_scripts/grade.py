@@ -1682,30 +1682,84 @@ def selected_comp(
 # ============================================================
 
 def fetch_day_events(day):
+    """
+    Fetch the complete ESPN college-football slate for one day.
+
+    IMPORTANT:
+    ESPN's unfiltered college-football scoreboard can return only a
+    partial/default slate. To avoid missing perfectly valid Pick Em
+    games, request three views and merge them by event ID:
+
+      - default scoreboard
+      - FBS group 80
+      - FCS group 81
+
+    This keeps the resolver conservative. We are expanding the event
+    pool, not loosening team matching.
+    """
+
     datestring = (
         day.strftime(
             "%Y%m%d"
         )
     )
 
-    params = {
-        "dates":
-            datestring,
+    all_events = []
 
-        "limit":
-            1000,
-    }
+    # None = ESPN default view.
+    # 80   = FBS.
+    # 81   = FCS.
+    for group in (
+        None,
+        80,
+        81,
+    ):
 
-    payload = request_json(
-        ESPN_SCOREBOARD,
-        params,
-    )
+        params = {
+            "dates":
+                datestring,
 
-    return (
-        payload.get(
-            "events"
-        )
-        or []
+            "limit":
+                1000,
+        }
+
+        if group is not None:
+            params[
+                "groups"
+            ] = group
+
+        try:
+
+            payload = request_json(
+                ESPN_SCOREBOARD,
+                params,
+            )
+
+            events = (
+                payload.get(
+                    "events"
+                )
+                or []
+            )
+
+            all_events.extend(
+                events
+            )
+
+        except Exception as exc:
+
+            print(
+                "ESPN SCOREBOARD VIEW FAILED:",
+                datestring,
+                "| group:",
+                group if group is not None else "default",
+                "|",
+                exc,
+            )
+
+    # De-duplicate the three scoreboard views immediately.
+    return merge_events(
+        all_events
     )
 
 
