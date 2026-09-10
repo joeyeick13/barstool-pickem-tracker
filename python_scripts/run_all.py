@@ -12,26 +12,20 @@ if __name__ == "__main__":
         os.getenv("X_BEARER_TOKEN")
         and os.getenv("OPENAI_API_KEY")
     ):
-
         ingest()
 
     else:
-
         print(
             "Skipping X ingestion: "
             "secrets not configured"
         )
 
-
-    # Match every provisional pick to its ESPN game
-    # BEFORE grading so kickoff times and event IDs
-    # are available before the game begins.
+    # Match picks to ESPN and save kickoff/event ID
+    # before any grading happens.
     enrich_schedule()
 
-
-    # Grade completed games using the stored event ID.
+    # Grade completed games using the stored ESPN match.
     grade_open()
 
-
-    # Rebuild dashboard.
+    # Rebuild dashboard/site data.
     build()
