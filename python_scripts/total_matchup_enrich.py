@@ -29,28 +29,33 @@ TOTAL_MARKETS = {
 
 
 # ============================================================
-# VERIFIED SOURCE-CARD OVERRIDES
+# MANUALLY VERIFIED BARSTOOL CARD OVERRIDES
 #
-# These are used only when we have personally verified the
-# official Barstool graphic and the image model has shown that
-# it can misread similar abbreviations.
+# These are exact wagers we have visually confirmed from the
+# official @BarstoolPickEm graphic.
 #
-# Key:
-#   (season, week, picker, normalized selection)
+# Match primarily by:
+#   source_post_id + picker + selection
 #
-# This does NOT globally teach the system that USF means
-# anything else. It corrects only this exact verified wager.
+# This is safer than relying on season/week metadata because
+# historical rows may not always contain every metadata field.
 # ============================================================
 
-VERIFIED_MATCHUP_OVERRIDES = {
-    (
-        2026,
-        2,
-        "Rico Bosco",
-        "over 48.5",
-    ):
-        "USF @ BYU",
-}
+VERIFIED_MATCHUP_OVERRIDES = [
+    {
+        "source_post_id":
+            "2098104159572541853",
+
+        "picker":
+            "Rico Bosco",
+
+        "selection":
+            "Over 48.5",
+
+        "matchup":
+            "USF @ BYU",
+    },
+]
 
 
 def clean_text(value):
@@ -62,6 +67,20 @@ def clean_text(value):
         .replace("½", ".5")
         .strip()
     )
+
+
+def normalize_text(value):
+    value = clean_text(
+        value
+    ).lower()
+
+    value = re.sub(
+        r"\s+",
+        " ",
+        value,
+    )
+
+    return value.strip()
 
 
 def normalize_market(value):
@@ -83,63 +102,72 @@ def normalize_market(value):
     )
 
 
-def normalize_selection(value):
-    value = clean_text(
-        value
-    ).lower()
-
-    value = re.sub(
-        r"\s+",
-        " ",
-        value,
-    )
-
-    return value.strip()
-
-
-def safe_int(value):
-    try:
-        return int(value)
-
-    except Exception:
-        return None
-
-
 def verified_override_for_pick(
     pick
 ):
-    season = safe_int(
+    post_id = str(
         pick.get(
-            "season"
+            "source_post_id"
         )
-    )
+        or ""
+    ).strip()
 
-    week = safe_int(
-        pick.get(
-            "week"
-        )
-    )
-
-    picker = clean_text(
+    picker = normalize_text(
         pick.get(
             "picker"
         )
     )
 
-    selection = normalize_selection(
+    selection = normalize_text(
         pick.get(
             "selection"
         )
     )
 
-    return VERIFIED_MATCHUP_OVERRIDES.get(
-        (
-            season,
-            week,
-            picker,
-            selection,
+    for override in (
+        VERIFIED_MATCHUP_OVERRIDES
+    ):
+
+        override_post_id = str(
+            override.get(
+                "source_post_id"
+            )
+            or ""
+        ).strip()
+
+        override_picker = (
+            normalize_text(
+                override.get(
+                    "picker"
+                )
+            )
         )
-    )
+
+        override_selection = (
+            normalize_text(
+                override.get(
+                    "selection"
+                )
+            )
+        )
+
+        if (
+            post_id
+            == override_post_id
+
+            and picker
+            == override_picker
+
+            and selection
+            == override_selection
+        ):
+            return clean_text(
+                override.get(
+                    "matchup"
+                )
+            )
+
+    return None
 
 
 def side_and_line(
@@ -460,7 +488,7 @@ Wager: {selection}
 Stored matchup, which may be wrong: {existing_matchup or 'NONE'}
 Post text: {source_text or 'NONE'}
 
-IMPORTANT READING RULES:
+IMPORTANT:
 
 1. Use ONLY the words visible on the official card images.
 
@@ -469,28 +497,21 @@ IMPORTANT READING RULES:
 
 3. The matchup is the game heading DIRECTLY ABOVE that wager.
 
-4. Do not use a different game that happens to contain the same line.
+4. Do not infer the matchup from schedules, memory, or the stored value.
 
-5. Do not infer or autocorrect school abbreviations.
+5. Copy the school abbreviations exactly as they appear.
 
-6. Copy the abbreviations exactly as they appear on the card.
-
-7. Carefully distinguish abbreviations such as:
+6. Carefully distinguish:
    USF
    UofA
-   UGA
    Utah
    Utah ST
    ASU
+   USC
 
-8. If you cannot clearly read BOTH teams attached to this exact wager,
-   return found=false.
+7. If both teams cannot be read confidently, return found=false.
 
-9. Never use the currently stored matchup as evidence.
-
-10. Return JSON only.
-
-Return exactly:
+Return JSON only:
 
 {{
   "found": true or false,
@@ -603,11 +624,11 @@ def selection_matches(
     requested,
     returned,
 ):
-    req = normalize_selection(
+    req = normalize_text(
         requested
     )
 
-    got = normalize_selection(
+    got = normalize_text(
         returned
     )
 
@@ -677,16 +698,15 @@ def needs_total_context(
     ):
         return False
 
-    # Verified overrides are allowed to repair
-    # an existing incorrect matchup even if it
-    # has already been source-verified.
+    # Exact manually verified picks always
+    # get a chance to repair bad metadata.
     if verified_override_for_pick(
         pick
     ):
         return True
 
-    # Once ESPN has locked the event, never
-    # spend money reparsing the card.
+    # Already locked to ESPN = no need
+    # to re-read the card.
     if pick.get(
         "event_id"
     ):
@@ -759,11 +779,11 @@ def apply_matchup(
     )
 
     changed = (
-        normalize_selection(
+        normalize_text(
             old
         )
         !=
-        normalize_selection(
+        normalize_text(
             matchup
         )
     )
@@ -781,6 +801,7 @@ def apply_matchup(
     ] = now_iso()
 
     if changed:
+
         clear_stale_schedule_fields(
             pick
         )
@@ -861,10 +882,10 @@ def enrich_total_matchups():
             )
         )
 
-        # ----------------------------------------------------
-        # FIRST PRIORITY:
-        # exact source-card values we have manually verified.
-        # ----------------------------------------------------
+        # ====================================================
+        # PRIORITY 1:
+        # exact manually verified Barstool graphic.
+        # ====================================================
 
         override = (
             verified_override_for_pick(
@@ -919,6 +940,11 @@ def enrich_total_matchups():
                 )
 
             continue
+
+        # ====================================================
+        # PRIORITY 2:
+        # image verification for future unmatched totals.
+        # ====================================================
 
         post_id = str(
             pick.get(
