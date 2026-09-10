@@ -2208,10 +2208,10 @@
     "game_time": "2026-09-12T16:00Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Michigan vs Oklahoma",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:04.336147+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:37.961337+00:00"
   },
   {
     "picker": "Rico Bosco",
@@ -2246,10 +2246,10 @@
     "game_time": "2026-09-12T16:00Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Army vs South Florida",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:04.492609+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:37.961373+00:00"
   },
   {
     "picker": "Rico Bosco",
@@ -2284,10 +2284,10 @@
     "game_time": "2026-09-12T16:00Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Texas A&M vs Arizona St",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:04.945118+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:37.961391+00:00"
   },
   {
     "picker": "Rico Bosco",
@@ -2322,10 +2322,10 @@
     "game_time": "2026-09-12T16:00Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Oklahoma St vs Oregon",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:05.101764+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:37.961407+00:00"
   },
   {
     "picker": "Rico Bosco",
@@ -2360,10 +2360,10 @@
     "game_time": "2026-09-12T16:00Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Purdue vs Wake Forest",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:05.259516+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:37.961422+00:00"
   },
   {
     "picker": "Rico Bosco",
@@ -2398,10 +2398,10 @@
     "game_time": "2026-09-12T19:30Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Kentucky vs Alabama",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:05.418849+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:37.961437+00:00"
   },
   {
     "picker": "Rico Bosco",
@@ -2439,7 +2439,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:05.575669+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:38.187428+00:00"
   },
   {
     "picker": "Rico Bosco",
@@ -2474,10 +2474,10 @@
     "game_time": "2026-09-12T19:30Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Minnesota vs Mississippi St",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:05.732746+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:38.187492+00:00"
   },
   {
     "picker": "Rico Bosco",
@@ -2512,10 +2512,10 @@
     "game_time": "2026-09-12T19:30Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Washington vs Utah State",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:05.889158+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:38.187510+00:00"
   },
   {
     "picker": "Rico Bosco",
@@ -2553,7 +2553,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:06.344927+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:38.843594+00:00"
   },
   {
     "picker": "Rico Bosco",
@@ -2591,7 +2591,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:06.501955+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:39.068453+00:00"
   },
   {
     "picker": "Rico Bosco",
@@ -2629,7 +2629,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:06.961188+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:39.720665+00:00"
   },
   {
     "picker": "Rico Bosco",
@@ -2667,7 +2667,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:07.419386+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:40.372664+00:00"
   },
   {
     "picker": "Rico Bosco",
@@ -2705,7 +2705,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:07.577571+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:40.597923+00:00"
   },
   {
     "picker": "Rico Bosco",
@@ -2740,10 +2740,10 @@
     "game_time": "2026-09-12T00:00Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Kansas vs Missouri",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:07.736538+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:40.597991+00:00"
   },
   {
     "picker": "Rico Bosco",
@@ -2781,7 +2781,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:08.185089+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:41.257074+00:00"
   },
   {
     "picker": "Stool Presidente",
@@ -2816,10 +2816,10 @@
     "game_time": "2026-09-11T23:30Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Boston College vs Rutgers",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:08.349514+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:41.257145+00:00"
   },
   {
     "picker": "Stool Presidente",
@@ -2854,10 +2854,10 @@
     "game_time": "2026-09-12T16:00Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Michigan vs Oklahoma",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:08.504609+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:41.257175+00:00"
   },
   {
     "picker": "Stool Presidente",
@@ -2892,10 +2892,10 @@
     "game_time": "2026-09-12T16:00Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Texas A&M vs Arizona St",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:08.956111+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:41.257190+00:00"
   },
   {
     "picker": "Stool Presidente",
@@ -2930,10 +2930,10 @@
     "game_time": "2026-09-12T16:00Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Oklahoma St vs Oregon",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:09.112286+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:41.257205+00:00"
   },
   {
     "picker": "Stool Presidente",
@@ -2968,10 +2968,10 @@
     "game_time": "2026-09-12T16:00Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Oklahoma St vs Oregon",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:09.268120+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:41.257218+00:00"
   },
   {
     "picker": "Stool Presidente",
@@ -3006,10 +3006,10 @@
     "game_time": "2026-09-12T19:30Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Kentucky vs Alabama",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:09.423391+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:41.257232+00:00"
   },
   {
     "picker": "Stool Presidente",
@@ -3044,10 +3044,10 @@
     "game_time": "2026-09-12T19:30Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "BYU vs Arizona",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:09.874837+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:41.257246+00:00"
   },
   {
     "picker": "Stool Presidente",
@@ -3085,7 +3085,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:10.325192+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:41.899772+00:00"
   },
   {
     "picker": "Stool Presidente",
@@ -3123,7 +3123,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:10.776091+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:42.543222+00:00"
   },
   {
     "picker": "Stool Presidente",
@@ -3161,7 +3161,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:11.225903+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:43.187344+00:00"
   },
   {
     "picker": "Stool Presidente",
@@ -3199,7 +3199,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:11.677406+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:43.831644+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3237,7 +3237,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:12.129515+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:44.477981+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3275,7 +3275,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:12.581229+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:45.123251+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3313,7 +3313,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:13.035049+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:45.772109+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3351,7 +3351,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:13.489967+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:46.421603+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3389,7 +3389,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:13.945205+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:47.072330+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3427,7 +3427,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:14.400389+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:47.722967+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3465,7 +3465,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:14.852357+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:48.374766+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3503,7 +3503,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:15.302925+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:49.025999+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3538,10 +3538,10 @@
     "game_time": "2026-09-12T00:00Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Kansas vs Missouri",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:15.459986+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:49.026065+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3579,7 +3579,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:15.910985+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:49.678980+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3614,10 +3614,10 @@
     "game_time": "2026-09-11T23:30Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Boston College vs Rutgers",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:16.067532+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:49.679047+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3652,10 +3652,10 @@
     "game_time": "2026-09-12T16:00Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Michigan vs Oklahoma",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:16.224005+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:49.679065+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3690,10 +3690,10 @@
     "game_time": "2026-09-12T16:00Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Temple vs Penn State",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:16.381158+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:49.679080+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3728,10 +3728,10 @@
     "game_time": "2026-09-12T16:00Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Virginia Tech vs Old Dominion",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:16.538972+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:49.679096+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3766,10 +3766,10 @@
     "game_time": "2026-09-12T16:00Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Oklahoma St vs Oregon",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:16.694752+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:49.679111+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3804,10 +3804,10 @@
     "game_time": "2026-09-12T19:30Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Kentucky vs Alabama",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:16.851835+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:49.679125+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3842,10 +3842,10 @@
     "game_time": "2026-09-12T19:30Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "BYU vs Arizona",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:17.008674+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:49.679138+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3880,10 +3880,10 @@
     "game_time": "2026-09-12T19:30Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Syracuse vs California",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:17.165087+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:49.679161+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3921,7 +3921,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:17.615529+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:50.331685+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3959,7 +3959,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:18.063288+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:50.985949+00:00"
   },
   {
     "picker": "Big Cat",
@@ -3997,7 +3997,7 @@
     "game_match_confidence": "NONE",
     "game_match_source": "ESPN",
     "game_match_review_reason": "NO_CONFIDENT_EVENT_MATCH",
-    "schedule_checked_at": "2026-09-10T22:23:18.063683+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:50.986420+00:00"
   },
   {
     "picker": "Rico Bosco",
@@ -4032,9 +4032,9 @@
     "game_time": "2026-09-12T16:00Z",
     "game_match_status": "MATCHED",
     "game_match_source": "ESPN",
-    "game_match_confidence": "EXACT",
+    "game_match_confidence": "LOCKED",
     "game_matchup": "Army vs South Florida",
     "game_match_review_reason": null,
-    "schedule_checked_at": "2026-09-10T22:23:18.204560+00:00"
+    "schedule_checked_at": "2026-09-10T22:28:50.986451+00:00"
   }
 ]
