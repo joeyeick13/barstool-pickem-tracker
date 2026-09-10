@@ -81,6 +81,67 @@ ALIASES = {
         "aub",
     },
 
+    "bowling green": {
+        "bowling green",
+        "bowling green state",
+        "bowling green st",
+        "bgsu",
+    },
+
+    "delaware": {
+        "delaware",
+        "del",
+    },
+
+    "eastern michigan": {
+        "eastern michigan",
+        "eastern mich",
+        "emu",
+    },
+
+    "florida atlantic": {
+        "florida atlantic",
+        "fau",
+    },
+
+    "georgia southern": {
+        "georgia southern",
+        "ga southern",
+    },
+
+    "maryland": {
+        "maryland",
+        "md",
+    },
+
+    "navy": {
+        "navy",
+    },
+
+    "nebraska": {
+        "nebraska",
+        "neb",
+    },
+
+    "sacramento state": {
+        "sacramento state",
+        "sacramento st",
+        "sac state",
+        "sac st",
+    },
+
+    "sam houston": {
+        "sam houston",
+        "sam houston state",
+        "sam houston st",
+        "shsu",
+    },
+
+    "vanderbilt": {
+        "vanderbilt",
+        "vandy",
+    },
+
     "ball state": {
         "ball state",
         "ball st",
@@ -1729,6 +1790,83 @@ def fetch_day_events(day):
     )
 
 
+def fetch_date_range_events(
+    start,
+    end,
+):
+    """
+    Fetch ESPN's date-range college-football slate for the exact Pick Em
+    calendar window. This avoids assuming Barstool Pick Em week numbers
+    equal ESPN's own college-football week numbers.
+
+    We request default, FBS group 80, and FCS group 81, then merge by
+    ESPN event ID. Matching rules remain unchanged and conservative.
+    """
+
+    datestring = (
+        f"{start.strftime('%Y%m%d')}-"
+        f"{end.strftime('%Y%m%d')}"
+    )
+
+    all_events = []
+
+    for group in (
+        None,
+        80,
+        81,
+    ):
+
+        params = {
+            "dates": datestring,
+            "limit": 1000,
+        }
+
+        if group is not None:
+            params["groups"] = group
+
+        try:
+            payload = request_json(
+                ESPN_SCOREBOARD,
+                params,
+            )
+
+            events = (
+                payload.get("events")
+                or []
+            )
+
+            print(
+                "ESPN DATE-RANGE VIEW:",
+                datestring,
+                "| group:",
+                (
+                    group
+                    if group is not None
+                    else "default"
+                ),
+                "| events:",
+                len(events),
+            )
+
+            all_events.extend(events)
+
+        except Exception as exc:
+            print(
+                "ESPN DATE-RANGE VIEW FAILED:",
+                datestring,
+                "| group:",
+                (
+                    group
+                    if group is not None
+                    else "default"
+                ),
+                "|",
+                exc,
+            )
+
+    return merge_events(all_events)
+
+
 def event_quality(event):
     score = 0
 
@@ -1918,20 +2056,21 @@ def build_complete_week_slate(
 
     Sources merged:
 
-      1. Every calendar day inside our Pick Em week window
+      1. Every calendar day inside our verified Pick Em week window
          - ESPN default scoreboard
          - FBS group 80
          - FCS group 81
 
-      2. ESPN's own week-based scoreboard
+      2. ESPN date-range scoreboard for that exact same calendar window
          - ESPN default scoreboard
          - FBS group 80
          - FCS group 81
 
-    Events are de-duplicated by ESPN event ID.
+    We intentionally do NOT assume Barstool Pick Em week numbers match
+    ESPN's own week numbers. Events are de-duplicated by ESPN event ID.
 
-    Matching remains conservative. This function only gives the
-    resolver a more complete set of legitimate ESPN events.
+    Matching remains conservative. This function only expands the pool
+    of legitimate ESPN events available to the existing resolver.
     """
 
     start, end = week_window(
@@ -1944,19 +2083,13 @@ def build_complete_week_slate(
     current = start
 
     while current <= end:
-
         try:
-
             events = fetch_day_events(
                 current
             )
-
-            all_events.extend(
-                events
-            )
+            all_events.extend(events)
 
         except Exception as exc:
-
             print(
                 "ESPN DAY FETCH FAILED:",
                 current,
@@ -1964,9 +2097,7 @@ def build_complete_week_slate(
                 exc,
             )
 
-        current += timedelta(
-            days=1
-        )
+        current += timedelta(days=1)
 
     daily_merged = merge_events(
         all_events
@@ -1974,35 +2105,27 @@ def build_complete_week_slate(
 
     print(
         "Date-based slate:",
-        len(
-            daily_merged
-        ),
+        len(daily_merged),
         "unique events",
     )
 
     try:
-
-        week_events = fetch_week_events(
-            season_year,
-            week,
+        range_events = fetch_date_range_events(
+            start,
+            end,
         )
 
         print(
-            "Week-based slate:",
-            len(
-                week_events
-            ),
+            "Date-range slate:",
+            len(range_events),
             "unique events",
         )
 
-        all_events.extend(
-            week_events
-        )
+        all_events.extend(range_events)
 
     except Exception as exc:
-
         print(
-            "ESPN WEEK FETCH FAILED:",
+            "ESPN DATE-RANGE FETCH FAILED:",
             season_year,
             "Week",
             week,
@@ -2022,9 +2145,7 @@ def build_complete_week_slate(
 
     print(
         "Combined complete slate:",
-        len(
-            merged
-        ),
+        len(merged),
         "unique events",
     )
 
