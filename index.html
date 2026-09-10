@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Barstool Pick Em Tracker</title>
-
 <style>
 :root{
   --bg:#090b0f;
@@ -24,97 +23,29 @@
   --barstoolSoft:rgba(237,28,36,.10);
   --barstoolBorder:rgba(237,28,36,.65);
 }
-
-*{
-  box-sizing:border-box;
-}
-
-html,
-body{
-  background:var(--bg);
-}
-
+*{box-sizing:border-box}
+html,body{background:var(--bg)}
 body{
   margin:0;
   color:var(--text);
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
 }
-
-button{
-  font:inherit;
-}
-
-button,
-.card,
-.weekRow{
-  -webkit-tap-highlight-color:transparent;
-}
-
+button{font:inherit}
+button,.card,.weekRow{-webkit-tap-highlight-color:transparent}
 .shell{
   max-width:1050px;
   margin:auto;
   padding:max(20px,env(safe-area-inset-top)) 16px 52px;
 }
-
-.header{
-  margin-bottom:17px;
-}
-
-.headerTop{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:18px;
-}
-
-.headerCopy{
-  min-width:0;
-}
-
-.eyebrow{
-  font-size:11px;
-  letter-spacing:.17em;
-  color:var(--muted);
-  font-weight:900;
-}
-
-h1{
-  margin:5px 0 0;
-  font-size:clamp(29px,7vw,46px);
-  letter-spacing:-.045em;
-  line-height:1;
-}
-
-.brandLogo{
-  flex:0 0 auto;
-  width:92px;
-  height:92px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  overflow:hidden;
-}
-
-.brandLogo img{
-  display:block;
-  width:100%;
-  height:100%;
-  object-fit:contain;
-}
-
-.statusStrip{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  margin-top:14px;
-  overflow-x:auto;
-  scrollbar-width:none;
-}
-
-.statusStrip::-webkit-scrollbar{
-  display:none;
-}
-
+.header{margin-bottom:17px}
+.headerTop{display:flex;align-items:center;justify-content:space-between;gap:18px}
+.headerCopy{min-width:0}
+.eyebrow{font-size:11px;letter-spacing:.17em;color:var(--muted);font-weight:900}
+h1{margin:5px 0 0;font-size:clamp(29px,7vw,46px);letter-spacing:-.045em;line-height:1}
+.brandLogo{flex:0 0 auto;width:92px;height:92px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.brandLogo img{display:block;width:100%;height:100%;object-fit:contain}
+.statusStrip{display:flex;align-items:center;gap:8px;margin-top:14px;overflow-x:auto;scrollbar-width:none}
+.statusStrip::-webkit-scrollbar{display:none}
 .statusPill{
   flex:0 0 auto;
   display:flex;
@@ -128,60 +59,16 @@ h1{
   font-weight:800;
   color:var(--muted);
 }
-
-.statusPill strong{
-  color:var(--text);
-}
-
-.statusPill.weekAccent{
-  border-color:var(--barstoolBorder);
-  background:var(--barstoolSoft);
-}
-
-.statusPill.weekAccent strong{
-  color:#fff;
-}
-
-.dot{
-  width:6px;
-  height:6px;
-  border-radius:50%;
-  background:var(--muted);
-}
-
-.dot.good{
-  background:var(--good);
-}
-
-.dot.open{
-  background:var(--gold);
-}
-
-.metricHead{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  margin:2px 0 10px;
-}
-
-.metricHead h2{
-  margin:0;
-  font-size:18px;
-  letter-spacing:-.02em;
-}
-
-.metricHead span{
-  color:var(--muted);
-  font-size:11px;
-}
-
-.cards{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:12px;
-}
-
+.statusPill strong{color:var(--text)}
+.statusPill.weekAccent{border-color:var(--barstoolBorder);background:var(--barstoolSoft)}
+.statusPill.weekAccent strong{color:#fff}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--muted)}
+.dot.good{background:var(--good)}
+.dot.open{background:var(--gold)}
+.metricHead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 10px}
+.metricHead h2{margin:0;font-size:18px;letter-spacing:-.02em}
+.metricHead span{color:var(--muted);font-size:11px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .card{
   position:relative;
   border:1px solid var(--border);
@@ -192,15 +79,8 @@ h1{
   cursor:pointer;
   transition:border-color .15s ease,transform .15s ease;
 }
-
-.card:active{
-  transform:scale(.99);
-}
-
-.card.leader{
-  border-color:rgba(246,200,95,.55);
-}
-
+.card:active{transform:scale(.99)}
+.card.leader{border-color:rgba(246,200,95,.55)}
 .leaderTag{
   position:absolute;
   top:13px;
@@ -217,7 +97,6 @@ h1{
   letter-spacing:.08em;
   font-weight:900;
 }
-
 .rankTag{
   display:inline-flex;
   align-items:center;
@@ -232,112 +111,23 @@ h1{
   font-weight:900;
   margin-bottom:10px;
 }
-
-.rankTag.first{
-  color:var(--gold);
-  border-color:rgba(246,200,95,.4);
-  background:rgba(246,200,95,.08);
-}
-
-.name{
-  font-size:14px;
-  font-weight:900;
-  letter-spacing:.035em;
-  padding-right:50px;
-}
-
-.record{
-  font-size:38px;
-  line-height:1;
-  font-weight:950;
-  letter-spacing:-.05em;
-  margin:14px 0 5px;
-}
-
-.pct{
-  font-size:15px;
-  font-weight:850;
-}
-
-.section{
-  margin-top:14px;
-  border:1px solid var(--border);
-  background:var(--panel);
-  border-radius:20px;
-  overflow:hidden;
-}
-
-.sectionInner{
-  padding:17px;
-}
-
-.sectionHead{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:12px;
-  margin-bottom:6px;
-}
-
-.sectionHead h2{
-  margin:0;
-  font-size:19px;
-  letter-spacing:-.02em;
-}
-
-.sectionHead span{
-  color:var(--muted);
-  font-size:11px;
-  padding-top:3px;
-}
-
-.chartWrap{
-  width:100%;
-  overflow:hidden;
-}
-
-#race{
-  display:block;
-  width:100%;
-  height:auto;
-}
-
-.grid{
-  stroke:#2a323d;
-  stroke-width:1;
-}
-
-.axistext{
-  fill:#828d9c;
-  font-size:10px;
-}
-
-.line{
-  fill:none;
-  stroke-width:3.5;
-  stroke-linecap:round;
-  stroke-linejoin:round;
-}
-
-.endpct{
-  fill:#f5f7fa;
-  font-weight:900;
-  font-size:11px;
-}
-
-.avatarText{
-  fill:#090b0f;
-  font-size:9px;
-  font-weight:950;
-  text-anchor:middle;
-  dominant-baseline:central;
-}
-
-.weekBoard{
-  display:grid;
-  gap:0;
-}
-
+.rankTag.first{color:var(--gold);border-color:rgba(246,200,95,.4);background:rgba(246,200,95,.08)}
+.name{font-size:14px;font-weight:900;letter-spacing:.035em;padding-right:50px}
+.record{font-size:38px;line-height:1;font-weight:950;letter-spacing:-.05em;margin:14px 0 5px}
+.pct{font-size:15px;font-weight:850}
+.section{margin-top:14px;border:1px solid var(--border);background:var(--panel);border-radius:20px;overflow:hidden}
+.sectionInner{padding:17px}
+.sectionHead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px}
+.sectionHead h2{margin:0;font-size:19px;letter-spacing:-.02em}
+.sectionHead span{color:var(--muted);font-size:11px;padding-top:3px}
+.chartWrap{width:100%;overflow:hidden}
+#race{display:block;width:100%;height:auto}
+.grid{stroke:#2a323d;stroke-width:1}
+.axistext{fill:#828d9c;font-size:10px}
+.line{fill:none;stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round}
+.endpct{fill:#f5f7fa;font-weight:900;font-size:11px}
+.avatarText{fill:#090b0f;font-size:9px;font-weight:950;text-anchor:middle;dominant-baseline:central}
+.weekBoard{display:grid;gap:0}
 .weekRow{
   display:grid;
   grid-template-columns:34px minmax(0,1fr) auto;
@@ -347,20 +137,9 @@ h1{
   border-bottom:1px solid var(--border);
   cursor:pointer;
 }
-
-.weekRow:last-child{
-  border-bottom:0;
-  padding-bottom:0;
-}
-
-.weekRow:first-child{
-  padding-top:6px;
-}
-
-.weekRow:active{
-  opacity:.8;
-}
-
+.weekRow:last-child{border-bottom:0;padding-bottom:0}
+.weekRow:first-child{padding-top:6px}
+.weekRow:active{opacity:.8}
 .rank{
   display:flex;
   align-items:center;
@@ -374,43 +153,12 @@ h1{
   font-size:11px;
   font-weight:900;
 }
-
-.rank.first{
-  border-color:rgba(246,200,95,.4);
-  color:var(--gold);
-  background:rgba(246,200,95,.08);
-}
-
-.weekName{
-  min-width:0;
-}
-
-.weekName strong{
-  display:block;
-  font-size:13px;
-}
-
-.weekName span{
-  display:block;
-  margin-top:2px;
-  color:var(--muted);
-  font-size:10px;
-}
-
-.weekRecord{
-  text-align:right;
-  font-size:19px;
-  font-weight:950;
-  letter-spacing:-.03em;
-}
-
-.weekPct{
-  margin-top:2px;
-  color:var(--muted);
-  font-size:10px;
-  font-weight:700;
-}
-
+.rank.first{border-color:rgba(246,200,95,.4);color:var(--gold);background:rgba(246,200,95,.08)}
+.weekName{min-width:0}
+.weekName strong{display:block;font-size:13px}
+.weekName span{display:block;margin-top:2px;color:var(--muted);font-size:10px}
+.weekRecord{text-align:right;font-size:19px;font-weight:950;letter-spacing:-.03em}
+.weekPct{margin-top:2px;color:var(--muted);font-size:10px;font-weight:700}
 .fullbtn{
   width:100%;
   margin-top:14px;
@@ -423,51 +171,15 @@ h1{
   font-size:15px;
   cursor:pointer;
 }
-
-.fullbtn:active{
-  transform:scale(.995);
-}
-
-.view{
-  display:none;
-}
-
-.view.active{
-  display:block;
-}
-
-.back{
-  border:0;
-  background:transparent;
-  color:var(--text);
-  padding:5px 0 15px;
-  font-weight:850;
-  cursor:pointer;
-}
-
-.weeks,
-.filters{
-  display:flex;
-  gap:7px;
-  overflow-x:auto;
-  scrollbar-width:none;
-}
-
-.weeks{
-  padding:3px 0 11px;
-}
-
-.filters{
-  padding:0 0 16px;
-}
-
-.weeks::-webkit-scrollbar,
-.filters::-webkit-scrollbar{
-  display:none;
-}
-
-.weekbtn,
-.filterbtn{
+.fullbtn:active{transform:scale(.995)}
+.view{display:none}
+.view.active{display:block}
+.back{border:0;background:transparent;color:var(--text);padding:5px 0 15px;font-weight:850;cursor:pointer}
+.weeks,.filters{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
+.weeks{padding:3px 0 11px}
+.filters{padding:0 0 16px}
+.weeks::-webkit-scrollbar,.filters::-webkit-scrollbar{display:none}
+.weekbtn,.filterbtn{
   border:1px solid var(--border);
   background:var(--panel);
   color:var(--muted);
@@ -478,64 +190,16 @@ h1{
   font-size:12px;
   cursor:pointer;
 }
-
-.weekbtn.active{
-  background:var(--barstool);
-  border-color:var(--barstool);
-  color:#fff;
-}
-
-.filterbtn.active{
-  background:var(--text);
-  border-color:var(--text);
-  color:var(--bg);
-}
-
-.pickerBlock{
-  margin:0 0 14px;
-  border:1px solid var(--border);
-  border-radius:18px;
-  overflow:hidden;
-  background:var(--panel);
-}
-
-.pickerTitle{
-  padding:14px 15px;
-  border-bottom:1px solid var(--border);
-  display:flex;
-  justify-content:space-between;
-  gap:12px;
-  font-weight:900;
-}
-
-.pickerTitle span:last-child{
-  color:var(--muted);
-}
-
-.pick{
-  display:grid;
-  grid-template-columns:1fr auto;
-  gap:12px;
-  padding:13px 15px;
-  border-bottom:1px solid var(--border);
-}
-
-.pick:last-child{
-  border-bottom:0;
-}
-
-.sel{
-  font-weight:850;
-  line-height:1.3;
-}
-
-.meta{
-  font-size:11px;
-  color:var(--muted);
-  margin-top:5px;
-  line-height:1.5;
-}
-
+.weekbtn.active{background:var(--barstool);border-color:var(--barstool);color:#fff}
+.filterbtn.active{background:var(--text);border-color:var(--text);color:var(--bg)}
+.pickerBlock{margin:0 0 14px;border:1px solid var(--border);border-radius:18px;overflow:hidden;background:var(--panel)}
+.pickerTitle{padding:14px 15px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:12px;font-weight:900}
+.pickerTitle span:last-child{color:var(--muted)}
+.pick{display:grid;grid-template-columns:1fr auto;gap:12px;padding:13px 15px;border-bottom:1px solid var(--border)}
+.pick:last-child{border-bottom:0}
+.matchup{font-size:12px;color:var(--muted);font-weight:750;margin-bottom:4px;line-height:1.35}
+.sel{font-weight:850;line-height:1.3}
+.meta{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.5}
 .badge{
   display:inline-block;
   border:1px solid var(--border2);
@@ -545,2043 +209,521 @@ h1{
   font-size:9px;
   font-weight:850;
 }
-
-.result{
-  font-size:19px;
-  align-self:center;
-}
-
-.empty{
-  padding:18px;
-  color:var(--muted);
-  font-size:12px;
-}
-
+.result{font-size:19px;align-self:center}
+.empty{padding:18px;color:var(--muted);font-size:12px}
 @media(max-width:680px){
-
-  .shell{
-    padding-left:16px;
-    padding-right:16px;
-  }
-
-  .brandLogo{
-    width:88px;
-    height:88px;
-  }
-
-  .cards{
-    grid-template-columns:1fr;
-  }
-
+  .shell{padding-left:16px;padding-right:16px}
+  .brandLogo{width:88px;height:88px}
+  .cards{grid-template-columns:1fr}
   .card{
     display:grid;
     grid-template-columns:1fr auto;
-    grid-template-areas:
-      "rank rank"
-      "name record"
-      "pct record";
+    grid-template-areas:"rank rank" "name record" "pct record";
     align-items:center;
     padding:16px;
   }
-
-  .rankTag{
-    grid-area:rank;
-    justify-self:start;
-    margin-bottom:8px;
-  }
-
-  .name{
-    grid-area:name;
-  }
-
-  .record{
-    grid-area:record;
-    margin:0;
-    padding-left:12px;
-    font-size:34px;
-  }
-
-  .pct{
-    grid-area:pct;
-    margin-top:3px;
-  }
-
-  .leaderTag{
-    top:10px;
-    right:10px;
-  }
-
-  .sectionInner{
-    padding:15px;
-  }
+  .rankTag{grid-area:rank;justify-self:start;margin-bottom:8px}
+  .name{grid-area:name}
+  .record{grid-area:record;margin:0;padding-left:12px;font-size:34px}
+  .pct{grid-area:pct;margin-top:3px}
+  .leaderTag{top:10px;right:10px}
+  .sectionInner{padding:15px}
 }
-
 @media(min-width:681px){
-
-  .card:hover{
-    border-color:var(--border2);
-  }
-
-  .weekRow:hover{
-    opacity:.9;
-  }
+  .card:hover{border-color:var(--border2)}
+  .weekRow:hover{opacity:.9}
 }
 </style>
 </head>
-
 <body>
-
 <main class="shell">
 
 <section id="overview" class="view active">
-
   <header class="header">
-
     <div class="headerTop">
-
       <div class="headerCopy">
-
-        <div
-          id="seasonLabel"
-          class="eyebrow"
-        >
-          2026 SEASON
-        </div>
-
-        <h1>
-          Barstool Pick Em
-        </h1>
-
+        <div id="seasonLabel" class="eyebrow">2026 SEASON</div>
+        <h1>Barstool Pick Em</h1>
       </div>
-
-      <div
-        class="brandLogo"
-        aria-label="Barstool Sports"
-      >
-        <img
-          src="assets/IMG_1101.png"
-          alt="Barstool Sports"
-        >
+      <div class="brandLogo" aria-label="Barstool Sports">
+        <img src="assets/IMG_1101.png" alt="Barstool Sports">
       </div>
-
     </div>
-
-    <div
-      id="statusStrip"
-      class="statusStrip"
-    ></div>
-
+    <div id="statusStrip" class="statusStrip"></div>
   </header>
-
 
   <div class="metricHead">
-
-    <h2>
-      Overall
-    </h2>
-
-    <span>
-      Season record
-    </span>
-
+    <h2>Overall</h2>
+    <span>Season record</span>
   </div>
-
-
-  <div
-    id="cards"
-    class="cards"
-  ></div>
-
+  <div id="cards" class="cards"></div>
 
   <section class="section">
-
     <div class="sectionInner">
-
       <div class="sectionHead">
-
-        <h2>
-          Season Race
-        </h2>
-
-        <span>
-          Cumulative win %
-        </span>
-
+        <h2>Season Race</h2>
+        <span>Cumulative win %</span>
       </div>
-
       <div class="chartWrap">
-
-        <svg
-          id="race"
-          viewBox="0 0 900 280"
-          role="img"
-          aria-label="Cumulative win percentage by week"
-        ></svg>
-
+        <svg id="race" viewBox="0 0 900 280" role="img" aria-label="Cumulative win percentage by week"></svg>
       </div>
-
     </div>
-
   </section>
-
 
   <section class="section">
-
     <div class="sectionInner">
-
       <div class="sectionHead">
-
-        <h2 id="weekBoardTitle">
-          This Week
-        </h2>
-
-        <span>
-          Weekly leaderboard
-        </span>
-
+        <h2 id="weekBoardTitle">This Week</h2>
+        <span>Weekly leaderboard</span>
       </div>
-
-      <div
-        id="weekBoard"
-        class="weekBoard"
-      ></div>
-
+      <div id="weekBoard" class="weekBoard"></div>
     </div>
-
   </section>
 
-
-  <button
-    id="openCards"
-    class="fullbtn"
-  >
-    Full Card View →
-  </button>
-
+  <button id="openCards" class="fullbtn">Full Card View →</button>
 </section>
 
-
-
 <section id="full" class="view">
-
-  <button
-    id="back"
-    class="back"
-  >
-    ← Overview
-  </button>
-
-
+  <button id="back" class="back">← Overview</button>
   <header class="header">
-
     <div class="headerTop">
-
       <div>
-
-        <div class="eyebrow">
-          2026 SEASON
-        </div>
-
-        <h1>
-          Full Card View
-        </h1>
-
+        <div class="eyebrow">2026 SEASON</div>
+        <h1>Full Card View</h1>
       </div>
-
-
-      <div
-        class="brandLogo"
-        aria-label="Barstool Sports"
-      >
-
-        <img
-          src="assets/IMG_1101.png"
-          alt="Barstool Sports"
-        >
-
+      <div class="brandLogo" aria-label="Barstool Sports">
+        <img src="assets/IMG_1101.png" alt="Barstool Sports">
       </div>
-
     </div>
-
   </header>
-
-
-  <div
-    id="weeks"
-    class="weeks"
-  ></div>
-
-
-  <div
-    id="filters"
-    class="filters"
-  ></div>
-
-
-  <div
-    id="cardBody"
-  ></div>
-
+  <div id="weeks" class="weeks"></div>
+  <div id="filters" class="filters"></div>
+  <div id="cardBody"></div>
 </section>
 
 </main>
 
-
 <script>
-
-const PICKERS = [
-  "Big Cat",
-  "Stool Presidente",
-  "Rico Bosco"
-];
-
-
-const COLORS = {
-
-  "Big Cat":
-    "#67a9ff",
-
-  "Stool Presidente":
-    "#ff6b6b",
-
-  "Rico Bosco":
-    "#f6c85f"
+const PICKERS=["Big Cat","Stool Presidente","Rico Bosco"];
+const COLORS={
+  "Big Cat":"#67a9ff",
+  "Stool Presidente":"#ff6b6b",
+  "Rico Bosco":"#f6c85f"
+};
+const INITIALS={
+  "Big Cat":"BC",
+  "Stool Presidente":"DP",
+  "Rico Bosco":"RB"
 };
 
+let DATA={cappers:[],win_pct_history:{},weeks:[],picks:[]};
+let selectedWeek=null;
+let selectedFilter="All";
+const $=selector=>document.querySelector(selector);
 
-const INITIALS = {
-
-  "Big Cat":
-    "BC",
-
-  "Stool Presidente":
-    "DP",
-
-  "Rico Bosco":
-    "RB"
-};
-
-
-let DATA = {
-  cappers:[],
-  win_pct_history:{},
-  weeks:[],
-  picks:[]
-};
-
-
-let selectedWeek = null;
-
-let selectedFilter =
-  "All";
-
-
-const $ = selector =>
-  document.querySelector(
-    selector
-  );
-
-
-
-function recordFromValues(
-  wins,
-  losses,
-  pushes
-){
-
-  return (
-    `${wins || 0}-${losses || 0}`
-    + (
-      pushes
-        ? `-${pushes}`
-        : ""
-    )
-  );
+function recordFromValues(wins,losses,pushes){
+  return `${wins||0}-${losses||0}${pushes?`-${pushes}`:""}`;
 }
-
-
 
 function record(c){
-
-  return recordFromValues(
-    c.wins,
-    c.losses,
-    c.pushes
-  );
+  return recordFromValues(c.wins,c.losses,c.pushes);
 }
-
-
 
 function finalized(p){
-
-  return (
-    p.status === "FINAL"
-    &&
-    [
-      "WIN",
-      "LOSS",
-      "PUSH"
-    ].includes(
-      p.result
-    )
-  );
+  return p.status==="FINAL" && ["WIN","LOSS","PUSH"].includes(p.result);
 }
 
-
-
-function statsForPicks(
-  picks
-){
-
-  const finals =
-    picks.filter(
-      finalized
-    );
-
-
-  const wins =
-    finals.filter(
-      p =>
-        p.result === "WIN"
-    ).length;
-
-
-  const losses =
-    finals.filter(
-      p =>
-        p.result === "LOSS"
-    ).length;
-
-
-  const pushes =
-    finals.filter(
-      p =>
-        p.result === "PUSH"
-    ).length;
-
-
-  const pct =
-    wins + losses
-      ? wins /
-        (
-          wins + losses
-        )
-        * 100
-      : 0;
-
-
-  return {
-    wins,
-    losses,
-    pushes,
-    pct,
-    finals:
-      finals.length
-  };
+function statsForPicks(picks){
+  const finals=picks.filter(finalized);
+  const wins=finals.filter(p=>p.result==="WIN").length;
+  const losses=finals.filter(p=>p.result==="LOSS").length;
+  const pushes=finals.filter(p=>p.result==="PUSH").length;
+  const pct=wins+losses?wins/(wins+losses)*100:0;
+  return {wins,losses,pushes,pct,finals:finals.length};
 }
-
-
 
 function latestWeek(){
-
-  const weeks =
-    DATA.weeks
-    &&
-    DATA.weeks.length
-      ? DATA.weeks
-      : [1];
-
-
-  return +weeks.at(
-    -1
-  );
+  const weeks=DATA.weeks&&DATA.weeks.length?DATA.weeks:[1];
+  return +weeks.at(-1);
 }
-
-
 
 function formatUpdatedTime(){
-
-  if(
-    !DATA.updated_at
-  ){
-    return "Unavailable";
-  }
-
-
-  const d =
-    new Date(
-      DATA.updated_at
-    );
-
-
-  return (
-    d.toLocaleTimeString(
-      [],
-      {
-        hour:
-          "numeric",
-
-        minute:
-          "2-digit"
-      }
-    )
-  );
+  if(!DATA.updated_at) return "Unavailable";
+  const d=new Date(DATA.updated_at);
+  return d.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
 }
-
-
 
 function renderStatus(){
+  const week=latestWeek();
+  const weekPicks=DATA.picks.filter(p=>+p.week===week);
+  const pending=weekPicks.filter(p=>!finalized(p)).length;
+  const completionPill=pending===0
+    ? `<div class="statusPill"><span class="dot good"></span><strong>Week Complete ✓</strong></div>`
+    : `<div class="statusPill"><span class="dot open"></span><strong>${pending}</strong> pending</div>`;
 
-  const week =
-    latestWeek();
-
-
-  const weekPicks =
-    DATA.picks.filter(
-      p =>
-        +p.week
-        ===
-        week
-    );
-
-
-  const pending =
-    weekPicks.filter(
-      p =>
-        !finalized(
-          p
-        )
-    ).length;
-
-
-  const completionPill =
-    pending === 0
-
-      ? `
-        <div class="statusPill">
-          <span class="dot good"></span>
-          <strong>
-            Week Complete ✓
-          </strong>
-        </div>
-      `
-
-      : `
-        <div class="statusPill">
-          <span class="dot open"></span>
-          <strong>
-            ${pending}
-          </strong>
-          pending
-        </div>
-      `;
-
-
-  $("#statusStrip")
-    .innerHTML = `
-
-      <div
-        class="
-          statusPill
-          weekAccent
-        "
-      >
-        <strong>
-          Week ${week}
-        </strong>
-      </div>
-
-
-      <div
-        class="statusPill"
-      >
-        Updated as of
-        <strong>
-          ${formatUpdatedTime()}
-        </strong>
-      </div>
-
-
-      ${completionPill}
-    `;
+  $("#statusStrip").innerHTML=`
+    <div class="statusPill weekAccent"><strong>Week ${week}</strong></div>
+    <div class="statusPill">Updated as of <strong>${formatUpdatedTime()}</strong></div>
+    ${completionPill}
+  `;
 }
-
-
 
 function sortedCappers(){
-
-  return (
-    PICKERS
-
-      .map(
-        picker =>
-
-          DATA.cappers.find(
-            c =>
-              c.picker
-              ===
-              picker
-          )
-
-          ||
-
-          {
-            picker,
-            wins:0,
-            losses:0,
-            pushes:0,
-            win_pct:0
-          }
-      )
-
-      .sort(
-        (
-          a,
-          b
-        ) =>
-          (
-            b.win_pct || 0
-          )
-          -
-          (
-            a.win_pct || 0
-          )
-      )
-  );
+  return PICKERS
+    .map(picker=>DATA.cappers.find(c=>c.picker===picker)||{
+      picker,wins:0,losses:0,pushes:0,win_pct:0
+    })
+    .sort((a,b)=>(b.win_pct||0)-(a.win_pct||0));
 }
 
-
-
-function openPicker(
-  picker
-){
-
-  selectedWeek =
-    latestWeek();
-
-
-  selectedFilter =
-    picker;
-
-
+function openPicker(picker){
+  selectedWeek=latestWeek();
+  selectedFilter=picker;
   showFull();
 }
 
-
-
 function renderCards(){
-
-  const sorted =
-    sortedCappers();
-
-
-  $("#cards")
-    .innerHTML =
-      sorted.map(
-        (
-          c,
-          index
-        ) => {
-
-          const rank =
-            index + 1;
-
-
-          const pct =
-            Number(
-              c.win_pct
-              || 0
-            );
-
-
-          return `
-
-            <article
-              class="
-                card
-                ${
-                  rank === 1
-                    ? "leader"
-                    : ""
-                }
-              "
-              onclick="
-                openPicker(
-                  '${c.picker}'
-                )
-              "
-            >
-
-              ${
-                rank === 1
-
-                  ? `
-                    <div class="leaderTag">
-                      ★ LEADER
-                    </div>
-                  `
-
-                  : ""
-              }
-
-
-              <div
-                class="
-                  rankTag
-                  ${
-                    rank === 1
-                      ? "first"
-                      : ""
-                  }
-                "
-              >
-                #${rank}
-              </div>
-
-
-              <div class="name">
-                ${c.picker.toUpperCase()}
-              </div>
-
-
-              <div class="record">
-                ${record(c)}
-              </div>
-
-
-              <div class="pct">
-                ${pct.toFixed(1)}%
-                overall win rate
-              </div>
-
-            </article>
-          `;
-        }
-      )
-      .join("");
+  const sorted=sortedCappers();
+  $("#cards").innerHTML=sorted.map((c,index)=>{
+    const rank=index+1;
+    const pct=Number(c.win_pct||0);
+    return `
+      <article class="card ${rank===1?"leader":""}" onclick="openPicker('${c.picker}')">
+        ${rank===1?`<div class="leaderTag">★ LEADER</div>`:""}
+        <div class="rankTag ${rank===1?"first":""}">#${rank}</div>
+        <div class="name">${c.picker.toUpperCase()}</div>
+        <div class="record">${record(c)}</div>
+        <div class="pct">${pct.toFixed(1)}% overall win rate</div>
+      </article>
+    `;
+  }).join("");
 }
-
-
 
 function renderWeekBoard(){
+  const week=latestWeek();
+  $("#weekBoardTitle").textContent=`Week ${week}`;
 
-  const week =
-    latestWeek();
+  const ranked=PICKERS.map(picker=>{
+    const picks=DATA.picks.filter(p=>+p.week===week&&p.picker===picker);
+    return {picker,...statsForPicks(picks)};
+  }).sort((a,b)=>b.pct-a.pct);
 
-
-  $("#weekBoardTitle")
-    .textContent =
-      `Week ${week}`;
-
-
-  const ranked =
-    PICKERS
-
-      .map(
-        picker => {
-
-          const picks =
-            DATA.picks.filter(
-              p =>
-                +p.week
-                  ===
-                week
-                &&
-                p.picker
-                  ===
-                picker
-            );
-
-
-          return {
-            picker,
-            ...statsForPicks(
-              picks
-            )
-          };
-        }
-      )
-
-      .sort(
-        (
-          a,
-          b
-        ) =>
-          b.pct
-          -
-          a.pct
-      );
-
-
-  $("#weekBoard")
-    .innerHTML =
-      ranked.map(
-        (
-          c,
-          index
-        ) => {
-
-          const rank =
-            index + 1;
-
-
-          return `
-
-            <div
-              class="weekRow"
-              onclick="
-                openPicker(
-                  '${c.picker}'
-                )
-              "
-            >
-
-              <div
-                class="
-                  rank
-                  ${
-                    rank === 1
-                      ? "first"
-                      : ""
-                  }
-                "
-              >
-                ${rank}
-              </div>
-
-
-              <div
-                class="weekName"
-              >
-
-                <strong>
-                  ${c.picker}
-                </strong>
-
-                <span>
-                  ${c.finals}
-                  graded
-                  ${
-                    c.finals === 1
-                      ? "pick"
-                      : "picks"
-                  }
-                </span>
-
-              </div>
-
-
-              <div
-                class="weekRecord"
-              >
-
-                ${
-                  recordFromValues(
-                    c.wins,
-                    c.losses,
-                    c.pushes
-                  )
-                }
-
-                <div
-                  class="weekPct"
-                >
-                  ${c.pct.toFixed(1)}%
-                </div>
-
-              </div>
-
-            </div>
-          `;
-        }
-      )
-      .join("");
+  $("#weekBoard").innerHTML=ranked.map((c,index)=>{
+    const rank=index+1;
+    return `
+      <div class="weekRow" onclick="openPicker('${c.picker}')">
+        <div class="rank ${rank===1?"first":""}">${rank}</div>
+        <div class="weekName">
+          <strong>${c.picker}</strong>
+          <span>${c.finals} graded ${c.finals===1?"pick":"picks"}</span>
+        </div>
+        <div class="weekRecord">
+          ${recordFromValues(c.wins,c.losses,c.pushes)}
+          <div class="weekPct">${c.pct.toFixed(1)}%</div>
+        </div>
+      </div>
+    `;
+  }).join("");
 }
-
-
 
 function renderRace(){
+  const svg=$("#race");
+  const weeks=(DATA.weeks&&DATA.weeks.length?DATA.weeks:[1]).map(Number);
+  const width=900;
+  const height=280;
+  const left=65;
+  const right=150;
+  const top=34;
+  const bottom=45;
+  const chartW=width-left-right;
+  const chartH=height-top-bottom;
+  const yMin=30;
+  const yMax=85;
+  const yTicks=[30,44,58,71,85];
 
-  const svg =
-    $("#race");
-
-
-  const weeks =
-    (
-      DATA.weeks
-      &&
-      DATA.weeks.length
-        ? DATA.weeks
-        : [1]
-    )
-    .map(
-      Number
-    );
-
-
-  const width =
-    900;
-
-  const height =
-    280;
-
-  const left =
-    65;
-
-  const right =
-    150;
-
-  const top =
-    34;
-
-  const bottom =
-    45;
-
-
-  const chartW =
-    width
-    -
-    left
-    -
-    right;
-
-
-  const chartH =
-    height
-    -
-    top
-    -
-    bottom;
-
-
-  const yMin =
-    30;
-
-  const yMax =
-    85;
-
-
-  const yTicks = [
-    30,
-    44,
-    58,
-    71,
-    85
-  ];
-
-
-
-  function xForIndex(
-    i
-  ){
-
-    if(
-      weeks.length === 1
-    ){
-
-      return (
-        left
-        +
-        chartW / 2
-      );
-    }
-
-
-    return (
-      left
-      +
-      (
-        i
-        /
-        (
-          weeks.length
-          -
-          1
-        )
-      )
-      *
-      chartW
-    );
+  function xForIndex(i){
+    if(weeks.length===1) return left+chartW/2;
+    return left+(i/(weeks.length-1))*chartW;
   }
 
-
-
-  function yForPct(
-    pct
-  ){
-
-    const safe =
-      Math.max(
-        yMin,
-        Math.min(
-          yMax,
-          pct
-        )
-      );
-
-
-    return (
-      top
-      +
-      (
-        (
-          yMax
-          -
-          safe
-        )
-        /
-        (
-          yMax
-          -
-          yMin
-        )
-      )
-      *
-      chartH
-    );
+  function yForPct(pct){
+    const safe=Math.max(yMin,Math.min(yMax,pct));
+    return top+((yMax-safe)/(yMax-yMin))*chartH;
   }
 
+  let html="";
 
+  yTicks.forEach(tick=>{
+    const y=yForPct(tick);
+    html+=`
+      <line class="grid" x1="${left}" x2="${width-right}" y1="${y}" y2="${y}"></line>
+      <text class="axistext" x="${left-12}" y="${y+4}" text-anchor="end">${tick}%</text>
+    `;
+  });
 
-  let html = "";
+  weeks.forEach((week,i)=>{
+    html+=`<text class="axistext" x="${xForIndex(i)}" y="${height-15}" text-anchor="middle">W${week}</text>`;
+  });
 
+  PICKERS.forEach(picker=>{
+    const history=DATA.win_pct_history[picker]||[];
+    const points=weeks.map((week,i)=>{
+      let value=0;
 
-  yTicks.forEach(
-    tick => {
-
-      const y =
-        yForPct(
-          tick
-        );
-
-
-      html += `
-
-        <line
-          class="grid"
-          x1="${left}"
-          x2="${width-right}"
-          y1="${y}"
-          y2="${y}"
-        ></line>
-
-
-        <text
-          class="axistext"
-          x="${left-12}"
-          y="${y+4}"
-          text-anchor="end"
-        >
-          ${tick}%
-        </text>
-      `;
-    }
-  );
-
-
-  weeks.forEach(
-    (
-      week,
-      i
-    ) => {
-
-      html += `
-
-        <text
-          class="axistext"
-          x="${xForIndex(i)}"
-          y="${height-15}"
-          text-anchor="middle"
-        >
-          W${week}
-        </text>
-      `;
-    }
-  );
-
-
-  PICKERS.forEach(
-    picker => {
-
-      const history =
-        DATA.win_pct_history[
-          picker
-        ]
-        || [];
-
-
-      const points =
-        weeks.map(
-          (
-            week,
-            i
-          ) => {
-
-            let value =
-              0;
-
-
-            if(
-              Array.isArray(
-                history
-              )
-            ){
-
-              const found =
-                history.find(
-                  h =>
-                    +(
-                      h.week
-                      ??
-                      h.x
-                    )
-                    ===
-                    week
-                );
-
-
-              if(
-                found
-              ){
-
-                value =
-                  Number(
-                    found.win_pct
-                    ??
-                    found.pct
-                    ??
-                    found.value
-                    ??
-                    0
-                  );
-              }
-
-              else if(
-                typeof history[i]
-                ===
-                "number"
-              ){
-
-                value =
-                  Number(
-                    history[i]
-                  );
-              }
-
-              else if(
-                history[i]
-                &&
-                typeof history[i]
-                ===
-                "object"
-              ){
-
-                value =
-                  Number(
-                    history[i].win_pct
-                    ??
-                    history[i].pct
-                    ??
-                    history[i].value
-                    ??
-                    0
-                  );
-              }
-            }
-
-
-            if(
-              weeks.length === 1
-              &&
-              !value
-            ){
-
-              const c =
-                DATA.cappers.find(
-                  x =>
-                    x.picker
-                    ===
-                    picker
-                );
-
-
-              value =
-                Number(
-                  c?.win_pct
-                  || 0
-                );
-            }
-
-
-            return {
-              x:
-                xForIndex(
-                  i
-                ),
-
-              y:
-                yForPct(
-                  value
-                ),
-
-              pct:
-                value
-            };
-          }
-        );
-
-
-      const color =
-        COLORS[
-          picker
-        ];
-
-
-      if(
-        points.length > 1
-      ){
-
-        const path =
-          points.map(
-            (
-              p,
-              i
-            ) =>
-              `${
-                i
-                  ? "L"
-                  : "M"
-              } ${p.x} ${p.y}`
-          )
-          .join(" ");
-
-
-        html += `
-          <path
-            class="line"
-            d="${path}"
-            stroke="${color}"
-          ></path>
-        `;
+      if(Array.isArray(history)){
+        const found=history.find(h=>+(h.week??h.x)===week);
+        if(found){
+          value=Number(found.win_pct??found.pct??found.value??0);
+        }else if(typeof history[i]==="number"){
+          value=Number(history[i]);
+        }else if(history[i]&&typeof history[i]==="object"){
+          value=Number(history[i].win_pct??history[i].pct??history[i].value??0);
+        }
       }
 
-
-      const last =
-        points.at(
-          -1
-        );
-
-
-      if(
-        !last
-      ){
-        return;
+      if(weeks.length===1&&!value){
+        const c=DATA.cappers.find(x=>x.picker===picker);
+        value=Number(c?.win_pct||0);
       }
 
+      return {x:xForIndex(i),y:yForPct(value),pct:value};
+    });
 
-      html += `
-        <circle
-          cx="${last.x}"
-          cy="${last.y}"
-          r="19"
-          fill="${color}"
-        ></circle>
-      `;
+    const color=COLORS[picker];
 
-
-      html += `
-        <text
-          class="avatarText"
-          x="${last.x}"
-          y="${last.y+1}"
-        >
-          ${INITIALS[picker]}
-        </text>
-      `;
-
-
-      html += `
-        <text
-          class="endpct"
-          x="${last.x+28}"
-          y="${last.y+4}"
-        >
-          ${last.pct.toFixed(1)}%
-        </text>
-      `;
+    if(points.length>1){
+      const path=points.map((p,i)=>`${i?"L":"M"} ${p.x} ${p.y}`).join(" ");
+      html+=`<path class="line" d="${path}" stroke="${color}"></path>`;
     }
-  );
 
+    const last=points.at(-1);
+    if(!last) return;
 
-  svg.innerHTML =
-    html;
+    html+=`<circle cx="${last.x}" cy="${last.y}" r="19" fill="${color}"></circle>`;
+    html+=`<text class="avatarText" x="${last.x}" y="${last.y+1}">${INITIALS[picker]}</text>`;
+    html+=`<text class="endpct" x="${last.x+28}" y="${last.y+4}">${last.pct.toFixed(1)}%</text>`;
+  });
+
+  svg.innerHTML=html;
 }
-
-
 
 function showFull(){
-
-  $("#overview")
-    .classList.remove(
-      "active"
-    );
-
-
-  $("#full")
-    .classList.add(
-      "active"
-    );
-
-
+  $("#overview").classList.remove("active");
+  $("#full").classList.add("active");
   renderFull();
-
-
-  window.scrollTo({
-    top:0,
-    behavior:"instant"
-  });
+  window.scrollTo({top:0,behavior:"instant"});
 }
-
-
 
 function showOverview(){
-
-  $("#full")
-    .classList.remove(
-      "active"
-    );
-
-
-  $("#overview")
-    .classList.add(
-      "active"
-    );
-
-
-  window.scrollTo({
-    top:0,
-    behavior:"instant"
-  });
+  $("#full").classList.remove("active");
+  $("#overview").classList.add("active");
+  window.scrollTo({top:0,behavior:"instant"});
 }
-
-
 
 function renderWeeks(){
-
-  const weeks =
-    DATA.weeks
-    &&
-    DATA.weeks.length
-
-      ? DATA.weeks
-
-      : [1];
-
-
-  $("#weeks")
-    .innerHTML =
-      weeks.map(
-        week => `
-
-          <button
-            class="
-              weekbtn
-              ${
-                +selectedWeek === +week
-                  ? "active"
-                  : ""
-              }
-            "
-            onclick="
-              selectedWeek=${+week};
-              renderFull();
-            "
-          >
-            Week ${week}
-          </button>
-        `
-      )
-      .join("");
+  const weeks=DATA.weeks&&DATA.weeks.length?DATA.weeks:[1];
+  $("#weeks").innerHTML=weeks.map(week=>`
+    <button
+      class="weekbtn ${+selectedWeek===+week?"active":""}"
+      onclick="selectedWeek=${+week};renderFull();">
+      Week ${week}
+    </button>
+  `).join("");
 }
-
-
 
 function renderFilters(){
-
-  const values = [
-    "All",
-    ...PICKERS
-  ];
-
-
-  $("#filters")
-    .innerHTML =
-      values.map(
-        value => `
-
-          <button
-            class="
-              filterbtn
-              ${
-                selectedFilter === value
-                  ? "active"
-                  : ""
-              }
-            "
-            onclick="
-              selectedFilter='${value}';
-              renderFull();
-            "
-          >
-            ${value}
-          </button>
-        `
-      )
-      .join("");
+  const values=["All",...PICKERS];
+  $("#filters").innerHTML=values.map(value=>`
+    <button
+      class="filterbtn ${selectedFilter===value?"active":""}"
+      onclick="selectedFilter='${value}';renderFull();">
+      ${value}
+    </button>
+  `).join("");
 }
 
-
-
-function resultIcon(
-  pick
-){
-
-  if(
-    pick.result === "WIN"
-  ){
-    return "💰";
-  }
-
-
-  if(
-    pick.result === "LOSS"
-  ){
-    return "❌";
-  }
-
-
-  if(
-    pick.result === "PUSH"
-  ){
-    return "➖";
-  }
-
-
+function resultIcon(pick){
+  if(pick.result==="WIN") return "💰";
+  if(pick.result==="LOSS") return "❌";
+  if(pick.result==="PUSH") return "➖";
   return "⏳";
 }
 
-
-
-/* ============================================================
+/* ==========================================================
    GAME TIME DISPLAY
+   ESPN game_time is stored as UTC. The browser converts it
+   to America/Los_Angeles so every visitor sees Pick Em times
+   in Pacific time.
+========================================================== */
+function formatGameTime(value){
+  if(!value) return "Game time pending";
 
-   ESPN stores game_time in UTC.
+  const date=new Date(value);
+  if(Number.isNaN(date.getTime())) return "Game time pending";
 
-   We always display the kickoff in Pacific time because the
-   Pick Em tracker is being built around Pacific scheduling.
+  const parts=new Intl.DateTimeFormat("en-US",{
+    timeZone:"America/Los_Angeles",
+    weekday:"short",
+    month:"numeric",
+    day:"numeric",
+    hour:"numeric",
+    minute:"2-digit",
+    hour12:true
+  }).formatToParts(date);
 
-   Example display:
+  const get=type=>parts.find(part=>part.type===type)?.value||"";
 
-       Sat. 9/12 @ 4:30 PM PST
-============================================================ */
-
-function formatGameTime(
-  value
-){
-
-  if(
-    !value
-  ){
-    return (
-      "Game time pending"
-    );
-  }
-
-
-  const date =
-    new Date(
-      value
-    );
-
-
-  if(
-    Number.isNaN(
-      date.getTime()
-    )
-  ){
-
-    return (
-      "Game time pending"
-    );
-  }
-
-
-  const parts =
-    new Intl.DateTimeFormat(
-      "en-US",
-      {
-        timeZone:
-          "America/Los_Angeles",
-
-        weekday:
-          "short",
-
-        month:
-          "numeric",
-
-        day:
-          "numeric",
-
-        hour:
-          "numeric",
-
-        minute:
-          "2-digit",
-
-        hour12:
-          true
-      }
-    )
-    .formatToParts(
-      date
-    );
-
-
-  const get =
-    type =>
-      parts.find(
-        part =>
-          part.type === type
-      )?.value
-      || "";
-
-
-  return (
-    `${get("weekday")}. `
-    +
-    `${get("month")}/${get("day")} `
-    +
-    `@ `
-    +
-    `${get("hour")}:${get("minute")} `
-    +
-    `${get("dayPeriod")} `
-    +
-    `PST`
-  );
+  return `${get("weekday")}. ${get("month")}/${get("day")} @ ${get("hour")}:${get("minute")} ${get("dayPeriod")} PT`;
 }
 
-
-
-/* ============================================================
+/* ==========================================================
    FULL CARD METADATA
-
-   Previous behavior:
-
-       Source ↗
-
-   New behavior:
-
-       Sat. 9/12 @ 4:30 PM PST
-
-   source_url remains inside dashboard.json. We simply no longer
-   show it as the primary gray metadata line.
-
-   Final score remains visible after the game is graded.
-============================================================ */
-
-function pickMeta(
-  pick
-){
-
-  const pieces =
-    [];
-
-
-  if(
-    pick.added_pick
-  ){
-
-    pieces.push(
-      `
-        <span class="badge">
-          ADDED PICK
-        </span>
-      `
-    );
-  }
-
-
-  pieces.push(
-    formatGameTime(
-      pick.game_time
-    )
-  );
-
-
-  if(
-    pick.final_score
-  ){
-
-    pieces.push(
-      pick.final_score
-    );
-  }
-
-
-  return (
-    pieces.join(
-      " · "
-    )
-  );
+   Source link is intentionally no longer shown. We keep
+   source_url in the JSON; we simply display kickoff instead.
+========================================================== */
+function isTotalMarket(pick){
+  const type=String(pick.bet_type||"").toUpperCase();
+  return type==="TOTAL" || type==="FIRST_QUARTER_TOTAL" || type==="FIRST_HALF_TOTAL";
 }
 
-
-
-/* ============================================================
-   CHRONOLOGICAL SORTING
-
-   1. Earliest kickoff first.
-   2. Bets on the same ESPN event stay next to each other.
-   3. Picks without a confident ESPN match go to the bottom.
-============================================================ */
-
-function kickoffSort(
-  a,
-  b
-){
-
-  const aParsed =
-    a.game_time
-
-      ? new Date(
-          a.game_time
-        ).getTime()
-
-      : NaN;
-
-
-  const bParsed =
-    b.game_time
-
-      ? new Date(
-          b.game_time
-        ).getTime()
-
-      : NaN;
-
-
-  const aTime =
-    Number.isFinite(
-      aParsed
-    )
-
-      ? aParsed
-
-      : Number.MAX_SAFE_INTEGER;
-
-
-  const bTime =
-    Number.isFinite(
-      bParsed
-    )
-
-      ? bParsed
-
-      : Number.MAX_SAFE_INTEGER;
-
-
-  if(
-    aTime !== bTime
-  ){
-
-    return (
-      aTime
-      -
-      bTime
-    );
-  }
-
-
-  const aEvent =
-    String(
-      a.event_id
-      || ""
-    );
-
-
-  const bEvent =
-    String(
-      b.event_id
-      || ""
-    );
-
-
-  if(
-    aEvent !== bEvent
-  ){
-
-    return (
-      aEvent.localeCompare(
-        bEvent
-      )
-    );
-  }
-
-
-  return (
-    String(
-      a.selection
-      || ""
-    )
-    .localeCompare(
-      String(
-        b.selection
-        || ""
-      )
-    )
-  );
+function totalMatchup(pick){
+  if(!isTotalMarket(pick)) return "";
+  return String(pick.matchup||pick.game_matchup||"").trim();
 }
 
+function pickMeta(pick){
+  const pieces=[];
 
+  if(pick.added_pick){
+    pieces.push(`<span class="badge">ADDED PICK</span>`);
+  }
+
+  pieces.push(formatGameTime(pick.game_time));
+
+  if(pick.final_score){
+    pieces.push(pick.final_score);
+  }
+
+  return pieces.join(" · ");
+}
+
+/* ==========================================================
+   CHRONOLOGICAL SORT
+   1. Earliest kickoff first
+   2. Multiple wagers on the same game stay together
+   3. Unmatched / pending-time wagers go to the bottom
+========================================================== */
+function kickoffSort(a,b){
+  const aParsed=a.game_time?new Date(a.game_time).getTime():NaN;
+  const bParsed=b.game_time?new Date(b.game_time).getTime():NaN;
+
+  const aTime=Number.isFinite(aParsed)?aParsed:Number.MAX_SAFE_INTEGER;
+  const bTime=Number.isFinite(bParsed)?bParsed:Number.MAX_SAFE_INTEGER;
+
+  if(aTime!==bTime) return aTime-bTime;
+
+  const aEvent=String(a.event_id||"");
+  const bEvent=String(b.event_id||"");
+  if(aEvent!==bEvent) return aEvent.localeCompare(bEvent);
+
+  return String(a.selection||"").localeCompare(String(b.selection||""));
+}
 
 function renderCardBody(){
+  const picks=DATA.picks.filter(p=>+p.week===+selectedWeek);
+  const pickers=selectedFilter==="All"?PICKERS:[selectedFilter];
 
-  const picks =
-    DATA.picks.filter(
-      p =>
-        +p.week
-        ===
-        +selectedWeek
-    );
+  const blocks=pickers.map(picker=>{
+    const rows=picks
+      .filter(p=>p.picker===picker)
+      .slice()
+      .sort(kickoffSort);
 
+    const stats=statsForPicks(rows);
+    const titleRecord=recordFromValues(stats.wins,stats.losses,stats.pushes);
 
-  const pickers =
-    selectedFilter === "All"
+    let body="";
 
-      ? PICKERS
+    if(rows.length===0){
+      body=`<div class="empty">No picks found.</div>`;
+    }else{
+      body=rows.map(pick=>`
+        <div class="pick">
+          <div>
+            ${totalMatchup(pick)?`<div class="matchup">${totalMatchup(pick)}</div>`:""}
+            <div class="sel">${pick.selection||""}</div>
+            <div class="meta">${pickMeta(pick)}</div>
+          </div>
+          <div class="result">${resultIcon(pick)}</div>
+        </div>
+      `).join("");
+    }
 
-      : [
-          selectedFilter
-        ];
+    return `
+      <section class="pickerBlock">
+        <div class="pickerTitle">
+          <span>${picker}</span>
+          <span>${titleRecord}</span>
+        </div>
+        ${body}
+      </section>
+    `;
+  });
 
-
-  const blocks =
-    pickers.map(
-      picker => {
-
-
-        const rows =
-          picks
-
-            .filter(
-              p =>
-                p.picker
-                ===
-                picker
-            )
-
-            .slice()
-
-            .sort(
-              kickoffSort
-            );
-
-
-        const stats =
-          statsForPicks(
-            rows
-          );
-
-
-        const titleRecord =
-          recordFromValues(
-            stats.wins,
-            stats.losses,
-            stats.pushes
-          );
-
-
-        let body = "";
-
-
-        if(
-          rows.length === 0
-        ){
-
-          body = `
-            <div class="empty">
-              No picks found.
-            </div>
-          `;
-        }
-
-        else{
-
-          body =
-            rows.map(
-              pick => `
-
-                <div class="pick">
-
-                  <div>
-
-                    <div class="sel">
-                      ${
-                        pick.selection
-                        || ""
-                      }
-                    </div>
-
-                    <div class="meta">
-                      ${pickMeta(pick)}
-                    </div>
-
-                  </div>
-
-
-                  <div class="result">
-                    ${resultIcon(pick)}
-                  </div>
-
-                </div>
-              `
-            )
-            .join("");
-        }
-
-
-        return `
-
-          <section
-            class="pickerBlock"
-          >
-
-            <div
-              class="pickerTitle"
-            >
-
-              <span>
-                ${picker}
-              </span>
-
-              <span>
-                ${titleRecord}
-              </span>
-
-            </div>
-
-
-            ${body}
-
-          </section>
-        `;
-      }
-    );
-
-
-  $("#cardBody")
-    .innerHTML =
-      blocks.join("");
+  $("#cardBody").innerHTML=blocks.join("");
 }
 
-
-
 function renderFull(){
-
-  if(
-    selectedWeek === null
-  ){
-
-    selectedWeek =
-      latestWeek();
-  }
-
-
+  if(selectedWeek===null) selectedWeek=latestWeek();
   renderWeeks();
-
   renderFilters();
-
   renderCardBody();
 }
 
-
-
 async function loadData(){
-
   try{
+    const response=await fetch("data/dashboard.json",{cache:"no-store"});
+    if(!response.ok) throw new Error(`Dashboard fetch failed: ${response.status}`);
 
-    const response =
-      await fetch(
-        "data/dashboard.json",
-        {
-          cache:
-            "no-store"
-        }
-      );
+    DATA=await response.json();
 
+    if(!Array.isArray(DATA.picks)) DATA.picks=[];
+    if(!Array.isArray(DATA.cappers)) DATA.cappers=[];
 
-    if(
-      !response.ok
-    ){
-
-      throw new Error(
-        `Dashboard fetch failed: ${response.status}`
-      );
+    if(!Array.isArray(DATA.weeks)||!DATA.weeks.length){
+      DATA.weeks=[...new Set(DATA.picks.map(p=>+p.week).filter(Boolean))].sort((a,b)=>a-b);
     }
 
+    if(!DATA.win_pct_history) DATA.win_pct_history={};
 
-    DATA =
-      await response.json();
-
-
-    if(
-      !Array.isArray(
-        DATA.picks
-      )
-    ){
-
-      DATA.picks =
-        [];
-    }
-
-
-    if(
-      !Array.isArray(
-        DATA.cappers
-      )
-    ){
-
-      DATA.cappers =
-        [];
-    }
-
-
-    if(
-      !Array.isArray(
-        DATA.weeks
-      )
-      ||
-      !DATA.weeks.length
-    ){
-
-      DATA.weeks = [
-        ...new Set(
-          DATA.picks
-            .map(
-              p =>
-                +p.week
-            )
-            .filter(
-              Boolean
-            )
-        )
-      ]
-      .sort(
-        (
-          a,
-          b
-        ) =>
-          a - b
-      );
-    }
-
-
-    if(
-      !DATA.win_pct_history
-    ){
-
-      DATA.win_pct_history =
-        {};
-    }
-
-
-    selectedWeek =
-      latestWeek();
-
-
+    selectedWeek=latestWeek();
     renderStatus();
-
     renderCards();
-
     renderRace();
-
     renderWeekBoard();
-
-  }
-
-  catch(
-    error
-  ){
-
-    console.error(
-      error
-    );
-
-
-    document.body
-      .innerHTML = `
-
-        <main class="shell">
-
-          <section class="section">
-
-            <div class="sectionInner">
-
-              <h2>
-                Unable to load tracker
-              </h2>
-
-              <p
-                style="
-                  color:var(--muted);
-                  margin-bottom:0;
-                "
-              >
-                Dashboard data could not be loaded.
-              </p>
-
-            </div>
-
-          </section>
-
-        </main>
-      `;
+  }catch(error){
+    console.error(error);
+    document.body.innerHTML=`
+      <main class="shell">
+        <section class="section">
+          <div class="sectionInner">
+            <h2>Unable to load tracker</h2>
+            <p style="color:var(--muted);margin-bottom:0;">Dashboard data could not be loaded.</p>
+          </div>
+        </section>
+      </main>
+    `;
   }
 }
 
+$("#openCards").addEventListener("click",()=>{
+  selectedWeek=latestWeek();
+  selectedFilter="All";
+  showFull();
+});
 
-
-$("#openCards")
-  .addEventListener(
-    "click",
-    () => {
-
-      selectedWeek =
-        latestWeek();
-
-
-      selectedFilter =
-        "All";
-
-
-      showFull();
-    }
-  );
-
-
-
-$("#back")
-  .addEventListener(
-    "click",
-    showOverview
-  );
-
-
-
+$("#back").addEventListener("click",showOverview);
 loadData();
-
 </script>
-
 </body>
 </html>
