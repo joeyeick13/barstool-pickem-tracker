@@ -1977,6 +1977,49 @@ def resolve_event(
     return None
 
 
+def find_event_by_id(
+    events,
+    stored_event_id,
+):
+    """
+    Resolve an ESPN event strictly by a previously stored event ID.
+
+    This is the preferred grading path for picks that were matched
+    before kickoff by schedule_enrich.py.
+
+    Fail closed:
+      - no stored ID -> None
+      - zero matches -> None
+      - multiple matches -> None
+      - exactly one match -> that event
+    """
+
+    stored_event_id = str(
+        stored_event_id
+        or ""
+    ).strip()
+
+    if not stored_event_id:
+        return None
+
+    matches = [
+        event
+        for event in events
+        if str(
+            event.get(
+                "id"
+            )
+            or ""
+        ).strip()
+        == stored_event_id
+    ]
+
+    if len(matches) == 1:
+        return matches[0]
+
+    return None
+
+
 # ============================================================
 # EVENT HYDRATION
 # ============================================================
@@ -2492,7 +2535,12 @@ def clear_grade(
 
     pick["result"] = None
     pick["status"] = status
-    pick["event_id"] = None
+
+    # event_id is intentionally preserved.
+    #
+    # schedule_enrich.py resolves the ESPN event before kickoff
+    # and stores that exact event ID on the pick. Grading should
+    # continue using that same event rather than rematching later.
     pick["graded_at"] = None
     pick["final_score"] = None
     pick["profit_units"] = 0
@@ -3287,14 +3335,130 @@ def grade_open():
         )
 
 
-        event = resolve_event(
-            pick,
-            events,
-        )
+        # ====================================================
+        # PRE-GAME EVENT LOCK
+        #
+        # schedule_enrich.py matches the wager before kickoff
+        # and stores ESPN event_id. Once that exists, grading
+        # must use that exact event and must not silently switch
+        # to a different matchup later.
+        # ====================================================
+
+        stored_event_id = str(
+            pick.get(
+                "event_id"
+            )
+            or ""
+        ).strip()
+
+        event = None
+
+
+        if stored_event_id:
+
+            event = find_event_by_id(
+                events,
+                stored_event_id,
+            )
+
+
+            if event is None:
+
+                preserved += 1
+
+                print(
+                    "PRE-GAME EVENT NOT FOUND - "
+                    "PRESERVING PICK:",
+                    pick.get(
+                        "picker"
+                    ),
+                    "|",
+                    pick.get(
+                        "selection"
+                    ),
+                    "| stored event:",
+                    stored_event_id,
+                )
+
+                continue
+
+
+            print(
+                "USING PRE-GAME EVENT:",
+                pick.get(
+                    "picker"
+                ),
+                "|",
+                pick.get(
+                    "selection"
+                ),
+                "| event:",
+                stored_event_id,
+            )
+
+
+        else:
+
+            # ------------------------------------------------
+            # Backward-compatible fallback:
+            #
+            # Older provisional rows may not yet have been
+            # enriched. Resolve them conservatively once, then
+            # store that event ID so future runs stay locked.
+            # ------------------------------------------------
+
+            event = resolve_event(
+                pick,
+                events,
+            )
+
+
+            if event is not None:
+
+                resolved_event_id = str(
+                    event.get(
+                        "id"
+                    )
+                    or ""
+                ).strip()
+
+                if resolved_event_id:
+
+                    pick[
+                        "event_id"
+                    ] = resolved_event_id
+
+                    pick[
+                        "game_match_status"
+                    ] = "MATCHED"
+
+                    pick[
+                        "game_match_source"
+                    ] = "ESPN"
+
+                    pick[
+                        "game_match_confidence"
+                    ] = "GRADER_FALLBACK"
+
+                    print(
+                        "GRADER FALLBACK MATCH LOCKED:",
+                        pick.get(
+                            "picker"
+                        ),
+                        "|",
+                        pick.get(
+                            "selection"
+                        ),
+                        "| event:",
+                        resolved_event_id,
+                    )
 
 
         # ----------------------------------------------------
         # Recalculate PROVISIONAL pick only.
+        #
+        # clear_grade() now preserves event_id so the pre-game
+        # matchup lock survives while result fields are reset.
         # ----------------------------------------------------
 
         clear_grade(
