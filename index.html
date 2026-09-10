@@ -1,14 +1,11 @@
 <!doctype html>
 <html lang="en">
-
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-
 <title>Barstool Pick Em Tracker</title>
 
 <style>
-
 :root{
   --bg:#090b0f;
   --panel:#12161d;
@@ -18,14 +15,11 @@
   --muted:#98a2b1;
   --border:#282f3a;
   --border2:#343d49;
-
   --good:#56d38b;
   --bad:#ff6262;
-
   --blue:#67a9ff;
   --red:#ff6b6b;
   --gold:#f6c85f;
-
   --barstool:#ed1c24;
   --barstoolSoft:rgba(237,28,36,.10);
   --barstoolBorder:rgba(237,28,36,.65);
@@ -35,21 +29,15 @@
   box-sizing:border-box;
 }
 
-html{
+html,
+body{
   background:var(--bg);
 }
 
 body{
   margin:0;
-  background:var(--bg);
   color:var(--text);
-  font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    Roboto,
-    Arial,
-    sans-serif;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
 }
 
 button{
@@ -65,17 +53,8 @@ button,
 .shell{
   max-width:1050px;
   margin:auto;
-
-  padding:
-    max(20px,env(safe-area-inset-top))
-    16px
-    52px;
+  padding:max(20px,env(safe-area-inset-top)) 16px 52px;
 }
-
-
-/* =========================
-   HEADER
-========================= */
 
 .header{
   margin-bottom:17px;
@@ -106,21 +85,13 @@ h1{
   line-height:1;
 }
 
-
-/* =========================
-   BARSTOOL LOGO
-========================= */
-
 .brandLogo{
   flex:0 0 auto;
-
   width:92px;
   height:92px;
-
   display:flex;
   align-items:center;
   justify-content:center;
-
   overflow:hidden;
 }
 
@@ -131,18 +102,11 @@ h1{
   object-fit:contain;
 }
 
-
-/* =========================
-   STATUS
-========================= */
-
 .statusStrip{
   display:flex;
   align-items:center;
   gap:8px;
-
   margin-top:14px;
-
   overflow-x:auto;
   scrollbar-width:none;
 }
@@ -153,18 +117,13 @@ h1{
 
 .statusPill{
   flex:0 0 auto;
-
   display:flex;
   align-items:center;
   gap:6px;
-
   border:1px solid var(--border);
   background:var(--panel3);
-
   border-radius:999px;
-
   padding:7px 10px;
-
   font-size:11px;
   font-weight:800;
   color:var(--muted);
@@ -198,17 +157,11 @@ h1{
   background:var(--gold);
 }
 
-
-/* =========================
-   HEADERS
-========================= */
-
 .metricHead{
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:12px;
-
   margin:2px 0 10px;
 }
 
@@ -223,11 +176,6 @@ h1{
   font-size:11px;
 }
 
-
-/* =========================
-   OVERALL CARDS
-========================= */
-
 .cards{
   display:grid;
   grid-template-columns:repeat(3,1fr);
@@ -236,27 +184,13 @@ h1{
 
 .card{
   position:relative;
-
   border:1px solid var(--border);
-
-  background:
-    linear-gradient(
-      180deg,
-      var(--panel2),
-      var(--panel)
-    );
-
+  background:linear-gradient(180deg,var(--panel2),var(--panel));
   border-radius:20px;
-
   padding:18px;
-
   min-width:0;
-
   cursor:pointer;
-
-  transition:
-    border-color .15s ease,
-    transform .15s ease;
+  transition:border-color .15s ease,transform .15s ease;
 }
 
 .card:active{
@@ -271,19 +205,14 @@ h1{
   position:absolute;
   top:13px;
   right:13px;
-
   display:flex;
   align-items:center;
   gap:4px;
-
   border:1px solid rgba(246,200,95,.35);
   background:rgba(246,200,95,.08);
   color:var(--gold);
-
   border-radius:999px;
-
   padding:4px 7px;
-
   font-size:9px;
   letter-spacing:.08em;
   font-weight:900;
@@ -293,27 +222,19 @@ h1{
   display:inline-flex;
   align-items:center;
   justify-content:center;
-
   min-width:22px;
   height:22px;
-
   padding:0 6px;
-
   border-radius:999px;
-
   border:1px solid var(--border2);
-
   color:var(--muted);
-
   font-size:10px;
   font-weight:900;
-
   margin-bottom:10px;
 }
 
 .rankTag.first{
   color:var(--gold);
-
   border-color:rgba(246,200,95,.4);
   background:rgba(246,200,95,.08);
 }
@@ -338,20 +259,11 @@ h1{
   font-weight:850;
 }
 
-
-/* =========================
-   SECTIONS
-========================= */
-
 .section{
   margin-top:14px;
-
   border:1px solid var(--border);
-
   background:var(--panel);
-
   border-radius:20px;
-
   overflow:hidden;
 }
 
@@ -364,7 +276,6 @@ h1{
   align-items:flex-start;
   justify-content:space-between;
   gap:12px;
-
   margin-bottom:6px;
 }
 
@@ -379,11 +290,6 @@ h1{
   font-size:11px;
   padding-top:3px;
 }
-
-
-/* =========================
-   CHART
-========================= */
 
 .chartWrap{
   width:100%;
@@ -427,11 +333,6 @@ h1{
   dominant-baseline:central;
 }
 
-
-/* =========================
-   WEEKLY LEADERBOARD
-========================= */
-
 .weekBoard{
   display:grid;
   gap:0;
@@ -439,20 +340,11 @@ h1{
 
 .weekRow{
   display:grid;
-
-  grid-template-columns:
-    34px
-    minmax(0,1fr)
-    auto;
-
+  grid-template-columns:34px minmax(0,1fr) auto;
   align-items:center;
-
   gap:10px;
-
   padding:13px 0;
-
   border-bottom:1px solid var(--border);
-
   cursor:pointer;
 }
 
@@ -473,18 +365,12 @@ h1{
   display:flex;
   align-items:center;
   justify-content:center;
-
   width:28px;
   height:28px;
-
   border-radius:50%;
-
   background:var(--panel2);
-
   border:1px solid var(--border);
-
   color:var(--muted);
-
   font-size:11px;
   font-weight:900;
 }
@@ -506,66 +392,41 @@ h1{
 
 .weekName span{
   display:block;
-
   margin-top:2px;
-
   color:var(--muted);
-
   font-size:10px;
 }
 
 .weekRecord{
   text-align:right;
-
   font-size:19px;
-
   font-weight:950;
-
   letter-spacing:-.03em;
 }
 
 .weekPct{
   margin-top:2px;
-
   color:var(--muted);
-
   font-size:10px;
   font-weight:700;
 }
 
-
-/* =========================
-   FULL CARD BUTTON
-========================= */
-
 .fullbtn{
   width:100%;
-
   margin-top:14px;
-
   border:0;
-
   background:#f5f7fa;
   color:#090b0f;
-
   border-radius:16px;
-
   padding:16px 18px;
-
   font-weight:950;
   font-size:15px;
-
   cursor:pointer;
 }
 
 .fullbtn:active{
   transform:scale(.995);
 }
-
-
-/* =========================
-   VIEWS
-========================= */
 
 .view{
   display:none;
@@ -579,24 +440,16 @@ h1{
   border:0;
   background:transparent;
   color:var(--text);
-
   padding:5px 0 15px;
-
   font-weight:850;
+  cursor:pointer;
 }
-
-
-/* =========================
-   FILTERS
-========================= */
 
 .weeks,
 .filters{
   display:flex;
   gap:7px;
-
   overflow-x:auto;
-
   scrollbar-width:none;
 }
 
@@ -616,20 +469,13 @@ h1{
 .weekbtn,
 .filterbtn{
   border:1px solid var(--border);
-
   background:var(--panel);
-
   color:var(--muted);
-
   border-radius:999px;
-
   padding:9px 13px;
-
   white-space:nowrap;
-
   font-weight:850;
   font-size:12px;
-
   cursor:pointer;
 }
 
@@ -645,33 +491,20 @@ h1{
   color:var(--bg);
 }
 
-
-/* =========================
-   FULL CARD
-========================= */
-
 .pickerBlock{
   margin:0 0 14px;
-
   border:1px solid var(--border);
-
   border-radius:18px;
-
   overflow:hidden;
-
   background:var(--panel);
 }
 
 .pickerTitle{
   padding:14px 15px;
-
   border-bottom:1px solid var(--border);
-
   display:flex;
   justify-content:space-between;
-
   gap:12px;
-
   font-weight:900;
 }
 
@@ -681,15 +514,9 @@ h1{
 
 .pick{
   display:grid;
-
-  grid-template-columns:
-    1fr
-    auto;
-
+  grid-template-columns:1fr auto;
   gap:12px;
-
   padding:13px 15px;
-
   border-bottom:1px solid var(--border);
 }
 
@@ -705,25 +532,17 @@ h1{
 .meta{
   font-size:11px;
   color:var(--muted);
-
   margin-top:5px;
-
   line-height:1.5;
 }
 
 .badge{
   display:inline-block;
-
   border:1px solid var(--border2);
-
   border-radius:999px;
-
   padding:2px 6px;
-
   margin-right:5px;
-
   font-size:9px;
-
   font-weight:850;
 }
 
@@ -734,21 +553,9 @@ h1{
 
 .empty{
   padding:18px;
-
   color:var(--muted);
-
   font-size:12px;
 }
-
-.source{
-  color:inherit;
-  text-decoration:none;
-}
-
-
-/* =========================
-   MOBILE
-========================= */
 
 @media(max-width:680px){
 
@@ -768,18 +575,12 @@ h1{
 
   .card{
     display:grid;
-
-    grid-template-columns:
-      1fr
-      auto;
-
+    grid-template-columns:1fr auto;
     grid-template-areas:
       "rank rank"
       "name record"
       "pct record";
-
     align-items:center;
-
     padding:16px;
   }
 
@@ -795,11 +596,8 @@ h1{
 
   .record{
     grid-area:record;
-
     margin:0;
-
     padding-left:12px;
-
     font-size:34px;
   }
 
@@ -816,13 +614,7 @@ h1{
   .sectionInner{
     padding:15px;
   }
-
 }
-
-
-/* =========================
-   DESKTOP
-========================= */
 
 @media(min-width:681px){
 
@@ -833,223 +625,262 @@ h1{
   .weekRow:hover{
     opacity:.9;
   }
-
-  .source:hover{
-    text-decoration:underline;
-  }
-
 }
-
 </style>
 </head>
-
 
 <body>
 
 <main class="shell">
 
-
-<!-- OVERVIEW -->
-
 <section id="overview" class="view active">
 
+  <header class="header">
 
-<header class="header">
+    <div class="headerTop">
 
-  <div class="headerTop">
+      <div class="headerCopy">
 
-    <div class="headerCopy">
+        <div
+          id="seasonLabel"
+          class="eyebrow"
+        >
+          2026 SEASON
+        </div>
 
-      <div id="seasonLabel" class="eyebrow">
-        2026 SEASON
+        <h1>
+          Barstool Pick Em
+        </h1>
+
       </div>
 
-      <h1>
-        Barstool Pick Em
-      </h1>
+      <div
+        class="brandLogo"
+        aria-label="Barstool Sports"
+      >
+        <img
+          src="assets/IMG_1101.png"
+          alt="Barstool Sports"
+        >
+      </div>
 
     </div>
-
 
     <div
-      class="brandLogo"
-      aria-label="Barstool Sports">
+      id="statusStrip"
+      class="statusStrip"
+    ></div>
 
-      <img
-        src="assets/IMG_1101.png"
-        alt="Barstool Sports">
-
-    </div>
-
-  </div>
+  </header>
 
 
-  <div id="statusStrip" class="statusStrip"></div>
+  <div class="metricHead">
 
-</header>
+    <h2>
+      Overall
+    </h2>
 
-
-<div class="metricHead">
-
-  <h2>Overall</h2>
-
-  <span>Season record</span>
-
-</div>
-
-
-<div id="cards" class="cards"></div>
-
-
-<section class="section">
-
-  <div class="sectionInner">
-
-    <div class="sectionHead">
-
-      <h2>Season Race</h2>
-
-      <span>Cumulative win %</span>
-
-    </div>
-
-    <div class="chartWrap">
-
-      <svg
-        id="race"
-        viewBox="0 0 900 280"
-        role="img"
-        aria-label="Cumulative win percentage by week">
-      </svg>
-
-    </div>
+    <span>
+      Season record
+    </span>
 
   </div>
+
+
+  <div
+    id="cards"
+    class="cards"
+  ></div>
+
+
+  <section class="section">
+
+    <div class="sectionInner">
+
+      <div class="sectionHead">
+
+        <h2>
+          Season Race
+        </h2>
+
+        <span>
+          Cumulative win %
+        </span>
+
+      </div>
+
+      <div class="chartWrap">
+
+        <svg
+          id="race"
+          viewBox="0 0 900 280"
+          role="img"
+          aria-label="Cumulative win percentage by week"
+        ></svg>
+
+      </div>
+
+    </div>
+
+  </section>
+
+
+  <section class="section">
+
+    <div class="sectionInner">
+
+      <div class="sectionHead">
+
+        <h2 id="weekBoardTitle">
+          This Week
+        </h2>
+
+        <span>
+          Weekly leaderboard
+        </span>
+
+      </div>
+
+      <div
+        id="weekBoard"
+        class="weekBoard"
+      ></div>
+
+    </div>
+
+  </section>
+
+
+  <button
+    id="openCards"
+    class="fullbtn"
+  >
+    Full Card View →
+  </button>
 
 </section>
 
 
-<section class="section">
-
-  <div class="sectionInner">
-
-    <div class="sectionHead">
-
-      <h2 id="weekBoardTitle">
-        This Week
-      </h2>
-
-      <span>
-        Weekly leaderboard
-      </span>
-
-    </div>
-
-
-    <div id="weekBoard" class="weekBoard"></div>
-
-  </div>
-
-</section>
-
-
-<button id="openCards" class="fullbtn">
-  Full Card View →
-</button>
-
-
-</section>
-
-
-
-<!-- FULL CARD VIEW -->
 
 <section id="full" class="view">
 
+  <button
+    id="back"
+    class="back"
+  >
+    ← Overview
+  </button>
 
-<button id="back" class="back">
-  ← Overview
-</button>
 
+  <header class="header">
 
-<header class="header">
+    <div class="headerTop">
 
-  <div class="headerTop">
+      <div>
 
-    <div>
+        <div class="eyebrow">
+          2026 SEASON
+        </div>
 
-      <div class="eyebrow">
-        2026 SEASON
+        <h1>
+          Full Card View
+        </h1>
+
       </div>
 
-      <h1>
-        Full Card View
-      </h1>
+
+      <div
+        class="brandLogo"
+        aria-label="Barstool Sports"
+      >
+
+        <img
+          src="assets/IMG_1101.png"
+          alt="Barstool Sports"
+        >
+
+      </div>
 
     </div>
 
-
-    <div
-      class="brandLogo"
-      aria-label="Barstool Sports">
-
-      <img
-        src="assets/IMG_1101.png"
-        alt="Barstool Sports">
-
-    </div>
-
-  </div>
-
-</header>
+  </header>
 
 
-<div id="weeks" class="weeks"></div>
+  <div
+    id="weeks"
+    class="weeks"
+  ></div>
 
-<div id="filters" class="filters"></div>
 
-<div id="cardBody"></div>
+  <div
+    id="filters"
+    class="filters"
+  ></div>
 
+
+  <div
+    id="cardBody"
+  ></div>
 
 </section>
-
 
 </main>
 
 
 <script>
 
-const PICKERS=[
+const PICKERS = [
   "Big Cat",
   "Stool Presidente",
   "Rico Bosco"
 ];
 
-const COLORS={
-  "Big Cat":"#67a9ff",
-  "Stool Presidente":"#ff6b6b",
-  "Rico Bosco":"#f6c85f"
+
+const COLORS = {
+
+  "Big Cat":
+    "#67a9ff",
+
+  "Stool Presidente":
+    "#ff6b6b",
+
+  "Rico Bosco":
+    "#f6c85f"
 };
 
-const INITIALS={
-  "Big Cat":"BC",
-  "Stool Presidente":"DP",
-  "Rico Bosco":"RB"
+
+const INITIALS = {
+
+  "Big Cat":
+    "BC",
+
+  "Stool Presidente":
+    "DP",
+
+  "Rico Bosco":
+    "RB"
 };
 
-let DATA={
+
+let DATA = {
   cappers:[],
   win_pct_history:{},
   weeks:[],
   picks:[]
 };
 
-let selectedWeek=null;
-let selectedFilter="All";
 
-const $=
-  selector=>
-    document.querySelector(selector);
+let selectedWeek = null;
+
+let selectedFilter =
+  "All";
+
+
+const $ = selector =>
+  document.querySelector(
+    selector
+  );
+
 
 
 function recordFromValues(
@@ -1059,18 +890,15 @@ function recordFromValues(
 ){
 
   return (
-    `${wins||0}-${losses||0}`
-    +
-    (
+    `${wins || 0}-${losses || 0}`
+    + (
       pushes
-      ?
-      `-${pushes}`
-      :
-      ""
+        ? `-${pushes}`
+        : ""
     )
   );
-
 }
+
 
 
 function record(c){
@@ -1080,384 +908,560 @@ function record(c){
     c.losses,
     c.pushes
   );
-
 }
+
 
 
 function finalized(p){
 
   return (
-    p.status==="FINAL"
+    p.status === "FINAL"
     &&
     [
       "WIN",
       "LOSS",
       "PUSH"
-    ].includes(p.result)
+    ].includes(
+      p.result
+    )
   );
-
 }
 
 
-function statsForPicks(picks){
 
-  const finals=
-    picks.filter(finalized);
+function statsForPicks(
+  picks
+){
 
-  const wins=
+  const finals =
+    picks.filter(
+      finalized
+    );
+
+
+  const wins =
     finals.filter(
-      p=>p.result==="WIN"
+      p =>
+        p.result === "WIN"
     ).length;
 
-  const losses=
+
+  const losses =
     finals.filter(
-      p=>p.result==="LOSS"
+      p =>
+        p.result === "LOSS"
     ).length;
 
-  const pushes=
+
+  const pushes =
     finals.filter(
-      p=>p.result==="PUSH"
+      p =>
+        p.result === "PUSH"
     ).length;
 
-  const pct=
-    wins+losses
-    ?
-    wins/(wins+losses)*100
-    :
-    0;
+
+  const pct =
+    wins + losses
+      ? wins /
+        (
+          wins + losses
+        )
+        * 100
+      : 0;
+
 
   return {
     wins,
     losses,
     pushes,
     pct,
-    finals:finals.length
+    finals:
+      finals.length
   };
-
 }
+
 
 
 function latestWeek(){
 
-  const weeks=
+  const weeks =
     DATA.weeks
     &&
     DATA.weeks.length
-    ?
-    DATA.weeks
-    :
-    [1];
+      ? DATA.weeks
+      : [1];
 
-  return +weeks.at(-1);
 
+  return +weeks.at(
+    -1
+  );
 }
+
 
 
 function formatUpdatedTime(){
 
-  if(!DATA.updated_at){
+  if(
+    !DATA.updated_at
+  ){
     return "Unavailable";
   }
 
-  const d=
-    new Date(DATA.updated_at);
 
-  return d.toLocaleTimeString(
-    [],
-    {
-      hour:"numeric",
-      minute:"2-digit"
-    }
+  const d =
+    new Date(
+      DATA.updated_at
+    );
+
+
+  return (
+    d.toLocaleTimeString(
+      [],
+      {
+        hour:
+          "numeric",
+
+        minute:
+          "2-digit"
+      }
+    )
   );
-
 }
+
 
 
 function renderStatus(){
 
-  const week=
+  const week =
     latestWeek();
 
-  const weekPicks=
+
+  const weekPicks =
     DATA.picks.filter(
-      p=>+p.week===week
+      p =>
+        +p.week
+        ===
+        week
     );
 
-  const pending=
+
+  const pending =
     weekPicks.filter(
-      p=>!finalized(p)
+      p =>
+        !finalized(
+          p
+        )
     ).length;
 
-  const completionPill=
-    pending===0
-    ?
-    `
-      <div class="statusPill">
-        <span class="dot good"></span>
-        <strong>Week Complete ✓</strong>
-      </div>
-    `
-    :
-    `
-      <div class="statusPill">
-        <span class="dot open"></span>
-        <strong>${pending}</strong>
-        pending
-      </div>
-    `;
 
-  $("#statusStrip").innerHTML=
-    `
-      <div class="statusPill weekAccent">
+  const completionPill =
+    pending === 0
+
+      ? `
+        <div class="statusPill">
+          <span class="dot good"></span>
+          <strong>
+            Week Complete ✓
+          </strong>
+        </div>
+      `
+
+      : `
+        <div class="statusPill">
+          <span class="dot open"></span>
+          <strong>
+            ${pending}
+          </strong>
+          pending
+        </div>
+      `;
+
+
+  $("#statusStrip")
+    .innerHTML = `
+
+      <div
+        class="
+          statusPill
+          weekAccent
+        "
+      >
         <strong>
           Week ${week}
         </strong>
       </div>
 
-      <div class="statusPill">
+
+      <div
+        class="statusPill"
+      >
         Updated as of
         <strong>
           ${formatUpdatedTime()}
         </strong>
       </div>
 
+
       ${completionPill}
     `;
-
 }
+
 
 
 function sortedCappers(){
 
-  return PICKERS
-  .map(
-    picker=>
-      DATA.cappers.find(
-        c=>c.picker===picker
-      )
-      ||
-      {
-        picker,
-        wins:0,
-        losses:0,
-        pushes:0,
-        win_pct:0
-      }
-  )
-  .sort(
-    (a,b)=>
-      (b.win_pct||0)
-      -
-      (a.win_pct||0)
-  );
+  return (
+    PICKERS
 
+      .map(
+        picker =>
+
+          DATA.cappers.find(
+            c =>
+              c.picker
+              ===
+              picker
+          )
+
+          ||
+
+          {
+            picker,
+            wins:0,
+            losses:0,
+            pushes:0,
+            win_pct:0
+          }
+      )
+
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          (
+            b.win_pct || 0
+          )
+          -
+          (
+            a.win_pct || 0
+          )
+      )
+  );
 }
 
 
-function openPicker(picker){
 
-  selectedWeek=
+function openPicker(
+  picker
+){
+
+  selectedWeek =
     latestWeek();
 
-  selectedFilter=
+
+  selectedFilter =
     picker;
 
-  showFull();
 
+  showFull();
 }
+
 
 
 function renderCards(){
 
-  const sorted=
+  const sorted =
     sortedCappers();
 
-  $("#cards").innerHTML=
-    sorted.map(
-      (c,index)=>{
 
-        const rank=
-          index+1;
+  $("#cards")
+    .innerHTML =
+      sorted.map(
+        (
+          c,
+          index
+        ) => {
 
-        const pct=
-          Number(c.win_pct||0);
+          const rank =
+            index + 1;
 
-        return `
-          <article
-            class="card ${rank===1?"leader":""}"
-            onclick="openPicker('${c.picker}')">
 
-            ${
-              rank===1
-              ?
-              `
-                <div class="leaderTag">
-                  ★ LEADER
-                </div>
-              `
-              :
-              ""
-            }
+          const pct =
+            Number(
+              c.win_pct
+              || 0
+            );
 
-            <div
-              class="rankTag ${rank===1?"first":""}">
-              #${rank}
-            </div>
 
-            <div class="name">
-              ${c.picker.toUpperCase()}
-            </div>
+          return `
 
-            <div class="record">
-              ${record(c)}
-            </div>
+            <article
+              class="
+                card
+                ${
+                  rank === 1
+                    ? "leader"
+                    : ""
+                }
+              "
+              onclick="
+                openPicker(
+                  '${c.picker}'
+                )
+              "
+            >
 
-            <div class="pct">
-              ${pct.toFixed(1)}%
-              overall win rate
-            </div>
+              ${
+                rank === 1
 
-          </article>
-        `;
+                  ? `
+                    <div class="leaderTag">
+                      ★ LEADER
+                    </div>
+                  `
 
-      }
-    )
-    .join("");
+                  : ""
+              }
 
+
+              <div
+                class="
+                  rankTag
+                  ${
+                    rank === 1
+                      ? "first"
+                      : ""
+                  }
+                "
+              >
+                #${rank}
+              </div>
+
+
+              <div class="name">
+                ${c.picker.toUpperCase()}
+              </div>
+
+
+              <div class="record">
+                ${record(c)}
+              </div>
+
+
+              <div class="pct">
+                ${pct.toFixed(1)}%
+                overall win rate
+              </div>
+
+            </article>
+          `;
+        }
+      )
+      .join("");
 }
+
 
 
 function renderWeekBoard(){
 
-  const week=
+  const week =
     latestWeek();
 
-  $("#weekBoardTitle").textContent=
-    `Week ${week}`;
 
-  const ranked=
+  $("#weekBoardTitle")
+    .textContent =
+      `Week ${week}`;
+
+
+  const ranked =
     PICKERS
-    .map(
-      picker=>{
 
-        const picks=
-          DATA.picks.filter(
-            p=>
-              +p.week===week
-              &&
-              p.picker===picker
-          );
+      .map(
+        picker => {
 
-        return {
-          picker,
-          ...statsForPicks(picks)
-        };
+          const picks =
+            DATA.picks.filter(
+              p =>
+                +p.week
+                  ===
+                week
+                &&
+                p.picker
+                  ===
+                picker
+            );
 
-      }
-    )
-    .sort(
-      (a,b)=>
-        b.pct-a.pct
-    );
 
-  $("#weekBoard").innerHTML=
-    ranked.map(
-      (c,index)=>{
+          return {
+            picker,
+            ...statsForPicks(
+              picks
+            )
+          };
+        }
+      )
 
-        const rank=
-          index+1;
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          b.pct
+          -
+          a.pct
+      );
 
-        return `
-          <div
-            class="weekRow"
-            onclick="openPicker('${c.picker}')">
+
+  $("#weekBoard")
+    .innerHTML =
+      ranked.map(
+        (
+          c,
+          index
+        ) => {
+
+          const rank =
+            index + 1;
+
+
+          return `
 
             <div
-              class="rank ${rank===1?"first":""}">
-              ${rank}
-            </div>
-
-            <div class="weekName">
-
-              <strong>
-                ${c.picker}
-              </strong>
-
-              <span>
-                ${c.finals}
-                graded
-                ${
-                  c.finals===1
-                  ?
-                  "pick"
-                  :
-                  "picks"
-                }
-              </span>
-
-            </div>
-
-            <div class="weekRecord">
-
-              ${
-                recordFromValues(
-                  c.wins,
-                  c.losses,
-                  c.pushes
+              class="weekRow"
+              onclick="
+                openPicker(
+                  '${c.picker}'
                 )
-              }
+              "
+            >
 
-              <div class="weekPct">
-                ${c.pct.toFixed(1)}%
+              <div
+                class="
+                  rank
+                  ${
+                    rank === 1
+                      ? "first"
+                      : ""
+                  }
+                "
+              >
+                ${rank}
+              </div>
+
+
+              <div
+                class="weekName"
+              >
+
+                <strong>
+                  ${c.picker}
+                </strong>
+
+                <span>
+                  ${c.finals}
+                  graded
+                  ${
+                    c.finals === 1
+                      ? "pick"
+                      : "picks"
+                  }
+                </span>
+
+              </div>
+
+
+              <div
+                class="weekRecord"
+              >
+
+                ${
+                  recordFromValues(
+                    c.wins,
+                    c.losses,
+                    c.pushes
+                  )
+                }
+
+                <div
+                  class="weekPct"
+                >
+                  ${c.pct.toFixed(1)}%
+                </div>
+
               </div>
 
             </div>
-
-          </div>
-        `;
-
-      }
-    )
-    .join("");
-
+          `;
+        }
+      )
+      .join("");
 }
+
 
 
 function renderRace(){
 
-  const svg=
+  const svg =
     $("#race");
 
-  const weeks=
+
+  const weeks =
     (
       DATA.weeks
       &&
       DATA.weeks.length
-      ?
-      DATA.weeks
-      :
-      [1]
+        ? DATA.weeks
+        : [1]
     )
-    .map(Number);
+    .map(
+      Number
+    );
 
-  const width=900;
-  const height=280;
 
-  const left=65;
-  const right=150;
-  const top=34;
-  const bottom=45;
+  const width =
+    900;
 
-  const chartW=
-    width-left-right;
+  const height =
+    280;
 
-  const chartH=
-    height-top-bottom;
+  const left =
+    65;
 
-  const yMin=30;
-  const yMax=85;
+  const right =
+    150;
 
-  const yTicks=[
+  const top =
+    34;
+
+  const bottom =
+    45;
+
+
+  const chartW =
+    width
+    -
+    left
+    -
+    right;
+
+
+  const chartH =
+    height
+    -
+    top
+    -
+    bottom;
+
+
+  const yMin =
+    30;
+
+  const yMax =
+    85;
+
+
+  const yTicks = [
     30,
     44,
     58,
@@ -1466,29 +1470,47 @@ function renderRace(){
   ];
 
 
-  function xForIndex(i){
 
-    if(weeks.length===1){
-      return left+chartW/2;
+  function xForIndex(
+    i
+  ){
+
+    if(
+      weeks.length === 1
+    ){
+
+      return (
+        left
+        +
+        chartW / 2
+      );
     }
+
 
     return (
       left
       +
       (
-        i/
-        (weeks.length-1)
+        i
+        /
+        (
+          weeks.length
+          -
+          1
+        )
       )
       *
       chartW
     );
-
   }
 
 
-  function yForPct(pct){
 
-    const safe=
+  function yForPct(
+    pct
+  ){
+
+    const safe =
       Math.max(
         yMin,
         Math.min(
@@ -1497,103 +1519,132 @@ function renderRace(){
         )
       );
 
+
     return (
       top
       +
       (
-        (yMax-safe)
+        (
+          yMax
+          -
+          safe
+        )
         /
-        (yMax-yMin)
+        (
+          yMax
+          -
+          yMin
+        )
       )
       *
       chartH
     );
-
   }
 
 
-  let html="";
+
+  let html = "";
 
 
   yTicks.forEach(
-    tick=>{
+    tick => {
 
-      const y=
-        yForPct(tick);
+      const y =
+        yForPct(
+          tick
+        );
 
-      html+=`
+
+      html += `
+
         <line
           class="grid"
           x1="${left}"
           x2="${width-right}"
           y1="${y}"
-          y2="${y}">
-        </line>
+          y2="${y}"
+        ></line>
+
 
         <text
           class="axistext"
           x="${left-12}"
           y="${y+4}"
-          text-anchor="end">
-
+          text-anchor="end"
+        >
           ${tick}%
-
         </text>
       `;
-
     }
   );
 
 
   weeks.forEach(
-    (week,i)=>{
+    (
+      week,
+      i
+    ) => {
 
-      html+=`
+      html += `
+
         <text
           class="axistext"
           x="${xForIndex(i)}"
           y="${height-15}"
-          text-anchor="middle">
-
+          text-anchor="middle"
+        >
           W${week}
-
         </text>
       `;
-
     }
   );
 
 
   PICKERS.forEach(
-    picker=>{
+    picker => {
 
-      const history=
-        DATA.win_pct_history[picker]
-        ||
-        [];
+      const history =
+        DATA.win_pct_history[
+          picker
+        ]
+        || [];
 
-      const points=
+
+      const points =
         weeks.map(
-          (week,i)=>{
+          (
+            week,
+            i
+          ) => {
 
-            let value=0;
+            let value =
+              0;
 
-            if(Array.isArray(history)){
 
-              const found=
+            if(
+              Array.isArray(
+                history
+              )
+            ){
+
+              const found =
                 history.find(
-                  h=>
+                  h =>
                     +(
                       h.week
                       ??
                       h.x
                     )
-                    ===week
+                    ===
+                    week
                 );
 
-              if(found){
 
-                value=
+              if(
+                found
+              ){
+
+                value =
                   Number(
                     found.win_pct
                     ??
@@ -1603,7 +1654,6 @@ function renderRace(){
                     ??
                     0
                   );
-
               }
 
               else if(
@@ -1612,9 +1662,10 @@ function renderRace(){
                 "number"
               ){
 
-                value=
-                  Number(history[i]);
-
+                value =
+                  Number(
+                    history[i]
+                  );
               }
 
               else if(
@@ -1625,7 +1676,7 @@ function renderRace(){
                 "object"
               ){
 
-                value=
+                value =
                   Number(
                     history[i].win_pct
                     ??
@@ -1635,348 +1686,651 @@ function renderRace(){
                     ??
                     0
                   );
-
               }
-
             }
 
+
             if(
-              weeks.length===1
+              weeks.length === 1
               &&
               !value
             ){
 
-              const c=
+              const c =
                 DATA.cappers.find(
-                  x=>x.picker===picker
+                  x =>
+                    x.picker
+                    ===
+                    picker
                 );
 
-              value=
+
+              value =
                 Number(
                   c?.win_pct
-                  ||
-                  0
+                  || 0
                 );
-
             }
 
-            return {
-              x:xForIndex(i),
-              y:yForPct(value),
-              pct:value
-            };
 
+            return {
+              x:
+                xForIndex(
+                  i
+                ),
+
+              y:
+                yForPct(
+                  value
+                ),
+
+              pct:
+                value
+            };
           }
         );
 
-      const color=
-        COLORS[picker];
 
-      if(points.length>1){
+      const color =
+        COLORS[
+          picker
+        ];
 
-        const path=
-          points
-          .map(
-            (p,i)=>
-              `${i?"L":"M"} ${p.x} ${p.y}`
+
+      if(
+        points.length > 1
+      ){
+
+        const path =
+          points.map(
+            (
+              p,
+              i
+            ) =>
+              `${
+                i
+                  ? "L"
+                  : "M"
+              } ${p.x} ${p.y}`
           )
           .join(" ");
 
-        html+=`
+
+        html += `
           <path
             class="line"
             d="${path}"
-            stroke="${color}">
-          </path>
+            stroke="${color}"
+          ></path>
         `;
-
       }
 
-      const last=
-        points.at(-1);
 
-      if(!last){
+      const last =
+        points.at(
+          -1
+        );
+
+
+      if(
+        !last
+      ){
         return;
       }
 
-      html+=`
+
+      html += `
         <circle
           cx="${last.x}"
           cy="${last.y}"
           r="19"
-          fill="${color}">
-        </circle>
+          fill="${color}"
+        ></circle>
       `;
 
-      html+=`
+
+      html += `
         <text
           class="avatarText"
           x="${last.x}"
-          y="${last.y+1}">
+          y="${last.y+1}"
+        >
           ${INITIALS[picker]}
         </text>
       `;
 
-      html+=`
+
+      html += `
         <text
           class="endpct"
           x="${last.x+28}"
-          y="${last.y+4}">
+          y="${last.y+4}"
+        >
           ${last.pct.toFixed(1)}%
         </text>
       `;
-
     }
   );
 
-  svg.innerHTML=
-    html;
 
+  svg.innerHTML =
+    html;
 }
+
 
 
 function showFull(){
 
   $("#overview")
-  .classList
-  .remove("active");
+    .classList.remove(
+      "active"
+    );
+
 
   $("#full")
-  .classList
-  .add("active");
+    .classList.add(
+      "active"
+    );
+
 
   renderFull();
+
 
   window.scrollTo({
     top:0,
     behavior:"instant"
   });
-
 }
+
 
 
 function showOverview(){
 
   $("#full")
-  .classList
-  .remove("active");
+    .classList.remove(
+      "active"
+    );
+
 
   $("#overview")
-  .classList
-  .add("active");
+    .classList.add(
+      "active"
+    );
+
 
   window.scrollTo({
     top:0,
     behavior:"instant"
   });
-
 }
+
 
 
 function renderWeeks(){
 
-  const weeks=
+  const weeks =
     DATA.weeks
     &&
     DATA.weeks.length
-    ?
-    DATA.weeks
-    :
-    [1];
 
-  $("#weeks").innerHTML=
-    weeks.map(
-      week=>`
+      ? DATA.weeks
 
-        <button
-          class="
-            weekbtn
-            ${
-              +selectedWeek===+week
-              ?
-              "active"
-              :
-              ""
-            }
-          "
-          onclick="
-            selectedWeek=${+week};
-            renderFull();
-          ">
+      : [1];
 
-          Week ${week}
 
-        </button>
+  $("#weeks")
+    .innerHTML =
+      weeks.map(
+        week => `
 
-      `
-    )
-    .join("");
-
+          <button
+            class="
+              weekbtn
+              ${
+                +selectedWeek === +week
+                  ? "active"
+                  : ""
+              }
+            "
+            onclick="
+              selectedWeek=${+week};
+              renderFull();
+            "
+          >
+            Week ${week}
+          </button>
+        `
+      )
+      .join("");
 }
+
 
 
 function renderFilters(){
 
-  const values=[
+  const values = [
     "All",
     ...PICKERS
   ];
 
-  $("#filters").innerHTML=
-    values.map(
-      value=>`
 
-        <button
-          class="
-            filterbtn
-            ${
-              selectedFilter===value
-              ?
-              "active"
-              :
-              ""
-            }
-          "
-          onclick="
-            selectedFilter='${value}';
-            renderFull();
-          ">
+  $("#filters")
+    .innerHTML =
+      values.map(
+        value => `
 
-          ${value}
-
-        </button>
-
-      `
-    )
-    .join("");
-
+          <button
+            class="
+              filterbtn
+              ${
+                selectedFilter === value
+                  ? "active"
+                  : ""
+              }
+            "
+            onclick="
+              selectedFilter='${value}';
+              renderFull();
+            "
+          >
+            ${value}
+          </button>
+        `
+      )
+      .join("");
 }
 
 
-function resultIcon(pick){
 
-  if(pick.result==="WIN"){
+function resultIcon(
+  pick
+){
+
+  if(
+    pick.result === "WIN"
+  ){
     return "💰";
   }
 
-  if(pick.result==="LOSS"){
+
+  if(
+    pick.result === "LOSS"
+  ){
     return "❌";
   }
 
-  if(pick.result==="PUSH"){
+
+  if(
+    pick.result === "PUSH"
+  ){
     return "➖";
   }
 
-  return "⏳";
 
+  return "⏳";
 }
 
 
-function pickMeta(pick){
 
-  const pieces=[];
+/* ============================================================
+   GAME TIME DISPLAY
 
-  if(pick.added_pick){
+   ESPN stores game_time in UTC.
 
-    pieces.push(
-      `<span class="badge">
-        ADDED PICK
-      </span>`
+   We always display the kickoff in Pacific time because the
+   Pick Em tracker is being built around Pacific scheduling.
+
+   Example display:
+
+       Sat. 9/12 @ 4:30 PM PST
+============================================================ */
+
+function formatGameTime(
+  value
+){
+
+  if(
+    !value
+  ){
+    return (
+      "Game time pending"
     );
-
   }
 
-  if(pick.final_score){
+
+  const date =
+    new Date(
+      value
+    );
+
+
+  if(
+    Number.isNaN(
+      date.getTime()
+    )
+  ){
+
+    return (
+      "Game time pending"
+    );
+  }
+
+
+  const parts =
+    new Intl.DateTimeFormat(
+      "en-US",
+      {
+        timeZone:
+          "America/Los_Angeles",
+
+        weekday:
+          "short",
+
+        month:
+          "numeric",
+
+        day:
+          "numeric",
+
+        hour:
+          "numeric",
+
+        minute:
+          "2-digit",
+
+        hour12:
+          true
+      }
+    )
+    .formatToParts(
+      date
+    );
+
+
+  const get =
+    type =>
+      parts.find(
+        part =>
+          part.type === type
+      )?.value
+      || "";
+
+
+  return (
+    `${get("weekday")}. `
+    +
+    `${get("month")}/${get("day")} `
+    +
+    `@ `
+    +
+    `${get("hour")}:${get("minute")} `
+    +
+    `${get("dayPeriod")} `
+    +
+    `PST`
+  );
+}
+
+
+
+/* ============================================================
+   FULL CARD METADATA
+
+   Previous behavior:
+
+       Source ↗
+
+   New behavior:
+
+       Sat. 9/12 @ 4:30 PM PST
+
+   source_url remains inside dashboard.json. We simply no longer
+   show it as the primary gray metadata line.
+
+   Final score remains visible after the game is graded.
+============================================================ */
+
+function pickMeta(
+  pick
+){
+
+  const pieces =
+    [];
+
+
+  if(
+    pick.added_pick
+  ){
+
+    pieces.push(
+      `
+        <span class="badge">
+          ADDED PICK
+        </span>
+      `
+    );
+  }
+
+
+  pieces.push(
+    formatGameTime(
+      pick.game_time
+    )
+  );
+
+
+  if(
+    pick.final_score
+  ){
 
     pieces.push(
       pick.final_score
     );
-
   }
 
-  if(pick.source_url){
 
-    pieces.push(
-      `
-        <a
-          class="source"
-          href="${pick.source_url}"
-          target="_blank"
-          rel="noopener">
+  return (
+    pieces.join(
+      " · "
+    )
+  );
+}
 
-          Source ↗
 
-        </a>
-      `
+
+/* ============================================================
+   CHRONOLOGICAL SORTING
+
+   1. Earliest kickoff first.
+   2. Bets on the same ESPN event stay next to each other.
+   3. Picks without a confident ESPN match go to the bottom.
+============================================================ */
+
+function kickoffSort(
+  a,
+  b
+){
+
+  const aParsed =
+    a.game_time
+
+      ? new Date(
+          a.game_time
+        ).getTime()
+
+      : NaN;
+
+
+  const bParsed =
+    b.game_time
+
+      ? new Date(
+          b.game_time
+        ).getTime()
+
+      : NaN;
+
+
+  const aTime =
+    Number.isFinite(
+      aParsed
+    )
+
+      ? aParsed
+
+      : Number.MAX_SAFE_INTEGER;
+
+
+  const bTime =
+    Number.isFinite(
+      bParsed
+    )
+
+      ? bParsed
+
+      : Number.MAX_SAFE_INTEGER;
+
+
+  if(
+    aTime !== bTime
+  ){
+
+    return (
+      aTime
+      -
+      bTime
+    );
+  }
+
+
+  const aEvent =
+    String(
+      a.event_id
+      || ""
     );
 
+
+  const bEvent =
+    String(
+      b.event_id
+      || ""
+    );
+
+
+  if(
+    aEvent !== bEvent
+  ){
+
+    return (
+      aEvent.localeCompare(
+        bEvent
+      )
+    );
   }
 
-  return pieces.join(" · ");
 
+  return (
+    String(
+      a.selection
+      || ""
+    )
+    .localeCompare(
+      String(
+        b.selection
+        || ""
+      )
+    )
+  );
 }
+
 
 
 function renderCardBody(){
 
-  const picks=
+  const picks =
     DATA.picks.filter(
-      p=>
+      p =>
         +p.week
         ===
         +selectedWeek
     );
 
-  const pickers=
-    selectedFilter==="All"
-    ?
-    PICKERS
-    :
-    [selectedFilter];
 
-  const blocks=
+  const pickers =
+    selectedFilter === "All"
+
+      ? PICKERS
+
+      : [
+          selectedFilter
+        ];
+
+
+  const blocks =
     pickers.map(
-      picker=>{
+      picker => {
 
-        const rows=
-          picks.filter(
-            p=>p.picker===picker
+
+        const rows =
+          picks
+
+            .filter(
+              p =>
+                p.picker
+                ===
+                picker
+            )
+
+            .slice()
+
+            .sort(
+              kickoffSort
+            );
+
+
+        const stats =
+          statsForPicks(
+            rows
           );
 
-        const stats=
-          statsForPicks(rows);
 
-        const titleRecord=
+        const titleRecord =
           recordFromValues(
             stats.wins,
             stats.losses,
             stats.pushes
           );
 
-        let body="";
 
-        if(rows.length===0){
+        let body = "";
 
-          body=`
+
+        if(
+          rows.length === 0
+        ){
+
+          body = `
             <div class="empty">
               No picks found.
             </div>
           `;
-
         }
 
         else{
 
-          body=
+          body =
             rows.map(
-              pick=>`
+              pick => `
 
                 <div class="pick">
 
                   <div>
 
                     <div class="sel">
-                      ${pick.selection||""}
+                      ${
+                        pick.selection
+                        || ""
+                      }
                     </div>
 
                     <div class="meta">
@@ -1985,23 +2339,27 @@ function renderCardBody(){
 
                   </div>
 
+
                   <div class="result">
                     ${resultIcon(pick)}
                   </div>
 
                 </div>
-
               `
             )
             .join("");
-
         }
+
 
         return `
 
-          <section class="pickerBlock">
+          <section
+            class="pickerBlock"
+          >
 
-            <div class="pickerTitle">
+            <div
+              class="pickerTitle"
+            >
 
               <span>
                 ${picker}
@@ -2013,162 +2371,212 @@ function renderCardBody(){
 
             </div>
 
+
             ${body}
 
           </section>
-
         `;
-
       }
     );
 
-  $("#cardBody").innerHTML=
-    blocks.join("");
 
+  $("#cardBody")
+    .innerHTML =
+      blocks.join("");
 }
+
 
 
 function renderFull(){
 
-  if(selectedWeek===null){
-    selectedWeek=
+  if(
+    selectedWeek === null
+  ){
+
+    selectedWeek =
       latestWeek();
   }
 
-  renderWeeks();
-  renderFilters();
-  renderCardBody();
 
+  renderWeeks();
+
+  renderFilters();
+
+  renderCardBody();
 }
+
 
 
 async function loadData(){
 
   try{
 
-    const response=
+    const response =
       await fetch(
         "data/dashboard.json",
         {
-          cache:"no-store"
+          cache:
+            "no-store"
         }
       );
 
-    if(!response.ok){
+
+    if(
+      !response.ok
+    ){
 
       throw new Error(
         `Dashboard fetch failed: ${response.status}`
       );
-
     }
 
-    DATA=
+
+    DATA =
       await response.json();
 
-    if(!Array.isArray(DATA.picks)){
-      DATA.picks=[];
-    }
-
-    if(!Array.isArray(DATA.cappers)){
-      DATA.cappers=[];
-    }
 
     if(
-      !Array.isArray(DATA.weeks)
+      !Array.isArray(
+        DATA.picks
+      )
+    ){
+
+      DATA.picks =
+        [];
+    }
+
+
+    if(
+      !Array.isArray(
+        DATA.cappers
+      )
+    ){
+
+      DATA.cappers =
+        [];
+    }
+
+
+    if(
+      !Array.isArray(
+        DATA.weeks
+      )
       ||
       !DATA.weeks.length
     ){
 
-      DATA.weeks=[
+      DATA.weeks = [
         ...new Set(
           DATA.picks
-          .map(
-            p=>+p.week
-          )
-          .filter(Boolean)
+            .map(
+              p =>
+                +p.week
+            )
+            .filter(
+              Boolean
+            )
         )
       ]
       .sort(
-        (a,b)=>a-b
+        (
+          a,
+          b
+        ) =>
+          a - b
       );
-
     }
 
-    if(!DATA.win_pct_history){
-      DATA.win_pct_history={};
+
+    if(
+      !DATA.win_pct_history
+    ){
+
+      DATA.win_pct_history =
+        {};
     }
 
-    selectedWeek=
+
+    selectedWeek =
       latestWeek();
 
+
     renderStatus();
+
     renderCards();
+
     renderRace();
+
     renderWeekBoard();
 
   }
 
-  catch(error){
+  catch(
+    error
+  ){
 
-    console.error(error);
+    console.error(
+      error
+    );
 
-    document.body.innerHTML=`
 
-      <main class="shell">
+    document.body
+      .innerHTML = `
 
-        <section class="section">
+        <main class="shell">
 
-          <div class="sectionInner">
+          <section class="section">
 
-            <h2>
-              Unable to load tracker
-            </h2>
+            <div class="sectionInner">
 
-            <p
-              style="
-                color:var(--muted);
-                margin-bottom:0;
-              ">
+              <h2>
+                Unable to load tracker
+              </h2>
 
-              Dashboard data could not be loaded.
+              <p
+                style="
+                  color:var(--muted);
+                  margin-bottom:0;
+                "
+              >
+                Dashboard data could not be loaded.
+              </p>
 
-            </p>
+            </div>
 
-          </div>
+          </section>
 
-        </section>
-
-      </main>
-
-    `;
-
+        </main>
+      `;
   }
-
 }
 
 
+
 $("#openCards")
-.addEventListener(
-  "click",
-  ()=>{
+  .addEventListener(
+    "click",
+    () => {
 
-    selectedWeek=
-      latestWeek();
+      selectedWeek =
+        latestWeek();
 
-    selectedFilter=
-      "All";
 
-    showFull();
+      selectedFilter =
+        "All";
 
-  }
-);
+
+      showFull();
+    }
+  );
+
 
 
 $("#back")
-.addEventListener(
-  "click",
-  showOverview
-);
+  .addEventListener(
+    "click",
+    showOverview
+  );
+
 
 
 loadData();
