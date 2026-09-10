@@ -28,6 +28,31 @@ TOTAL_MARKETS = {
 }
 
 
+# ============================================================
+# VERIFIED SOURCE-CARD OVERRIDES
+#
+# These are used only when we have personally verified the
+# official Barstool graphic and the image model has shown that
+# it can misread similar abbreviations.
+#
+# Key:
+#   (season, week, picker, normalized selection)
+#
+# This does NOT globally teach the system that USF means
+# anything else. It corrects only this exact verified wager.
+# ============================================================
+
+VERIFIED_MATCHUP_OVERRIDES = {
+    (
+        2026,
+        2,
+        "Rico Bosco",
+        "over 48.5",
+    ):
+        "USF @ BYU",
+}
+
+
 def clean_text(value):
     return (
         str(value or "")
@@ -70,6 +95,51 @@ def normalize_selection(value):
     )
 
     return value.strip()
+
+
+def safe_int(value):
+    try:
+        return int(value)
+
+    except Exception:
+        return None
+
+
+def verified_override_for_pick(
+    pick
+):
+    season = safe_int(
+        pick.get(
+            "season"
+        )
+    )
+
+    week = safe_int(
+        pick.get(
+            "week"
+        )
+    )
+
+    picker = clean_text(
+        pick.get(
+            "picker"
+        )
+    )
+
+    selection = normalize_selection(
+        pick.get(
+            "selection"
+        )
+    )
+
+    return VERIFIED_MATCHUP_OVERRIDES.get(
+        (
+            season,
+            week,
+            picker,
+            selection,
+        )
+    )
 
 
 def side_and_line(
@@ -382,37 +452,43 @@ def ask_model_for_matchup(
     prompt = f"""
 You are reading an official Barstool Pick Em pick-card image.
 
-Your job is extremely narrow:
-identify the exact GAME MATCHUP attached to one TOTAL wager.
+Your ONLY job is to identify the exact game heading attached to one
+specific TOTAL wager.
 
 Picker: {picker}
-Wager selection stored in our tracker: {selection}
-Currently stored matchup (may be wrong): {existing_matchup or 'NONE'}
-X post text: {source_text or 'NONE'}
+Wager: {selection}
+Stored matchup, which may be wrong: {existing_matchup or 'NONE'}
+Post text: {source_text or 'NONE'}
 
-Rules:
+IMPORTANT READING RULES:
 
-1. Look only at the official pick card images in this request.
+1. Use ONLY the words visible on the official card images.
 
-2. Find the line for this exact wager selection.
+2. Find the exact wager:
+   {selection}
 
-3. Read the matchup heading immediately associated with that wager on the card.
+3. The matchup is the game heading DIRECTLY ABOVE that wager.
 
-4. Do NOT infer the matchup from memory, rankings, team schedules, or the currently stored matchup.
+4. Do not use a different game that happens to contain the same line.
 
-5. If the exact wager appears more than once on this picker's card and the matchup cannot be uniquely identified, return found=false.
+5. Do not infer or autocorrect school abbreviations.
 
-6. Preserve the matchup wording from the graphic as closely as possible.
+6. Copy the abbreviations exactly as they appear on the card.
 
-Examples:
-"USF @ BYU"
-"OSU @ TEX"
-"Bama @ UK"
+7. Carefully distinguish abbreviations such as:
+   USF
+   UofA
+   UGA
+   Utah
+   Utah ST
+   ASU
 
-7. A total such as "Over 48.5" must be paired with the game directly above it on the graphic.
+8. If you cannot clearly read BOTH teams attached to this exact wager,
+   return found=false.
 
-8. Return JSON only.
-No markdown.
+9. Never use the currently stored matchup as evidence.
+
+10. Return JSON only.
 
 Return exactly:
 
@@ -601,9 +677,16 @@ def needs_total_context(
     ):
         return False
 
-    # Once ESPN has already locked the
-    # event, don't spend money reading
-    # the image again.
+    # Verified overrides are allowed to repair
+    # an existing incorrect matchup even if it
+    # has already been source-verified.
+    if verified_override_for_pick(
+        pick
+    ):
+        return True
+
+    # Once ESPN has locked the event, never
+    # spend money reparsing the card.
     if pick.get(
         "event_id"
     ):
@@ -613,6 +696,98 @@ def needs_total_context(
         pick.get(
             "source_post_id"
         )
+    )
+
+
+def clear_stale_schedule_fields(
+    pick
+):
+    pick.pop(
+        "event_id",
+        None,
+    )
+
+    pick.pop(
+        "game_matchup",
+        None,
+    )
+
+    pick.pop(
+        "game_time",
+        None,
+    )
+
+    pick.pop(
+        "game_match_status",
+        None,
+    )
+
+    pick.pop(
+        "game_match_source",
+        None,
+    )
+
+    pick.pop(
+        "game_match_confidence",
+        None,
+    )
+
+    pick.pop(
+        "game_match_review_reason",
+        None,
+    )
+
+    pick.pop(
+        "schedule_checked_at",
+        None,
+    )
+
+
+def apply_matchup(
+    pick,
+    matchup,
+    source,
+):
+    old = clean_text(
+        pick.get(
+            "matchup"
+        )
+    )
+
+    matchup = clean_text(
+        matchup
+    )
+
+    changed = (
+        normalize_selection(
+            old
+        )
+        !=
+        normalize_selection(
+            matchup
+        )
+    )
+
+    pick[
+        "matchup"
+    ] = matchup
+
+    pick[
+        "matchup_source"
+    ] = source
+
+    pick[
+        "matchup_source_verified_at"
+    ] = now_iso()
+
+    if changed:
+        clear_stale_schedule_fields(
+            pick
+        )
+
+    return (
+        changed,
+        old,
     )
 
 
@@ -662,15 +837,9 @@ def enrich_total_matchups():
     corrected = 0
     verified_unchanged = 0
     unresolved = 0
+    deterministic = 0
 
     for pick in candidates:
-
-        post_id = str(
-            pick.get(
-                "source_post_id"
-            )
-            or ""
-        )
 
         picker = clean_text(
             pick.get(
@@ -690,6 +859,72 @@ def enrich_total_matchups():
                     "matchup"
                 )
             )
+        )
+
+        # ----------------------------------------------------
+        # FIRST PRIORITY:
+        # exact source-card values we have manually verified.
+        # ----------------------------------------------------
+
+        override = (
+            verified_override_for_pick(
+                pick
+            )
+        )
+
+        if override:
+
+            changed, old = (
+                apply_matchup(
+                    pick,
+                    override,
+                    (
+                        "VERIFIED_BARSTOOL_"
+                        "CARD_OVERRIDE"
+                    ),
+                )
+            )
+
+            deterministic += 1
+
+            if changed:
+
+                corrected += 1
+
+                print(
+                    "TOTAL MATCHUP "
+                    "VERIFIED OVERRIDE:",
+                    picker,
+                    "|",
+                    selection,
+                    "| old:",
+                    old
+                    or "NONE",
+                    "| new:",
+                    override,
+                )
+
+            else:
+
+                verified_unchanged += 1
+
+                print(
+                    "TOTAL MATCHUP "
+                    "OVERRIDE ALREADY CORRECT:",
+                    picker,
+                    "|",
+                    selection,
+                    "|",
+                    override,
+                )
+
+            continue
+
+        post_id = str(
+            pick.get(
+                "source_post_id"
+            )
+            or ""
         )
 
         try:
@@ -832,27 +1067,33 @@ def enrich_total_matchups():
 
                 continue
 
-            if (
-                normalize_selection(
-                    existing_matchup
+            changed, old = (
+                apply_matchup(
+                    pick,
+                    returned_matchup,
+                    "BARSTOOL_CARD_IMAGE",
                 )
-                ==
-                normalize_selection(
-                    returned_matchup
+            )
+
+            if changed:
+
+                corrected += 1
+
+                print(
+                    "TOTAL MATCHUP CORRECTED:",
+                    picker,
+                    "|",
+                    selection,
+                    "| old:",
+                    old
+                    or "NONE",
+                    "| new:",
+                    returned_matchup,
                 )
-            ):
+
+            else:
 
                 verified_unchanged += 1
-
-                pick[
-                    "matchup_source_verified_at"
-                ] = now_iso()
-
-                pick[
-                    "matchup_source"
-                ] = (
-                    "BARSTOOL_CARD_IMAGE"
-                )
 
                 print(
                     "TOTAL MATCHUP VERIFIED:",
@@ -862,70 +1103,6 @@ def enrich_total_matchups():
                     "|",
                     returned_matchup,
                 )
-
-                continue
-
-            print(
-                "TOTAL MATCHUP CORRECTED:",
-                picker,
-                "|",
-                selection,
-                "| old:",
-                existing_matchup
-                or "NONE",
-                "| new:",
-                returned_matchup,
-            )
-
-            pick[
-                "matchup"
-            ] = returned_matchup
-
-            pick[
-                "matchup_source"
-            ] = (
-                "BARSTOOL_CARD_IMAGE"
-            )
-
-            pick[
-                "matchup_source_verified_at"
-            ] = now_iso()
-
-            # Remove stale schedule-review
-            # metadata so schedule_enrich.py
-            # gets a clean chance to lock
-            # the corrected matchup.
-            pick.pop(
-                "game_matchup",
-                None,
-            )
-
-            pick.pop(
-                "game_time",
-                None,
-            )
-
-            pick.pop(
-                "game_match_status",
-                None,
-            )
-
-            pick.pop(
-                "game_match_source",
-                None,
-            )
-
-            pick.pop(
-                "game_match_confidence",
-                None,
-            )
-
-            pick.pop(
-                "game_match_review_reason",
-                None,
-            )
-
-            corrected += 1
 
         except Exception as exc:
 
@@ -943,6 +1120,11 @@ def enrich_total_matchups():
     save_json(
         PICKS_FILE,
         picks,
+    )
+
+    print(
+        "Verified deterministic overrides:",
+        deterministic,
     )
 
     print(
