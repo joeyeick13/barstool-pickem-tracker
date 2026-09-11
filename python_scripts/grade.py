@@ -81,6 +81,14 @@ ALIASES = {
         "aub",
     },
 
+    "arizona": {
+        "arizona",
+        "zona",
+        "uofa",
+        "u of a",
+    },
+
+
     "bowling green": {
         "bowling green",
         "bowling green state",
