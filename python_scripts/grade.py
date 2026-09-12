@@ -88,7 +88,6 @@ ALIASES = {
         "u of a",
     },
 
-
     "bowling green": {
         "bowling green",
         "bowling green state",
@@ -795,6 +794,213 @@ def normalize_bet_type(value):
     )
 
 
+def market_period(
+    bet_type
+):
+    bet_type = (
+        normalize_bet_type(
+            bet_type
+        )
+    )
+
+    if bet_type.startswith(
+        "FIRST_QUARTER_"
+    ):
+        return "FIRST_QUARTER"
+
+    if bet_type.startswith(
+        "FIRST_HALF_"
+    ):
+        return "FIRST_HALF"
+
+    return "FULL_GAME"
+
+
+def base_market(
+    bet_type
+):
+    bet_type = (
+        normalize_bet_type(
+            bet_type
+        )
+    )
+
+    for prefix in (
+        "FIRST_QUARTER_",
+        "FIRST_HALF_",
+    ):
+        if bet_type.startswith(
+            prefix
+        ):
+            return bet_type[
+                len(prefix):
+            ]
+
+    return bet_type
+
+
+def spread_line_from_selection(pick):
+    """
+    Read a spread's SIGNED line directly from the visible selection.
+
+    Examples:
+      Oregon -22.5     -> -22.5
+      Mich +5.5        -> +5.5
+      Purdue +3        -> +3.0
+      Oregon 1h -13.5  -> -13.5
+
+    Why this exists:
+    Some historical rows were extracted with the correct selection
+    string but an incorrectly unsigned/positive numeric "line" field.
+
+    The selection is the bettor-facing source of truth for the spread
+    sign. This prevents a favorite such as Oregon -22.5 from being
+    accidentally graded as though it were Oregon +22.5.
+
+    Official PAT HILL rows are never passed through this repair.
+    """
+
+    selection = clean_text(
+        pick.get(
+            "selection"
+        )
+    )
+
+    if not selection:
+        return None
+
+    text = (
+        selection
+        .replace("−", "-")
+        .replace("–", "-")
+        .replace("—", "-")
+        .replace("½", ".5")
+    )
+
+    # If odds were ever appended in parentheses, ignore them.
+    #
+    # Example:
+    #   Oregon -22.5 (-110)
+    #
+    # We want -22.5, not -110.
+    text = re.sub(
+        r"\(\s*[+-]\s*\d+(?:\.\d+)?\s*\)"
+        r"\s*$",
+        "",
+        text,
+    ).strip()
+
+    matches = list(
+        re.finditer(
+            r"(?<![A-Za-z0-9])"
+            r"([+-])\s*"
+            r"(\d+(?:\.\d+)?)",
+            text,
+        )
+    )
+
+    if not matches:
+        return None
+
+    # The first signed number in a spread selection is the spread.
+    # Team names do not contain signed numbers, while any trailing
+    # price/odds would come later.
+    match = matches[0]
+
+    sign = (
+        -1.0
+        if match.group(1) == "-"
+        else 1.0
+    )
+
+    try:
+        return (
+            sign
+            *
+            float(
+                match.group(2)
+            )
+        )
+
+    except Exception:
+        return None
+
+
+def normalize_spread_line(pick):
+    """
+    Repair the stored numeric line for all provisional spread markets.
+
+    This runs before ESPN grading, including for games that are still
+    OPEN, so bad line signs are corrected in picks.json immediately.
+
+    Returns True if the stored line was changed.
+    """
+
+    if is_official_result(
+        pick
+    ):
+        return False
+
+    bet_type = normalize_bet_type(
+        pick.get(
+            "bet_type"
+        )
+    )
+
+    if base_market(
+        bet_type
+    ) != "SPREAD":
+        return False
+
+    selection_line = (
+        spread_line_from_selection(
+            pick
+        )
+    )
+
+    if selection_line is None:
+        return False
+
+    stored_line = safe_float(
+        pick.get(
+            "line"
+        )
+    )
+
+    if (
+        stored_line is not None
+        and abs(
+            stored_line
+            - selection_line
+        )
+        < 0.000001
+    ):
+        return False
+
+    pick[
+        "line"
+    ] = selection_line
+
+    print(
+        "SPREAD LINE NORMALIZED:",
+        pick.get(
+            "picker"
+        )
+        or "Unknown",
+        "|",
+        pick.get(
+            "selection"
+        )
+        or "Unknown selection",
+        "| stored:",
+        stored_line,
+        "-> signed:",
+        selection_line,
+    )
+
+    return True
+
+
 def normalize_existing_pick_market(pick):
     """
     Upgrade older extracted market labels.
@@ -926,7 +1132,6 @@ def normalize_existing_pick_market(pick):
 
         return
 
-
     if (
         first_quarter
         or first_half
@@ -973,7 +1178,6 @@ def normalize_existing_pick_market(pick):
 
         return
 
-
     pick["bet_type"] = (
         normalize_bet_type(
             pick.get(
@@ -981,51 +1185,6 @@ def normalize_existing_pick_market(pick):
             )
         )
     )
-
-
-def market_period(
-    bet_type
-):
-    bet_type = (
-        normalize_bet_type(
-            bet_type
-        )
-    )
-
-    if bet_type.startswith(
-        "FIRST_QUARTER_"
-    ):
-        return "FIRST_QUARTER"
-
-    if bet_type.startswith(
-        "FIRST_HALF_"
-    ):
-        return "FIRST_HALF"
-
-    return "FULL_GAME"
-
-
-def base_market(
-    bet_type
-):
-    bet_type = (
-        normalize_bet_type(
-            bet_type
-        )
-    )
-
-    for prefix in (
-        "FIRST_QUARTER_",
-        "FIRST_HALF_",
-    ):
-        if bet_type.startswith(
-            prefix
-        ):
-            return bet_type[
-                len(prefix):
-            ]
-
-    return bet_type
 
 
 def total_direction(pick):
@@ -1434,7 +1593,6 @@ def event_contains_pair(
         team_b
     )
 
-    # Fail closed if both sides are ambiguous.
     if a_ambiguous and b_ambiguous:
         return False
 
@@ -1445,10 +1603,6 @@ def event_contains_pair(
     if len(sets) != 2:
         return False
 
-    # Contextual ambiguous-team handling.
-    # Example: "OSU vs TEX". Bare OSU remains globally ambiguous,
-    # but ESPN's team abbreviation can safely identify the OSU side
-    # when the other team in the matchup is known.
     if a_ambiguous or b_ambiguous:
         ambiguous_hint = (
             team_a
@@ -1569,7 +1723,6 @@ def selection_matchup_hints(
 
     if len(pieces) == 2:
 
-        # Strip wager information from second team.
         pieces[1] = re.split(
             r"\b(?:"
             r"over|under|"
@@ -1718,8 +1871,6 @@ def side_identity(pick):
                 .strip()
             )
 
-            # If source contains matchup, keep only
-            # selected team portion.
             pieces = split_matchup(
                 value
             )
@@ -1770,22 +1921,6 @@ def selected_comp(
 # ============================================================
 
 def fetch_day_events(day):
-    """
-    Fetch the complete ESPN college-football slate for one day.
-
-    IMPORTANT:
-    ESPN's unfiltered college-football scoreboard can return only a
-    partial/default slate. To avoid missing perfectly valid Pick Em
-    games, request three views and merge them by event ID:
-
-      - default scoreboard
-      - FBS group 80
-      - FCS group 81
-
-    This keeps the resolver conservative. We are expanding the event
-    pool, not loosening team matching.
-    """
-
     datestring = (
         day.strftime(
             "%Y%m%d"
@@ -1794,9 +1929,6 @@ def fetch_day_events(day):
 
     all_events = []
 
-    # None = ESPN default view.
-    # 80   = FBS.
-    # 81   = FCS.
     for group in (
         None,
         80,
@@ -1845,7 +1977,6 @@ def fetch_day_events(day):
                 exc,
             )
 
-    # De-duplicate the three scoreboard views immediately.
     return merge_events(
         all_events
     )
@@ -1855,15 +1986,6 @@ def fetch_date_range_events(
     start,
     end,
 ):
-    """
-    Fetch ESPN's date-range college-football slate for the exact Pick Em
-    calendar window. This avoids assuming Barstool Pick Em week numbers
-    equal ESPN's own college-football week numbers.
-
-    We request default, FBS group 80, and FCS group 81, then merge by
-    ESPN event ID. Matching rules remain unchanged and conservative.
-    """
-
     datestring = (
         f"{start.strftime('%Y%m%d')}-"
         f"{end.strftime('%Y%m%d')}"
@@ -2001,24 +2123,6 @@ def fetch_week_events(
     season_year,
     week,
 ):
-    """
-    Fetch ESPN's week-based college-football schedule.
-
-    This supplements the date-by-date scoreboard because ESPN can omit
-    games from the daily/default views.
-
-    We request:
-      - default
-      - FBS group 80
-      - FCS group 81
-
-    Then merge everything by ESPN event ID.
-
-    IMPORTANT:
-    This expands the candidate event pool only.
-    It does NOT loosen event matching.
-    """
-
     all_events = []
 
     for group in (
@@ -2112,28 +2216,6 @@ def build_complete_week_slate(
     season_year,
     week,
 ):
-    """
-    Build the most complete ESPN event slate possible for a Pick Em week.
-
-    Sources merged:
-
-      1. Every calendar day inside our verified Pick Em week window
-         - ESPN default scoreboard
-         - FBS group 80
-         - FCS group 81
-
-      2. ESPN date-range scoreboard for that exact same calendar window
-         - ESPN default scoreboard
-         - FBS group 80
-         - FCS group 81
-
-    We intentionally do NOT assume Barstool Pick Em week numbers match
-    ESPN's own week numbers. Events are de-duplicated by ESPN event ID.
-
-    Matching remains conservative. This function only expands the pool
-    of legitimate ESPN events available to the existing resolver.
-    """
-
     start, end = week_window(
         season_year,
         week,
@@ -2221,22 +2303,6 @@ def resolve_event(
     pick,
     events,
 ):
-    """
-    Conservative matching priority:
-
-    1. Explicit matchup
-    2. Matchup encoded in selection
-    3. team + opponent
-    4. selected team only
-
-    A single-team match is accepted only if exactly one event
-    in the entire week matches.
-    """
-
-    # --------------------------------------------------------
-    # 1. Dedicated matchup field
-    # --------------------------------------------------------
-
     hints = split_matchup(
         pick.get(
             "matchup"
@@ -2258,10 +2324,6 @@ def resolve_event(
         if len(matches) == 1:
             return matches[0]
 
-    # --------------------------------------------------------
-    # 2. Selection matchup
-    # --------------------------------------------------------
-
     hints = (
         selection_matchup_hints(
             pick
@@ -2282,10 +2344,6 @@ def resolve_event(
 
         if len(matches) == 1:
             return matches[0]
-
-    # --------------------------------------------------------
-    # 3. Structured team/opponent
-    # --------------------------------------------------------
 
     team = clean_text(
         pick.get("team")
@@ -2311,10 +2369,6 @@ def resolve_event(
 
         if len(matches) == 1:
             return matches[0]
-
-    # --------------------------------------------------------
-    # 4. Selected team
-    # --------------------------------------------------------
 
     selected = side_identity(
         pick
@@ -2346,15 +2400,6 @@ def find_event_by_id(
     events,
     stored_event_id,
 ):
-    """
-    Strict pregame event lock.
-
-    Once schedule_enrich.py has attached an ESPN event_id to a pick,
-    grading must use that exact event.
-
-    Never silently rematch a locked pick to another game.
-    """
-
     if not stored_event_id:
         return None
 
@@ -2432,12 +2477,6 @@ def hydrate_event_from_summary(
     event,
     summary,
 ):
-    """
-    Use ESPN summary data to strengthen the exact event object.
-
-    This does not change which event was selected.
-    """
-
     summary_comps = (
         summary_competitors(
             summary
@@ -2545,13 +2584,6 @@ def core_linescore_url(
 def extract_period_value(
     item
 ):
-    """
-    ESPN core responses vary slightly.
-
-    Return:
-      (period_number, score)
-    """
-
     period = item.get(
         "period"
     )
@@ -2681,18 +2713,6 @@ def event_period_scores(
     event,
     period,
 ):
-    """
-    Return period score by ESPN team ID.
-
-    FIRST_QUARTER:
-      Q1
-
-    FIRST_HALF:
-      Q1 + Q2
-
-    Full-game markets do not call this.
-    """
-
     event_value = str(
         event.get(
             "id"
@@ -3114,6 +3134,74 @@ def grade_spread_market(
     ):
         return None
 
+    # --------------------------------------------------------
+    # IMPORTANT:
+    #
+    # Use the signed spread from the selection whenever
+    # available.
+    #
+    # Example:
+    #
+    #   selection: Oregon -22.5
+    #   bad stored line: +22.5
+    #
+    # This function will use -22.5 and also repair the row.
+    # --------------------------------------------------------
+
+    selection_line = (
+        spread_line_from_selection(
+            pick
+        )
+    )
+
+    if selection_line is not None:
+
+        line = selection_line
+
+        stored_line = safe_float(
+            pick.get(
+                "line"
+            )
+        )
+
+        if (
+            stored_line is None
+            or abs(
+                stored_line
+                - selection_line
+            )
+            > 0.000001
+        ):
+
+            pick[
+                "line"
+            ] = selection_line
+
+            print(
+                "SPREAD LINE REPAIRED DURING GRADE:",
+                pick.get(
+                    "picker"
+                )
+                or "Unknown",
+                "|",
+                pick.get(
+                    "selection"
+                )
+                or "Unknown selection",
+                "| stored:",
+                stored_line,
+                "-> signed:",
+                selection_line,
+            )
+
+    else:
+
+        line = safe_float(
+            pick.get(
+                "line"
+            )
+        )
+
     return compare_spread(
         scores[
             selected_id
@@ -3121,11 +3209,7 @@ def grade_spread_market(
         scores[
             opponent_id
         ],
-        safe_float(
-            pick.get(
-                "line"
-            )
-        ),
+        line,
     )
 
 
@@ -3741,13 +3825,29 @@ def grade_open():
 
     # --------------------------------------------------------
     # Normalize only provisional rows.
+    #
+    # IMPORTANT:
+    # Spread sign repair happens here BEFORE any grading.
+    # This also fixes OPEN spread rows in picks.json.
     # --------------------------------------------------------
+
+    spread_lines_repaired = 0
 
     for pick in provisional:
 
         normalize_existing_pick_market(
             pick
         )
+
+        if normalize_spread_line(
+            pick
+        ):
+            spread_lines_repaired += 1
+
+    print(
+        "Spread lines normalized:",
+        spread_lines_repaired,
+    )
 
     # --------------------------------------------------------
     # Group provisional picks by season/week.
@@ -3958,11 +4058,6 @@ def grade_open():
             week,
         )
 
-        # ----------------------------------------------------
-        # If ESPN failed for this entire week, preserve the
-        # existing row exactly as-is.
-        # ----------------------------------------------------
-
         if (
             cache_key
             in failed_weeks
@@ -3997,11 +4092,6 @@ def grade_open():
 
         # ----------------------------------------------------
         # PRE-GAME EVENT LOCK
-        #
-        # If schedule_enrich.py already found the event,
-        # use that exact event forever.
-        #
-        # Never silently rematch a locked pick.
         # ----------------------------------------------------
 
         if stored_event_id:
@@ -4045,11 +4135,6 @@ def grade_open():
             )
 
         else:
-
-            # ------------------------------------------------
-            # Conservative fallback for legacy / unmatched
-            # rows.
-            # ------------------------------------------------
 
             event = resolve_event(
                 pick,
@@ -4122,13 +4207,6 @@ def grade_open():
                     event_value,
                 )
 
-        # ----------------------------------------------------
-        # From here onward the event has been safely resolved.
-        # Recalculate provisional grading from ESPN.
-        #
-        # clear_grade() intentionally keeps event_id.
-        # ----------------------------------------------------
-
         clear_grade(
             pick
         )
@@ -4145,12 +4223,6 @@ def grade_open():
             pick[
                 "event_id"
             ] = event_value
-
-        # ----------------------------------------------------
-        # Save the ESPN kickoff/matchup whenever possible.
-        # This also helps the dashboard stay populated if
-        # schedule_enrich.py did not previously add them.
-        # ----------------------------------------------------
 
         event_date_value = (
             event.get(
@@ -4219,10 +4291,6 @@ def grade_open():
                     f"vs {names[1]}"
                 )
 
-        # ----------------------------------------------------
-        # Not final yet.
-        # ----------------------------------------------------
-
         if not completed(
             event
         ):
@@ -4254,12 +4322,6 @@ def grade_open():
 
             continue
 
-        # ----------------------------------------------------
-        # Hydrate the exact event from ESPN summary.
-        #
-        # This is especially important for period markets.
-        # ----------------------------------------------------
-
         summary = None
 
         if event_value:
@@ -4286,10 +4348,6 @@ def grade_open():
                     exc,
                 )
 
-        # ----------------------------------------------------
-        # Verify the event still reports final after hydration.
-        # ----------------------------------------------------
-
         if not completed(
             event
         ):
@@ -4313,10 +4371,6 @@ def grade_open():
         )
 
         period_scores = None
-
-        # ----------------------------------------------------
-        # 1Q / 1H grading.
-        # ----------------------------------------------------
 
         if period in {
             "FIRST_QUARTER",
@@ -4376,10 +4430,6 @@ def grade_open():
 
                 continue
 
-        # ----------------------------------------------------
-        # Calculate wager result.
-        # ----------------------------------------------------
-
         result = grade_market(
             pick,
             event,
@@ -4417,10 +4467,6 @@ def grade_open():
             )
 
             continue
-
-        # ----------------------------------------------------
-        # Apply final ESPN grade.
-        # ----------------------------------------------------
 
         apply_grade(
             pick,
@@ -4479,6 +4525,11 @@ def grade_open():
     )
 
     print(
+        "Spread lines normalized:",
+        spread_lines_repaired,
+    )
+
+    print(
         "Official results preserved:",
         official_preserved,
     )
@@ -4519,10 +4570,6 @@ def grade_open():
             pending_event_ids
         ),
     )
-
-    # --------------------------------------------------------
-    # Week audits
-    # --------------------------------------------------------
 
     weeks = sorted(
         {
