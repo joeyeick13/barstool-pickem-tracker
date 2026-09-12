@@ -1,26 +1,26 @@
 {
-  "updated_at": "2026-09-12T19:02:22.346772+00:00",
+  "updated_at": "2026-09-12T22:00:46.944583+00:00",
   "cappers": [
     {
       "picker": "Big Cat",
-      "wins": 18,
-      "losses": 22,
+      "wins": 23,
+      "losses": 25,
       "pushes": 0,
-      "win_pct": 45.0
+      "win_pct": 47.9
     },
     {
       "picker": "Stool Presidente",
-      "wins": 6,
-      "losses": 6,
+      "wins": 9,
+      "losses": 7,
       "pushes": 0,
-      "win_pct": 50.0
+      "win_pct": 56.2
     },
     {
       "picker": "Rico Bosco",
-      "wins": 14,
-      "losses": 5,
+      "wins": 17,
+      "losses": 7,
       "pushes": 0,
-      "win_pct": 73.7
+      "win_pct": 70.8
     }
   ],
   "win_pct_history": {
@@ -31,7 +31,7 @@
       },
       {
         "week": 2,
-        "win_pct": 45.0
+        "win_pct": 47.9
       }
     ],
     "Stool Presidente": [
@@ -41,7 +41,7 @@
       },
       {
         "week": 2,
-        "win_pct": 50.0
+        "win_pct": 56.2
       }
     ],
     "Rico Bosco": [
@@ -51,7 +51,7 @@
       },
       {
         "week": 2,
-        "win_pct": 73.7
+        "win_pct": 70.8
       }
     ]
   },
@@ -89,10 +89,10 @@
       "game_time": "2026-09-12T19:30Z",
       "game_match_status": "MATCHED",
       "game_match_source": "ESPN",
-      "game_match_confidence": "EXACT",
+      "game_match_confidence": "LOCKED",
       "game_matchup": "Syracuse vs California",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:15.272524+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.823130+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -125,10 +125,10 @@
       "game_time": "2026-09-12T19:30Z",
       "game_match_status": "MATCHED",
       "game_match_source": "ESPN",
-      "game_match_confidence": "EXACT",
+      "game_match_confidence": "LOCKED",
       "game_matchup": "Pitt vs UCF",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:15.726474+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.823150+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -161,10 +161,10 @@
       "game_time": "2026-09-12T19:30Z",
       "game_match_status": "MATCHED",
       "game_match_source": "ESPN",
-      "game_match_confidence": "EXACT",
+      "game_match_confidence": "LOCKED",
       "game_matchup": "Texas St vs UTSA",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:16.133815+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.823169+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -197,10 +197,10 @@
       "game_time": "2026-09-12T19:30Z",
       "game_match_status": "MATCHED",
       "game_match_source": "ESPN",
-      "game_match_confidence": "EXACT",
+      "game_match_confidence": "LOCKED",
       "game_matchup": "Texas St vs UTSA",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:16.582932+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.823189+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -236,9 +236,17 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Oklahoma St vs Oregon",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.911139+00:00",
-      "status": "OPEN",
-      "result": null
+      "schedule_checked_at": "2026-09-12T22:00:41.823091+00:00",
+      "result": "LOSS",
+      "status": "FINAL",
+      "final_score": "OKST 39 - ORE 31",
+      "profit": -1.0,
+      "graded_at": "2026-09-12T22:00:46.826641+00:00",
+      "grade_source": "ESPN",
+      "period_score": {
+        "197": 24.0,
+        "2483": 17.0
+      }
     },
     {
       "picker": "Big Cat",
@@ -272,9 +280,13 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "East Carolina vs App State",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.911151+00:00",
-      "status": "OPEN",
-      "result": null
+      "schedule_checked_at": "2026-09-12T22:00:41.823111+00:00",
+      "result": "WIN",
+      "status": "FINAL",
+      "final_score": "ECU 24 - APP 27",
+      "profit": 0.909,
+      "graded_at": "2026-09-12T22:00:46.936347+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Big Cat",
@@ -308,12 +320,12 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Indiana vs Howard",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910963+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822846+00:00",
       "result": "LOSS",
       "status": "FINAL",
       "final_score": "IU 55 - HOW 0",
       "profit": -1.0,
-      "graded_at": "2026-09-12T19:02:22.338641+00:00",
+      "graded_at": "2026-09-12T22:00:45.945615+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -348,9 +360,13 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "West Virginia vs UT Martin",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910980+00:00",
-      "status": "OPEN",
-      "result": null
+      "schedule_checked_at": "2026-09-12T22:00:41.822877+00:00",
+      "result": "WIN",
+      "status": "FINAL",
+      "final_score": "WVU 52 - UTM 7",
+      "profit": 0.909,
+      "graded_at": "2026-09-12T22:00:46.047322+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Big Cat",
@@ -384,7 +400,7 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Notre Dame vs Rice",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910999+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822905+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -420,9 +436,13 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "James Madison vs Wagner",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.911016+00:00",
-      "status": "OPEN",
-      "result": null
+      "schedule_checked_at": "2026-09-12T22:00:41.822920+00:00",
+      "result": "WIN",
+      "status": "FINAL",
+      "final_score": "JMU 87 - WAG 3",
+      "profit": 0.909,
+      "graded_at": "2026-09-12T22:00:46.172058+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Big Cat",
@@ -456,7 +476,7 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "New Mexico vs Mercyhurst",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.911034+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822932+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -492,7 +512,7 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Florida vs Campbell",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.911051+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822955+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -527,7 +547,7 @@
       "game_match_status": "MATCHED",
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
-      "schedule_checked_at": "2026-09-12T19:02:13.911065+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822975+00:00",
       "verified_correction": true,
       "verified_correction_note": "Confirmed Over 60.5 is Southern @ Houston.",
       "verified_correction_at": "2026-09-12T15:11:19.073504+00:00",
@@ -567,7 +587,7 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "South Carolina vs Towson",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.911079+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822994+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -603,12 +623,12 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Virginia vs Norfolk St",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910946+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822799+00:00",
       "result": "WIN",
       "status": "FINAL",
       "final_score": "UVA 59 - NORF 3",
       "profit": 0.909,
-      "graded_at": "2026-09-12T19:02:22.239925+00:00",
+      "graded_at": "2026-09-12T22:00:45.835619+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -643,7 +663,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910928+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822786+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -679,7 +699,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910631+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822534+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -715,7 +735,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910643+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822547+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -750,7 +770,7 @@
       "game_match_status": "MATCHED",
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
-      "schedule_checked_at": "2026-09-12T19:02:13.910655+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822560+00:00",
       "verified_correction": true,
       "verified_correction_note": "Confirmed Big Cat pick is UConn +12.5.",
       "verified_correction_at": "2026-09-12T15:11:19.073477+00:00",
@@ -790,7 +810,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910668+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822573+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -826,7 +846,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910679+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822585+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -862,7 +882,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910690+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822598+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -898,7 +918,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910702+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822610+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -934,7 +954,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910714+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822625+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -970,12 +990,12 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Kansas vs Missouri",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910725+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822638+00:00",
       "result": "LOSS",
       "status": "FINAL",
       "final_score": "KU 21 - MIZ 38",
       "profit": -1.0,
-      "graded_at": "2026-09-12T19:02:21.628184+00:00",
+      "graded_at": "2026-09-12T22:00:45.317297+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -1010,7 +1030,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910738+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822652+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -1046,12 +1066,12 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Boston College vs Rutgers",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910749+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822665+00:00",
       "result": "WIN",
       "status": "FINAL",
       "final_score": "BC 28 - RUTG 21",
       "profit": 0.909,
-      "graded_at": "2026-09-12T19:02:21.827022+00:00",
+      "graded_at": "2026-09-12T22:00:45.373437+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -1086,9 +1106,13 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Michigan vs Oklahoma",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910760+00:00",
-      "status": "OPEN",
-      "result": null
+      "schedule_checked_at": "2026-09-12T22:00:41.822678+00:00",
+      "result": "LOSS",
+      "status": "FINAL",
+      "final_score": "MICH 17 - OU 10",
+      "profit": -1.0,
+      "graded_at": "2026-09-12T22:00:45.433371+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Big Cat",
@@ -1122,12 +1146,12 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Temple vs Penn State",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910773+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822691+00:00",
       "result": "LOSS",
       "status": "FINAL",
       "final_score": "TEM 9 - PSU 27",
       "profit": -1.0,
-      "graded_at": "2026-09-12T19:02:21.993722+00:00",
+      "graded_at": "2026-09-12T22:00:45.541685+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -1162,9 +1186,13 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Virginia Tech vs Old Dominion",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910784+00:00",
-      "status": "OPEN",
-      "result": null
+      "schedule_checked_at": "2026-09-12T22:00:41.822703+00:00",
+      "result": "WIN",
+      "status": "FINAL",
+      "final_score": "VT 44 - ODU 21",
+      "profit": 0.909,
+      "graded_at": "2026-09-12T22:00:45.670788+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Big Cat",
@@ -1198,9 +1226,13 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Oklahoma St vs Oregon",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910795+00:00",
-      "status": "OPEN",
-      "result": null
+      "schedule_checked_at": "2026-09-12T22:00:41.822717+00:00",
+      "result": "LOSS",
+      "status": "FINAL",
+      "final_score": "OKST 39 - ORE 31",
+      "profit": -1.0,
+      "graded_at": "2026-09-12T22:00:45.729560+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Big Cat",
@@ -1234,7 +1266,7 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Kentucky vs Alabama",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910806+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822728+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -1270,7 +1302,7 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "BYU vs Arizona",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910819+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822740+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -1306,7 +1338,7 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Syracuse vs California",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910831+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822752+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -1342,7 +1374,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910892+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822764+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -1378,7 +1410,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910910+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822775+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -1414,12 +1446,12 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Boston College vs Rutgers",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910474+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822394+00:00",
       "result": "WIN",
       "status": "FINAL",
       "final_score": "BC 28 - RUTG 21",
       "profit": 0.909,
-      "graded_at": "2026-09-12T19:02:21.470431+00:00",
+      "graded_at": "2026-09-12T22:00:44.970379+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -1454,9 +1486,13 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Michigan vs Oklahoma",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910485+00:00",
-      "status": "OPEN",
-      "result": null
+      "schedule_checked_at": "2026-09-12T22:00:41.822406+00:00",
+      "result": "WIN",
+      "status": "FINAL",
+      "final_score": "MICH 17 - OU 10",
+      "profit": 0.909,
+      "graded_at": "2026-09-12T22:00:45.040609+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Stool Presidente",
@@ -1490,9 +1526,13 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Texas A&M vs Arizona St",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910496+00:00",
-      "status": "OPEN",
-      "result": null
+      "schedule_checked_at": "2026-09-12T22:00:41.822418+00:00",
+      "result": "LOSS",
+      "status": "FINAL",
+      "final_score": "TA&M 48 - ASU 20",
+      "profit": -1.0,
+      "graded_at": "2026-09-12T22:00:45.149585+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Stool Presidente",
@@ -1526,9 +1566,13 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Oklahoma St vs Oregon",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910508+00:00",
-      "status": "OPEN",
-      "result": null
+      "schedule_checked_at": "2026-09-12T22:00:41.822432+00:00",
+      "result": "WIN",
+      "status": "FINAL",
+      "final_score": "OKST 39 - ORE 31",
+      "profit": 0.909,
+      "graded_at": "2026-09-12T22:00:45.204254+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Stool Presidente",
@@ -1562,9 +1606,13 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Oklahoma St vs Oregon",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910519+00:00",
-      "status": "OPEN",
-      "result": null
+      "schedule_checked_at": "2026-09-12T22:00:41.822445+00:00",
+      "result": "WIN",
+      "status": "FINAL",
+      "final_score": "OKST 39 - ORE 31",
+      "profit": 0.909,
+      "graded_at": "2026-09-12T22:00:45.265462+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Stool Presidente",
@@ -1598,7 +1646,7 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Kentucky vs Alabama",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910530+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822458+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -1634,7 +1682,7 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "BYU vs Arizona",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910542+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822470+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -1669,7 +1717,7 @@
       "game_match_status": "MATCHED",
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
-      "schedule_checked_at": "2026-09-12T19:02:13.910580+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822483+00:00",
       "verified_correction": true,
       "verified_correction_note": "Confirmed Dave/Stool Presidente pick is UConn +12.5.",
       "verified_correction_at": "2026-09-12T15:11:19.073457+00:00",
@@ -1709,7 +1757,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910594+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822496+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -1745,7 +1793,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910606+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822508+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -1781,7 +1829,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910618+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822521+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -1817,9 +1865,13 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Michigan vs Oklahoma",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910233+00:00",
-      "status": "OPEN",
-      "result": null
+      "schedule_checked_at": "2026-09-12T22:00:41.822137+00:00",
+      "result": "WIN",
+      "status": "FINAL",
+      "final_score": "MICH 17 - OU 10",
+      "profit": 0.909,
+      "graded_at": "2026-09-12T22:00:44.120893+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Rico Bosco",
@@ -1853,9 +1905,13 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Army vs South Florida",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910276+00:00",
-      "status": "OPEN",
-      "result": null
+      "schedule_checked_at": "2026-09-12T22:00:41.822175+00:00",
+      "result": "LOSS",
+      "status": "FINAL",
+      "final_score": "ARMY 24 - USF 28",
+      "profit": -1.0,
+      "graded_at": "2026-09-12T22:00:44.228002+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Rico Bosco",
@@ -1889,9 +1945,13 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Texas A&M vs Arizona St",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910291+00:00",
-      "status": "OPEN",
-      "result": null
+      "schedule_checked_at": "2026-09-12T22:00:41.822193+00:00",
+      "result": "LOSS",
+      "status": "FINAL",
+      "final_score": "TA&M 48 - ASU 20",
+      "profit": -1.0,
+      "graded_at": "2026-09-12T22:00:44.459854+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Rico Bosco",
@@ -1925,9 +1985,13 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Oklahoma St vs Oregon",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910304+00:00",
-      "status": "OPEN",
-      "result": null
+      "schedule_checked_at": "2026-09-12T22:00:41.822210+00:00",
+      "result": "WIN",
+      "status": "FINAL",
+      "final_score": "OKST 39 - ORE 31",
+      "profit": 0.909,
+      "graded_at": "2026-09-12T22:00:44.570347+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Rico Bosco",
@@ -1961,9 +2025,13 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Purdue vs Wake Forest",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910319+00:00",
-      "status": "OPEN",
-      "result": null
+      "schedule_checked_at": "2026-09-12T22:00:41.822223+00:00",
+      "result": "WIN",
+      "status": "FINAL",
+      "final_score": "PUR 36 - WAKE 38",
+      "profit": 0.909,
+      "graded_at": "2026-09-12T22:00:44.717332+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Rico Bosco",
@@ -1997,7 +2065,7 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Kentucky vs Alabama",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910331+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822239+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -2027,7 +2095,7 @@
       "official_reconciled": false,
       "id": "4498dc303f4327e1",
       "matchup_source": "VERIFIED_BARSTOOL_CARD_OVERRIDE",
-      "matchup_source_verified_at": "2026-09-12T19:02:08.107929+00:00",
+      "matchup_source_verified_at": "2026-09-12T22:00:38.472457+00:00",
       "event_id": "401856810",
       "game_time": "2026-09-12T19:30Z",
       "game_match_status": "MATCHED",
@@ -2035,7 +2103,7 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "BYU vs Arizona",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910345+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822255+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -2071,7 +2139,7 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Minnesota vs Mississippi St",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910359+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822270+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -2107,7 +2175,7 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Washington vs Utah State",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910371+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822285+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -2143,7 +2211,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910383+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822298+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -2179,7 +2247,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910395+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822312+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -2215,7 +2283,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910410+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822325+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -2251,7 +2319,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910423+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822339+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -2287,7 +2355,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910435+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822352+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -2323,12 +2391,12 @@
       "game_match_confidence": "LOCKED",
       "game_matchup": "Kansas vs Missouri",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910448+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822366+00:00",
       "result": "WIN",
       "status": "FINAL",
       "final_score": "KU 21 - MIZ 38",
       "profit": 0.909,
-      "graded_at": "2026-09-12T19:02:21.170850+00:00",
+      "graded_at": "2026-09-12T22:00:44.859458+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -2363,7 +2431,7 @@
       "game_match_confidence": "LOCKED",
       "game_match_source": "ESPN",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.910462+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.822379+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -2401,7 +2469,7 @@
       "game_time": "2026-09-13T00:00Z",
       "game_matchup": "TCU vs Grambling",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.911091+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.823013+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -2439,7 +2507,7 @@
       "game_time": "2026-09-13T00:08Z",
       "game_matchup": "Baylor vs Prairie View",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.911104+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.823032+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -2477,9 +2545,13 @@
       "game_time": "2026-09-12T16:00Z",
       "game_matchup": "Purdue vs Wake Forest",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.911115+00:00",
-      "status": "OPEN",
-      "result": null
+      "schedule_checked_at": "2026-09-12T22:00:41.823051+00:00",
+      "result": "WIN",
+      "status": "FINAL",
+      "final_score": "PUR 36 - WAKE 38",
+      "profit": 0.909,
+      "graded_at": "2026-09-12T22:00:46.232083+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Big Cat",
@@ -2515,7 +2587,7 @@
       "game_time": "2026-09-12T23:30Z",
       "game_matchup": "Oregon St vs Texas Tech",
       "game_match_review_reason": null,
-      "schedule_checked_at": "2026-09-12T19:02:13.911128+00:00",
+      "schedule_checked_at": "2026-09-12T22:00:41.823072+00:00",
       "status": "OPEN",
       "result": null
     },
