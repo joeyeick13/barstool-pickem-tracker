@@ -3787,6 +3787,113 @@ No markdown. No commentary. JSON only.
             "read every image"
         )
 
+    # --------------------------------------------------------
+    # DETERMINISTIC ORPHAN-PAGE OWNERSHIP
+    # --------------------------------------------------------
+    # Some continuation/result pages do not visibly repeat the picker's
+    # name. Do not ask vision to guess ownership in that case. The PAT HILL
+    # standings text gives the exact official row total for each picker.
+    # We may assign an unnamed page only when the row-count arithmetic makes
+    # exactly one ownership possible: every already-named picker must already
+    # equal its official total, exactly one picker must be short, and the
+    # unnamed rows must equal that one deficit. Otherwise leave ownership
+    # unresolved and let the existing fail-closed validation reject the run.
+    # --------------------------------------------------------
+
+    expected_records = parse_printed_standings(
+        str(root_post.get("text") or ""),
+        target_week,
+    )
+
+    expected_row_totals = {
+        picker: (
+            int(record.get("wins") or 0)
+            + int(record.get("losses") or 0)
+            + int(record.get("pushes") or 0)
+        )
+        for picker, record in expected_records.items()
+        if picker in TRACKED_PICKERS
+    }
+
+    named_row_totals = {
+        picker: 0
+        for picker in TRACKED_PICKERS
+    }
+    orphan_pages = []
+
+    for page_payload in page_reads:
+        rows = page_payload.get("rows") or []
+        picker = normalize_picker(
+            page_payload.get("picker")
+        )
+
+        if picker in TRACKED_PICKERS:
+            named_row_totals[picker] += len(rows)
+        elif (
+            str(page_payload.get("image_role") or "").upper()
+            == "RESULT_CARD"
+            and rows
+        ):
+            orphan_pages.append(page_payload)
+
+    if orphan_pages and len(expected_row_totals) == len(TRACKED_PICKERS):
+        orphan_row_total = sum(
+            len(page.get("rows") or [])
+            for page in orphan_pages
+        )
+
+        deficits = {
+            picker: expected_row_totals[picker] - named_row_totals[picker]
+            for picker in TRACKED_PICKERS
+        }
+
+        candidates = [
+            picker
+            for picker, deficit in deficits.items()
+            if deficit == orphan_row_total and deficit > 0
+        ]
+
+        other_pickers_exact = (
+            len(candidates) == 1
+            and all(
+                named_row_totals[picker] == expected_row_totals[picker]
+                for picker in TRACKED_PICKERS
+                if picker != candidates[0]
+            )
+        )
+
+        if other_pickers_exact:
+            inferred_picker = candidates[0]
+            for page_payload in orphan_pages:
+                page_payload["picker"] = inferred_picker
+                page_payload["picker_assignment"] = (
+                    "DETERMINISTIC_OFFICIAL_ROW_TOTAL"
+                )
+
+            print(
+                "PAT HILL deterministic orphan assignment:",
+                inferred_picker,
+                "| orphan pages:",
+                len(orphan_pages),
+                "| orphan rows:",
+                orphan_row_total,
+                "| expected totals:",
+                expected_row_totals,
+            )
+        else:
+            print(
+                "PAT HILL orphan pages unresolved:",
+                len(orphan_pages),
+                "| orphan rows:",
+                orphan_row_total,
+                "| named totals:",
+                named_row_totals,
+                "| expected totals:",
+                expected_row_totals,
+                "| deficits:",
+                deficits,
+            )
+
     page_transcripts = json.dumps(
         page_reads,
         ensure_ascii=False,
@@ -3864,7 +3971,12 @@ CRITICAL RULES
     add up to that picker's printed record.
 
 11. The page transcripts are aids, not authority. Resolve any disagreement by
-    re-reading the original images.
+    re-reading the original images. If a transcript contains
+    picker_assignment=DETERMINISTIC_OFFICIAL_ROW_TOTAL, the program assigned
+    that otherwise-unnamed RESULT_CARD page only because the official printed
+    standings row totals made exactly one picker ownership mathematically
+    possible. Treat that ownership as established bookkeeping, while still
+    verifying every wager and result from the original image.
 
 12. If any required picker card is genuinely missing, a required wager row is
     unreadable after re-reading the image, or result totals cannot be
