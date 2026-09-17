@@ -4066,6 +4066,202 @@ No markdown. No commentary. JSON only.
             f"{images_read}/{len(image_urls)}"
         )
 
+    # --------------------------------------------------------
+    # STRICT DETERMINISTIC FALLBACK FROM PAGE-LOCAL READS
+    # --------------------------------------------------------
+    # The final reconciliation model can be overly conservative and return
+    # complete=false even when every page-local read is complete and the
+    # evidence reconciles exactly to the official printed standings. In that
+    # narrow case, construct the payload directly from the independently read
+    # pages instead of asking the model to make a second completeness judgment.
+    #
+    # This is NOT a relaxed validation path. It is available only when:
+    #   * every RESULT_CARD page has a uniquely established picker;
+    #   * every row is readable and has a WIN/LOSS/PUSH result;
+    #   * every row has a non-empty selection;
+    #   * each picker's row count exactly equals the official W+L+P total; and
+    #   * the row-level result counts exactly equal the official printed record.
+    # validate_official_results() still runs afterward and independently checks
+    # the same official records before any week can be replaced.
+    # --------------------------------------------------------
+
+    if not safe_bool(payload.get("complete")):
+        fallback_picks = {
+            picker: []
+            for picker in TRACKED_PICKERS
+        }
+        fallback_safe = (
+            len(expected_row_totals) == len(TRACKED_PICKERS)
+        )
+        fallback_reason = None
+
+        for page_payload in page_reads:
+            role = str(
+                page_payload.get("image_role") or ""
+            ).upper()
+            rows = page_payload.get("rows") or []
+
+            if role != "RESULT_CARD":
+                continue
+
+            picker = normalize_picker(
+                page_payload.get("picker")
+            )
+
+            if picker not in TRACKED_PICKERS:
+                fallback_safe = False
+                fallback_reason = (
+                    "unassigned RESULT_CARD page"
+                )
+                break
+
+            for row in rows:
+                if not safe_bool(row.get("readable")):
+                    fallback_safe = False
+                    fallback_reason = (
+                        f"unreadable row for {picker}"
+                    )
+                    break
+
+                selection = str(
+                    row.get("selection") or ""
+                ).strip()
+                result = str(
+                    row.get("result") or ""
+                ).upper().strip()
+
+                if not selection:
+                    fallback_safe = False
+                    fallback_reason = (
+                        f"missing selection for {picker}"
+                    )
+                    break
+
+                if result not in {
+                    "WIN",
+                    "LOSS",
+                    "PUSH",
+                }:
+                    fallback_safe = False
+                    fallback_reason = (
+                        f"missing result for {picker}"
+                    )
+                    break
+
+                fallback_picks[picker].append(
+                    {
+                        "selection": selection,
+                        "matchup": row.get("matchup"),
+                        "team": row.get("team"),
+                        "opponent": row.get("opponent"),
+                        "bet_type": row.get("bet_type") or "OTHER",
+                        "side": row.get("side"),
+                        "line": row.get("line"),
+                        "result": result,
+                        "added_pick": safe_bool(
+                            row.get("added_pick")
+                        ),
+                    }
+                )
+
+            if not fallback_safe:
+                break
+
+        if fallback_safe:
+            for picker in TRACKED_PICKERS:
+                expected = expected_records.get(picker)
+                picks = fallback_picks[picker]
+
+                if expected is None:
+                    fallback_safe = False
+                    fallback_reason = (
+                        f"missing printed record for {picker}"
+                    )
+                    break
+
+                expected_total = (
+                    int(expected.get("wins") or 0)
+                    + int(expected.get("losses") or 0)
+                    + int(expected.get("pushes") or 0)
+                )
+
+                actual_record = {
+                    "wins": sum(
+                        1 for pick in picks
+                        if pick.get("result") == "WIN"
+                    ),
+                    "losses": sum(
+                        1 for pick in picks
+                        if pick.get("result") == "LOSS"
+                    ),
+                    "pushes": sum(
+                        1 for pick in picks
+                        if pick.get("result") == "PUSH"
+                    ),
+                }
+
+                expected_record = {
+                    "wins": int(expected.get("wins") or 0),
+                    "losses": int(expected.get("losses") or 0),
+                    "pushes": int(expected.get("pushes") or 0),
+                }
+
+                if len(picks) != expected_total:
+                    fallback_safe = False
+                    fallback_reason = (
+                        f"row total mismatch for {picker}: "
+                        f"{len(picks)}/{expected_total}"
+                    )
+                    break
+
+                if actual_record != expected_record:
+                    fallback_safe = False
+                    fallback_reason = (
+                        f"result total mismatch for {picker}: "
+                        f"{actual_record}/{expected_record}"
+                    )
+                    break
+
+        if fallback_safe:
+            payload = {
+                "complete": True,
+                "week": int(target_week),
+                "images_read": len(image_urls),
+                "pickers": [
+                    {
+                        "picker": picker,
+                        "printed_record": {
+                            "wins": int(
+                                expected_records[picker].get("wins")
+                                or 0
+                            ),
+                            "losses": int(
+                                expected_records[picker].get("losses")
+                                or 0
+                            ),
+                            "pushes": int(
+                                expected_records[picker].get("pushes")
+                                or 0
+                            ),
+                        },
+                        "picks": fallback_picks[picker],
+                    }
+                    for picker in TRACKED_PICKERS
+                ],
+            }
+            print(
+                "PAT HILL strict deterministic page fallback accepted:",
+                " | ".join(
+                    f"{picker}={len(fallback_picks[picker])}"
+                    for picker in TRACKED_PICKERS
+                ),
+            )
+        else:
+            print(
+                "PAT HILL deterministic page fallback rejected:",
+                fallback_reason or "strict conditions not satisfied",
+            )
+
     return payload
 
 
