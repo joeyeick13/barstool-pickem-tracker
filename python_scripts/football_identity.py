@@ -870,6 +870,214 @@ ALIAS_INDEX = _build_alias_index()
 
 
 # ============================================================
+# RUNTIME ESPN TEAM IDENTITY REGISTRY
+# ============================================================
+#
+# ESPN gives every competitor a stable team ID plus multiple safe
+# names for that same team (for example location, displayName,
+# shortDisplayName, abbreviation).  espn_resolver.py registers those
+# structured relationships here whenever it retrieves a slate.
+#
+# This is intentionally runtime-only:
+#   - no week-specific corrections
+#   - no event-specific corrections
+#   - no mascot guessing
+#   - no fuzzy matching
+#
+# A name is learned only because ESPN itself attached that name to the
+# same stable team ID.  Conflicting names fail closed.
+# ============================================================
+
+ESPN_TEAM_IDENTITIES = {}
+ESPN_NAME_INDEX = {}
+ESPN_CANONICAL_NAMES = {}
+
+
+def _runtime_name_variants(value):
+    variants = set()
+
+    for item in team_name_variants(value):
+        normalized = norm(item)
+
+        if normalized:
+            variants.add(normalized)
+
+    return variants
+
+
+def _set_runtime_name(name, canonical):
+    """
+    Add one ESPN-provided name to the runtime index.
+
+    If ESPN ever causes the same normalized name to point at two
+    different canonical teams during one process, mark it ambiguous
+    instead of silently choosing one.
+    """
+    for variant in _runtime_name_variants(name):
+        if variant in {
+            norm(item)
+            for item in AMBIGUOUS_ALIASES
+        }:
+            ESPN_NAME_INDEX[variant] = None
+            continue
+
+        if variant not in ESPN_NAME_INDEX:
+            ESPN_NAME_INDEX[variant] = canonical
+            continue
+
+        existing = ESPN_NAME_INDEX.get(variant)
+
+        if existing != canonical:
+            ESPN_NAME_INDEX[variant] = None
+
+
+def register_espn_team_identity(
+    team_id,
+    canonical_name,
+    names=None,
+):
+    """
+    Register a structured ESPN team identity.
+
+    Parameters
+    ----------
+    team_id:
+        ESPN's stable team ID.
+
+    canonical_name:
+        ESPN's school/location identity for the competitor.  This is
+        the anchor; the function does NOT derive a school name by
+        stripping words from a display name.
+
+    names:
+        Other safe names ESPN supplied for the same team ID, such as
+        displayName, shortDisplayName, location, and abbreviation.
+
+    Returns the canonical identity when registration succeeds, else
+    None.
+
+    Safety:
+      - stable ESPN team ID establishes the relationship
+      - known static aliases remain authoritative
+      - explicit ambiguous aliases remain ambiguous
+      - a team ID cannot silently change canonical identity
+      - a name collision between two ESPN teams fails closed
+    """
+    team_id = clean_text(team_id)
+    anchor = clean_text(canonical_name)
+
+    if not team_id or not anchor:
+        return None
+
+    if is_ambiguous_hint(anchor):
+        return None
+
+    # Prefer the curated static identity when ESPN's anchor is already
+    # known there.  Otherwise the normalized ESPN anchor itself becomes
+    # the runtime canonical identity.
+    anchor_variants = team_name_variants(anchor)
+
+    static_found = {
+        ALIAS_INDEX[item]
+        for item in anchor_variants
+        if (
+            item in ALIAS_INDEX
+            and ALIAS_INDEX[item]
+        )
+    }
+
+    if len(static_found) > 1:
+        return None
+
+    if len(static_found) == 1:
+        canonical = next(iter(static_found))
+    else:
+        canonical = normalized_team_text(anchor)
+
+    if not canonical:
+        return None
+
+    existing_canonical = ESPN_CANONICAL_NAMES.get(team_id)
+
+    if (
+        existing_canonical
+        and existing_canonical != canonical
+    ):
+        # Never let one ESPN team ID silently become another team.
+        return None
+
+    ESPN_CANONICAL_NAMES[team_id] = canonical
+
+    values = {
+        anchor,
+        canonical,
+    }
+
+    for value in names or []:
+        value = clean_text(value)
+
+        if value:
+            values.add(value)
+
+    bucket = ESPN_TEAM_IDENTITIES.setdefault(
+        team_id,
+        set(),
+    )
+
+    bucket.update(values)
+
+    for value in values:
+        _set_runtime_name(
+            value,
+            canonical,
+        )
+
+    return canonical
+
+
+def runtime_espn_aliases(value):
+    """
+    Return all ESPN-learned names belonging to value's runtime
+    canonical team.
+    """
+    normalized = norm(value)
+
+    if not normalized:
+        return set()
+
+    canonical = ESPN_NAME_INDEX.get(normalized)
+
+    if not canonical:
+        return set()
+
+    values = {
+        canonical,
+    }
+
+    for team_id, team_canonical in ESPN_CANONICAL_NAMES.items():
+        if team_canonical != canonical:
+            continue
+
+        values.update(
+            ESPN_TEAM_IDENTITIES.get(
+                team_id,
+                set(),
+            )
+        )
+
+    expanded = set()
+
+    for item in values:
+        expanded.update(
+            _runtime_name_variants(item)
+        )
+
+    return expanded
+
+
+
+
+# ============================================================
 # TEAM IDENTITY
 # ============================================================
 
@@ -974,15 +1182,16 @@ def canonical_team(value):
 
     Resolution order:
 
-      1. exact known alias
-      2. generic ESPN school-name prefix + appended mascot
-      3. normalized unknown name
+      1. exact known static alias
+      2. exact ESPN-registered runtime identity
+      3. generic known static school prefix + appended mascot
+      4. normalized unknown name
 
     Explicitly ambiguous aliases return None.
 
-    The ESPN prefix fallback is generic and permanent. It does not
-    contain weekly teams, mascot mappings, event IDs, or matchup
-    corrections.
+    Runtime ESPN identities are learned only from structured ESPN team
+    records registered by espn_resolver.py.  This function never strips
+    an unknown mascot or performs fuzzy matching.
     """
     normalized = norm(value)
 
@@ -1018,14 +1227,25 @@ def canonical_team(value):
     if len(found) > 1:
         return None
 
-    # ESPN's displayName commonly appends a mascot:
-    #
-    #   Oregon Ducks
-    #   Clemson Tigers
-    #   Arizona State Sun Devils
-    #
-    # Match the longest KNOWN school prefix instead of maintaining
-    # a brittle mascot list.
+    runtime_found = {
+        ESPN_NAME_INDEX[candidate]
+        for candidate in candidates
+        if (
+            candidate in ESPN_NAME_INDEX
+            and ESPN_NAME_INDEX[candidate]
+        )
+    }
+
+    if len(runtime_found) == 1:
+        return next(
+            iter(runtime_found)
+        )
+
+    if len(runtime_found) > 1:
+        return None
+
+    # Known static school prefixes safely handle ESPN display names for
+    # schools already represented in the curated alias registry.
     prefixed = _canonical_from_known_prefix(
         normalized
     )
@@ -1036,7 +1256,6 @@ def canonical_team(value):
     return normalized_team_text(
         normalized
     )
-
 
 def alias_group(value):
     normalized = norm(value)
@@ -1074,6 +1293,12 @@ def alias_group(value):
         values.update(
             aliases
         )
+
+    values.update(
+        runtime_espn_aliases(
+            normalized
+        )
+    )
 
     expanded = set()
 
