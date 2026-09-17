@@ -1,6 +1,6 @@
 {
   "last_x_post_id": "2100357106234798300",
-  "updated_at": "2026-09-17T16:37:30.495908+00:00",
+  "updated_at": "2026-09-17T16:48:43.025617+00:00",
   "backfill_complete": true,
   "reply_backfill_complete": false,
   "reply_recovery_complete": true,
@@ -62,5 +62,7 @@
   ],
   "last_official_reconciled_week": 1,
   "last_official_result_post_id": "2097352674010165426",
-  "last_official_reconciled_at": "2026-09-08T20:24:03.929130+00:00"
+  "last_official_reconciled_at": "2026-09-08T20:24:03.929130+00:00",
+  "processed_ids_initialized_v3": true,
+  "ingest_validation_version": 3
 }
