@@ -18,11 +18,13 @@ from espn_resolver import (
 )
 
 from football_identity import (
+    base_market,
     best_matchup_hints,
-    canonical_matchup,
     canonical_team,
     clean_text,
     is_ambiguous_hint,
+    normalize_bet_type,
+    side_identity,
     teams_equivalent,
 )
 
@@ -36,9 +38,6 @@ from football_identity import (
 # Match every provisional college-football wager to the exact
 # ESPN event BEFORE grading.
 #
-# This file intentionally contains NO team alias table and NO
-# independent event-matching algorithm.
-#
 # Team identity lives in:
 #
 #   football_identity.py
@@ -47,33 +46,62 @@ from football_identity import (
 #
 #   espn_resolver.py
 #
-# DESIGN RULE
-# -----------
-# FAIL CLOSED.
 #
-# A stored ESPN event ID is NOT automatically trusted merely
-# because that event still exists.
+# PERMANENT TRUST MODEL
+# ---------------------
 #
-# Every existing lock must also be compatible with the wager's
-# stored matchup identity.
+# 1. A stored ESPN event ID is never trusted merely because the
+#    ID exists.
 #
-# If the wager contains a complete two-team matchup and that
-# matchup contradicts the locked ESPN event:
+# 2. If the wager contains a reliable selected-team identity,
+#    the selected team must belong to the stored ESPN event.
 #
-#   - do NOT refresh the bad lock
-#   - do NOT silently rewrite the Barstool matchup
-#   - do NOT guess another event
-#   - mark the wager REVIEW
-#   - preserve diagnostics
+# 3. If the selected team belongs to the stored ESPN event but
+#    the historical matchup/opponent metadata contradicts ESPN,
+#    the event lock is treated as authoritative and ONLY the
+#    stale matchup metadata is repaired.
 #
-# If there is no complete two-team wager identity available,
-# the existing event lock can be retained, because there is no
-# independent matchup evidence with which to contradict it.
+# 4. The original stale metadata is preserved in diagnostic
+#    fields before repair.
 #
-# New event resolution continues to use espn_resolver.py.
+# 5. If the selected team does NOT belong to the ESPN event,
+#    nothing is repaired. The wager fails closed into REVIEW.
 #
-# There are NO week-specific fixes, event IDs, or hard-coded
-# historical corrections in this file.
+# 6. Totals without an independent selected-team anchor are NOT
+#    automatically repaired from ESPN merely to make an audit
+#    pass.
+#
+# 7. New event resolution continues to use espn_resolver.py.
+#
+# 8. There are NO week-specific fixes, event IDs, post IDs,
+#    picker-specific fixes, or historical correction tables in
+#    this file.
+#
+#
+# WHY THIS EXISTS
+# ---------------
+#
+# Historical ingestion can contain a correct ESPN event lock but
+# stale opponent/matchup text.
+#
+# Example pattern:
+#
+#   selection team = Team A
+#   stored event   = Team A vs Team B
+#   old matchup    = Team A vs Team C
+#
+# When Team A independently proves that the stored event belongs
+# to the wager, Team C is stale metadata. We can safely repair
+# the opponent from the already-validated ESPN event.
+#
+# But:
+#
+#   selection team = Team A
+#   stored event   = Team B vs Team C
+#
+# is fundamentally different. The event itself is suspect and
+# MUST NOT be blessed or rewritten automatically.
+#
 # ============================================================
 
 
@@ -195,14 +223,16 @@ def utc_now_iso():
 # ESPN EVENT TEAM HELPERS
 # ============================================================
 
-def event_team_names(event):
+def event_competitors(event):
     """
-    Return the two ESPN competitors using the strongest useful
-    text fields available in the scoreboard event.
+    Return structured ESPN competitors.
 
-    This is not a second resolver. It only exposes the team
-    identities of an already selected ESPN event so that an
-    existing lock can be validated.
+    Each row contains:
+        name
+        home_away
+
+    The exact ESPN event is already known when this helper is
+    used. This helper does not perform event resolution.
     """
 
     competitions = (
@@ -220,7 +250,7 @@ def event_team_names(event):
         or []
     )
 
-    teams = []
+    rows = []
 
     for competitor in competitors:
         team = (
@@ -238,10 +268,78 @@ def event_team_names(event):
 
         value = clean_text(value)
 
-        if value:
-            teams.append(value)
+        if not value:
+            continue
 
-    return teams
+        rows.append({
+            "name": value,
+            "home_away": str(
+                competitor.get(
+                    "homeAway"
+                )
+                or ""
+            ).lower().strip(),
+        })
+
+    return rows
+
+
+def event_team_names(event):
+    return [
+        row["name"]
+        for row in event_competitors(
+            event
+        )
+    ]
+
+
+def ordered_event_teams(event):
+    """
+    Return:
+        (away_team, home_team)
+
+    when ESPN home/away metadata is available.
+
+    Otherwise return the two competitors in ESPN's supplied
+    order.
+    """
+
+    rows = event_competitors(
+        event
+    )
+
+    if len(rows) != 2:
+        return None, None
+
+    away = next(
+        (
+            row["name"]
+            for row in rows
+            if row[
+                "home_away"
+            ] == "away"
+        ),
+        None,
+    )
+
+    home = next(
+        (
+            row["name"]
+            for row in rows
+            if row[
+                "home_away"
+            ] == "home"
+        ),
+        None,
+    )
+
+    if away and home:
+        return away, home
+
+    return (
+        rows[0]["name"],
+        rows[1]["name"],
+    )
 
 
 # ============================================================
@@ -403,8 +501,6 @@ def wager_matchup_hints(pick):
     """
     Return the strongest complete two-team identity supplied by
     the wager itself.
-
-    best_matchup_hints() is shared with the rest of the tracker.
     """
 
     hints = best_matchup_hints(
@@ -418,6 +514,162 @@ def wager_matchup_hints(pick):
         clean_text(hints[0]),
         clean_text(hints[1]),
     ]
+
+
+# ============================================================
+# SELECTED-TEAM ANCHOR
+# ============================================================
+
+def wager_selected_team(pick):
+    """
+    Return the wager's independently selected team when the
+    market supports one.
+
+    Spread:
+        ASU +14.5 -> Arizona State
+
+    Moneyline:
+        Clemson ML -> Clemson
+
+    Team total:
+        Texas State TT Over 33.5 -> Texas State
+
+    Full-game totals do not have a selected-team anchor and
+    therefore return None.
+    """
+
+    bet_type = normalize_bet_type(
+        pick.get(
+            "bet_type"
+        )
+    )
+
+    market = base_market(
+        bet_type
+    )
+
+    if market not in {
+        "SPREAD",
+        "MONEYLINE",
+        "TEAM_TOTAL",
+    }:
+        return None
+
+    selected = side_identity(
+        pick
+    )
+
+    selected = clean_text(
+        selected
+    )
+
+    if not selected:
+        return None
+
+    return selected
+
+
+def selected_team_event_matches(
+    pick,
+    event,
+):
+    """
+    Determine whether the wager's selected team belongs to this
+    exact ESPN event.
+
+    Returns a diagnostic dictionary rather than a bare boolean.
+
+    matched_count == 1:
+        strong independent anchor
+
+    matched_count == 0:
+        selected team contradicts event
+
+    matched_count > 1:
+        ambiguous / unsafe
+    """
+
+    selected = wager_selected_team(
+        pick
+    )
+
+    event_teams = event_team_names(
+        event
+    )
+
+    if not selected:
+        return {
+            "selected_team": None,
+            "matched_count": None,
+            "matched_team": None,
+            "event_teams": event_teams,
+            "status": "NO_SELECTED_TEAM",
+        }
+
+    matches = [
+        event_team
+        for event_team in event_teams
+        if team_hint_matches_event_team(
+            selected,
+            event_team,
+        )
+    ]
+
+    if len(matches) == 1:
+        status = "UNIQUE_MATCH"
+
+    elif len(matches) == 0:
+        status = "NO_MATCH"
+
+    else:
+        status = "AMBIGUOUS"
+
+    return {
+        "selected_team": selected,
+        "matched_count": len(
+            matches
+        ),
+        "matched_team": (
+            matches[0]
+            if len(matches) == 1
+            else None
+        ),
+        "event_teams": event_teams,
+        "status": status,
+    }
+
+
+def opponent_from_event(
+    selected_event_team,
+    event,
+):
+    """
+    Given the already-proven selected ESPN team, return the
+    other competitor.
+
+    This only succeeds when there is exactly one other team.
+    """
+
+    event_teams = event_team_names(
+        event
+    )
+
+    if len(event_teams) != 2:
+        return None
+
+    others = [
+        team
+        for team in event_teams
+        if not teams_equivalent(
+            team,
+            selected_event_team,
+        )
+    ]
+
+    if len(others) != 1:
+        return None
+
+    return others[0]
 
 
 # ============================================================
@@ -495,19 +747,11 @@ def mark_schedule_unavailable(
 def mark_existing_lock_conflict(
     pick,
     event,
+    reason,
 ):
     """
-    Existing event exists, but the wager's own two-team identity
-    contradicts ESPN.
-
-    IMPORTANT:
-    We deliberately preserve event_id and the original wager
-    matchup for diagnostics. We do not silently mutate either
-    side of the conflict.
-
-    Because game_match_status becomes REVIEW, downstream code
-    and the integrity audit can block publication/grading until
-    the source-data problem is resolved.
+    Preserve diagnostics when an existing lock cannot be safely
+    validated or repaired.
     """
 
     stored_event_id = str(
@@ -521,10 +765,6 @@ def mark_existing_lock_conflict(
 
     event_teams = event_team_names(
         event
-    )
-
-    reason = (
-        "STORED_EVENT_MATCHUP_CONFLICT"
     )
 
     mark_review(
@@ -546,7 +786,9 @@ def mark_existing_lock_conflict(
     pick[
         "conflicting_wager_matchup"
     ] = (
-        " vs ".join(wager_hints)
+        " vs ".join(
+            wager_hints
+        )
         if len(wager_hints) == 2
         else None
     )
@@ -554,6 +796,12 @@ def mark_existing_lock_conflict(
     pick[
         "conflicting_event_teams"
     ] = event_teams
+
+    pick[
+        "conflicting_selected_team"
+    ] = wager_selected_team(
+        pick
+    )
 
     pick[
         "event_matchup"
@@ -579,6 +827,7 @@ def clear_conflict_diagnostics(
         "conflicting_event_matchup",
         "conflicting_wager_matchup",
         "conflicting_event_teams",
+        "conflicting_selected_team",
     ):
         pick.pop(
             key,
@@ -594,8 +843,7 @@ def apply_match(
     confidence,
 ):
     """
-    Persist the exact ESPN event lock and the compatibility
-    fields used by the existing website/tracker.
+    Persist the exact ESPN event lock and compatibility fields.
     """
 
     lock_pick_to_event(
@@ -641,6 +889,204 @@ def apply_match(
     pick[
         "schedule_checked_at"
     ] = utc_now_iso()
+
+
+# ============================================================
+# SAFE HISTORICAL METADATA REPAIR
+# ============================================================
+
+def preserve_original_value(
+    pick,
+    original_key,
+    current_key,
+):
+    """
+    Preserve the first known stale value.
+
+    We never overwrite an already-recorded original value on
+    later workflow runs.
+    """
+
+    if original_key in pick:
+        return
+
+    current = pick.get(
+        current_key
+    )
+
+    if current is None:
+        return
+
+    pick[
+        original_key
+    ] = current
+
+
+def repair_matchup_from_locked_event(
+    pick,
+    event,
+    anchor,
+):
+    """
+    Repair stale matchup/opponent metadata ONLY after the
+    selected-team anchor has independently proven that the
+    existing ESPN event belongs to this wager.
+
+    Returns:
+        (True, details)
+
+    or:
+        (False, reason)
+
+    This function NEVER changes:
+        event_id
+        selection
+        line
+        picker
+        week
+        source_post_id
+        official result
+    """
+
+    if not anchor:
+        return (
+            False,
+            "NO_SELECTED_TEAM_ANCHOR",
+        )
+
+    if (
+        anchor.get(
+            "status"
+        )
+        != "UNIQUE_MATCH"
+    ):
+        return (
+            False,
+            "SELECTED_TEAM_NOT_UNIQUELY_IN_EVENT",
+        )
+
+    selected_event_team = (
+        anchor.get(
+            "matched_team"
+        )
+    )
+
+    if not selected_event_team:
+        return (
+            False,
+            "SELECTED_TEAM_EVENT_MATCH_MISSING",
+        )
+
+    opponent = opponent_from_event(
+        selected_event_team,
+        event,
+    )
+
+    if not opponent:
+        return (
+            False,
+            "EVENT_OPPONENT_NOT_UNIQUE",
+        )
+
+    away_team, home_team = (
+        ordered_event_teams(
+            event
+        )
+    )
+
+    if not away_team or not home_team:
+        return (
+            False,
+            "EVENT_HOME_AWAY_UNAVAILABLE",
+        )
+
+    repaired_matchup = (
+        f"{away_team} @ {home_team}"
+    )
+
+    # --------------------------------------------------------
+    # PRESERVE ORIGINAL HISTORICAL METADATA
+    # --------------------------------------------------------
+
+    preserve_original_value(
+        pick,
+        "pre_espn_repair_matchup",
+        "matchup",
+    )
+
+    preserve_original_value(
+        pick,
+        "pre_espn_repair_opponent",
+        "opponent",
+    )
+
+    preserve_original_value(
+        pick,
+        "pre_espn_repair_team",
+        "team",
+    )
+
+    # --------------------------------------------------------
+    # REPAIR ONLY DERIVED GAME IDENTITY METADATA
+    # --------------------------------------------------------
+
+    pick[
+        "matchup"
+    ] = repaired_matchup
+
+    pick[
+        "opponent"
+    ] = opponent
+
+    # If team is missing, populate it from the independently
+    # proven selected ESPN team.
+    #
+    # If team already exists, preserve the source value. Its
+    # identity has already been proven equivalent to the ESPN
+    # selected team by the anchor check.
+    if not clean_text(
+        pick.get(
+            "team"
+        )
+    ):
+        pick[
+            "team"
+        ] = selected_event_team
+
+    pick[
+        "matchup_metadata_repaired"
+    ] = True
+
+    pick[
+        "matchup_metadata_repair_source"
+    ] = "ESPN_LOCKED_EVENT"
+
+    pick[
+        "matchup_metadata_repair_reason"
+    ] = (
+        "SELECTED_TEAM_VALIDATED_EVENT"
+    )
+
+    pick[
+        "matchup_metadata_repaired_at"
+    ] = utc_now_iso()
+
+    pick[
+        "matchup_metadata_repair_event_id"
+    ] = str(
+        event.get("id")
+        or ""
+    )
+
+    return (
+        True,
+        {
+            "matchup": repaired_matchup,
+            "opponent": opponent,
+            "selected_event_team":
+                selected_event_team,
+        },
+    )
 
 
 # ============================================================
@@ -777,10 +1223,16 @@ def enrich_schedule():
     newly_matched = 0
     refreshed = 0
     review = 0
+
     stored_event_missing = 0
     stored_event_conflicts = 0
+
     existing_locks_validated = 0
     existing_locks_unverifiable = 0
+
+    metadata_repairs = 0
+    repair_failures = 0
+    selected_team_conflicts = 0
 
     resolution_methods = {}
     review_reasons = {}
@@ -850,17 +1302,6 @@ def enrich_schedule():
         # ====================================================
         # EXISTING EVENT LOCK
         # ====================================================
-        #
-        # Permanent rule:
-        #
-        # Existing event IDs are no longer blindly trusted.
-        #
-        # 1. Exact stored ID must still exist.
-        # 2. If the wager has a complete two-team identity,
-        #    that identity must agree with the ESPN event.
-        # 3. Contradictions fail closed.
-        # 4. We do NOT silently rewrite source matchup data.
-        # ====================================================
 
         if stored_event_id:
 
@@ -868,6 +1309,10 @@ def enrich_schedule():
                 events,
                 stored_event_id,
             )
+
+            # ------------------------------------------------
+            # STORED EVENT NO LONGER EXISTS IN WEEK SLATE
+            # ------------------------------------------------
 
             if event is None:
                 mark_review(
@@ -912,25 +1357,353 @@ def enrich_schedule():
                 )
             )
 
-            # -----------------------------------------------
-            # EXISTING LOCK CONTRADICTS WAGER
-            # -----------------------------------------------
+            # ------------------------------------------------
+            # EXISTING MATCHUP AGREES WITH EVENT
+            # ------------------------------------------------
+
+            if compatibility is True:
+
+                apply_match(
+                    pick,
+                    event,
+                    method=
+                        "EXISTING_EVENT_ID",
+                    confidence=
+                        "LOCKED_VALIDATED",
+                )
+
+                refreshed += 1
+                existing_locks_validated += 1
+
+                resolution_methods[
+                    "EXISTING_EVENT_ID"
+                ] = (
+                    resolution_methods.get(
+                        "EXISTING_EVENT_ID",
+                        0,
+                    )
+                    + 1
+                )
+
+                print(
+                    "PREGAME MATCH REFRESHED:",
+                    pick.get("picker"),
+                    "|",
+                    pick.get("selection"),
+                    "| event:",
+                    stored_event_id,
+                    "| kickoff:",
+                    event_date(event),
+                    "|",
+                    event_matchup_text(
+                        event
+                    ),
+                    "| validation:",
+                    "LOCKED_VALIDATED",
+                )
+
+                continue
+
+            # ------------------------------------------------
+            # EXISTING MATCHUP CONTRADICTS EVENT
+            # ------------------------------------------------
+            #
+            # We now distinguish:
+            #
+            # A. selected team proves the event belongs to this
+            #    wager -> repair stale opponent/matchup metadata
+            #
+            # B. selected team does not belong to event ->
+            #    event itself is suspect -> REVIEW
+            #
+            # C. no independent selected team exists ->
+            #    insufficient proof -> REVIEW
+            # ------------------------------------------------
 
             if compatibility is False:
+
+                anchor = (
+                    selected_team_event_matches(
+                        pick,
+                        event,
+                    )
+                )
+
+                # --------------------------------------------
+                # SAFE SELF-HEAL
+                # --------------------------------------------
+
+                if (
+                    anchor.get(
+                        "status"
+                    )
+                    == "UNIQUE_MATCH"
+                ):
+
+                    repaired, details = (
+                        repair_matchup_from_locked_event(
+                            pick,
+                            event,
+                            anchor,
+                        )
+                    )
+
+                    if repaired:
+
+                        # Re-validate the repaired matchup.
+                        repaired_hints = (
+                            wager_matchup_hints(
+                                pick
+                            )
+                        )
+
+                        repaired_compatibility = (
+                            matchup_matches_event(
+                                repaired_hints,
+                                event,
+                            )
+                        )
+
+                        if (
+                            repaired_compatibility
+                            is True
+                        ):
+
+                            apply_match(
+                                pick,
+                                event,
+                                method=
+                                    "EXISTING_EVENT_ID_METADATA_REPAIR",
+                                confidence=
+                                    "LOCKED_SELECTED_TEAM_VALIDATED",
+                            )
+
+                            refreshed += 1
+                            metadata_repairs += 1
+                            existing_locks_validated += 1
+
+                            resolution_methods[
+                                "EXISTING_EVENT_ID_METADATA_REPAIR"
+                            ] = (
+                                resolution_methods.get(
+                                    "EXISTING_EVENT_ID_METADATA_REPAIR",
+                                    0,
+                                )
+                                + 1
+                            )
+
+                            print(
+                                "PREGAME METADATA REPAIRED:",
+                                pick.get(
+                                    "picker"
+                                ),
+                                "|",
+                                pick.get(
+                                    "selection"
+                                ),
+                                "| event:",
+                                stored_event_id,
+                            )
+
+                            print(
+                                "  selected team:",
+                                anchor.get(
+                                    "selected_team"
+                                ),
+                            )
+
+                            print(
+                                "  validated ESPN team:",
+                                anchor.get(
+                                    "matched_team"
+                                ),
+                            )
+
+                            print(
+                                "  repaired matchup:",
+                                details.get(
+                                    "matchup"
+                                ),
+                            )
+
+                            print(
+                                "  repaired opponent:",
+                                details.get(
+                                    "opponent"
+                                ),
+                            )
+
+                            continue
+
+                        # Repair itself failed its defensive
+                        # post-repair verification.
+                        repair_failures += 1
+
+                        reason = (
+                            "METADATA_REPAIR_POSTCHECK_FAILED"
+                        )
+
+                        mark_existing_lock_conflict(
+                            pick,
+                            event,
+                            reason,
+                        )
+
+                        review += 1
+                        stored_event_conflicts += 1
+
+                        review_reasons[
+                            reason
+                        ] = (
+                            review_reasons.get(
+                                reason,
+                                0,
+                            )
+                            + 1
+                        )
+
+                        print(
+                            "PREGAME REPAIR POSTCHECK FAILED:",
+                            pick.get(
+                                "picker"
+                            ),
+                            "|",
+                            pick.get(
+                                "selection"
+                            ),
+                            "| event:",
+                            stored_event_id,
+                        )
+
+                        continue
+
+                    # Selected team anchored the event, but
+                    # reconstruction itself was unsafe.
+                    repair_failures += 1
+
+                    reason = (
+                        "SAFE_METADATA_REPAIR_FAILED"
+                    )
+
+                    mark_existing_lock_conflict(
+                        pick,
+                        event,
+                        reason,
+                    )
+
+                    review += 1
+                    stored_event_conflicts += 1
+
+                    review_reasons[
+                        reason
+                    ] = (
+                        review_reasons.get(
+                            reason,
+                            0,
+                        )
+                        + 1
+                    )
+
+                    print(
+                        "PREGAME METADATA REPAIR FAILED:",
+                        pick.get("picker"),
+                        "|",
+                        pick.get("selection"),
+                        "| event:",
+                        stored_event_id,
+                        "| reason:",
+                        details,
+                    )
+
+                    continue
+
+                # --------------------------------------------
+                # SELECTED TEAM CONTRADICTS EVENT
+                # --------------------------------------------
+
+                if (
+                    anchor.get(
+                        "status"
+                    )
+                    == "NO_MATCH"
+                ):
+
+                    reason = (
+                        "SELECTED_TEAM_EVENT_CONFLICT"
+                    )
+
+                    mark_existing_lock_conflict(
+                        pick,
+                        event,
+                        reason,
+                    )
+
+                    review += 1
+                    stored_event_conflicts += 1
+                    selected_team_conflicts += 1
+
+                    review_reasons[
+                        reason
+                    ] = (
+                        review_reasons.get(
+                            reason,
+                            0,
+                        )
+                        + 1
+                    )
+
+                    print(
+                        "PREGAME SELECTED TEAM CONFLICT:",
+                        pick.get("picker"),
+                        "|",
+                        pick.get("selection"),
+                        "| event:",
+                        stored_event_id,
+                    )
+
+                    print(
+                        "  selected team:",
+                        anchor.get(
+                            "selected_team"
+                        ),
+                    )
+
+                    print(
+                        "  ESPN teams:",
+                        anchor.get(
+                            "event_teams"
+                        ),
+                    )
+
+                    print(
+                        "  action: REVIEW — event lock "
+                        "was NOT trusted",
+                    )
+
+                    continue
+
+                # --------------------------------------------
+                # NO SAFE INDEPENDENT ANCHOR
+                # --------------------------------------------
+
+                reason = (
+                    "MATCHUP_CONFLICT_WITHOUT_SAFE_TEAM_ANCHOR"
+                )
 
                 mark_existing_lock_conflict(
                     pick,
                     event,
+                    reason,
                 )
 
                 review += 1
                 stored_event_conflicts += 1
 
                 review_reasons[
-                    "STORED_EVENT_MATCHUP_CONFLICT"
+                    reason
                 ] = (
                     review_reasons.get(
-                        "STORED_EVENT_MATCHUP_CONFLICT",
+                        reason,
                         0,
                     )
                     + 1
@@ -948,7 +1721,9 @@ def enrich_schedule():
                 print(
                     "  wager matchup:",
                     (
-                        " vs ".join(hints)
+                        " vs ".join(
+                            hints
+                        )
                         if len(hints) == 2
                         else None
                     ),
@@ -962,30 +1737,109 @@ def enrich_schedule():
                 )
 
                 print(
-                    "  action: REVIEW — existing lock "
-                    "was NOT trusted",
+                    "  selected-team anchor:",
+                    anchor.get(
+                        "status"
+                    ),
+                )
+
+                print(
+                    "  action: REVIEW — insufficient "
+                    "evidence for automatic repair",
                 )
 
                 continue
 
-            # -----------------------------------------------
-            # EXISTING LOCK VERIFIED
-            # -----------------------------------------------
+            # ------------------------------------------------
+            # NO COMPLETE MATCHUP IDENTITY
+            # ------------------------------------------------
+            #
+            # There is no two-team wager identity to challenge
+            # the existing event.
+            #
+            # If a selected team exists, validate it.
+            #
+            # If there is no selected team (for example a total
+            # with incomplete matchup metadata), preserve the
+            # existing lock but explicitly label it unverified.
+            # ------------------------------------------------
 
-            if compatibility is True:
+            anchor = (
+                selected_team_event_matches(
+                    pick,
+                    event,
+                )
+            )
+
+            if (
+                anchor.get(
+                    "status"
+                )
+                == "NO_MATCH"
+            ):
+
+                reason = (
+                    "SELECTED_TEAM_EVENT_CONFLICT"
+                )
+
+                mark_existing_lock_conflict(
+                    pick,
+                    event,
+                    reason,
+                )
+
+                review += 1
+                stored_event_conflicts += 1
+                selected_team_conflicts += 1
+
+                review_reasons[
+                    reason
+                ] = (
+                    review_reasons.get(
+                        reason,
+                        0,
+                    )
+                    + 1
+                )
+
+                print(
+                    "PREGAME SELECTED TEAM CONFLICT:",
+                    pick.get("picker"),
+                    "|",
+                    pick.get("selection"),
+                    "| event:",
+                    stored_event_id,
+                )
+
+                print(
+                    "  selected team:",
+                    anchor.get(
+                        "selected_team"
+                    ),
+                )
+
+                print(
+                    "  ESPN teams:",
+                    anchor.get(
+                        "event_teams"
+                    ),
+                )
+
+                continue
+
+            if (
+                anchor.get(
+                    "status"
+                )
+                == "UNIQUE_MATCH"
+            ):
                 confidence = (
-                    "LOCKED_VALIDATED"
+                    "LOCKED_SELECTED_TEAM_VALIDATED"
                 )
 
                 existing_locks_validated += 1
 
             else:
-                # There is no complete two-team wager identity
-                # with which to independently challenge the
-                # existing event ID.
-                #
-                # Preserve the lock but make that limitation
-                # observable.
                 confidence = (
                     "LOCKED_UNVERIFIED_MATCHUP"
                 )
@@ -1168,11 +2022,6 @@ def enrich_schedule():
         # ----------------------------------------------------
         # DEFENSIVE VALIDATION OF NEW LOCK
         # ----------------------------------------------------
-        #
-        # resolve_event_detailed() is authoritative, but if the
-        # wager itself has a complete two-team identity we still
-        # verify the returned event before persisting it.
-        # ----------------------------------------------------
 
         hints = wager_matchup_hints(
             pick
@@ -1186,6 +2035,18 @@ def enrich_schedule():
         )
 
         if compatibility is False:
+
+            # ------------------------------------------------
+            # A new resolution is NOT allowed to use the
+            # historical-metadata repair rule.
+            #
+            # The repair rule is only for a previously locked
+            # event that is independently anchored by the
+            # selected team.
+            #
+            # A brand-new contradictory resolution must fail
+            # closed.
+            # ------------------------------------------------
 
             candidate_id = str(
                 event.get("id")
@@ -1236,7 +2097,9 @@ def enrich_schedule():
             print(
                 "  wager matchup:",
                 (
-                    " vs ".join(hints)
+                    " vs ".join(
+                        hints
+                    )
                     if len(hints) == 2
                     else None
                 ),
@@ -1251,6 +2114,80 @@ def enrich_schedule():
 
             print(
                 "  action: REVIEW — event was NOT locked",
+            )
+
+            continue
+
+        # ----------------------------------------------------
+        # NEW LOCK SELECTED-TEAM DEFENSE
+        # ----------------------------------------------------
+
+        anchor = (
+            selected_team_event_matches(
+                pick,
+                event,
+            )
+        )
+
+        if (
+            anchor.get(
+                "status"
+            )
+            == "NO_MATCH"
+        ):
+
+            candidate_id = str(
+                event.get("id")
+                or ""
+            )
+
+            mark_review(
+                pick,
+                "NEW_EVENT_SELECTED_TEAM_CONFLICT",
+                method=
+                    "RESOLVER_SELECTED_TEAM_CONFLICT",
+                candidate_event_ids=[
+                    candidate_id
+                ] if candidate_id else [],
+            )
+
+            pick[
+                "event_id"
+            ] = None
+
+            pick[
+                "game_time"
+            ] = None
+
+            pick[
+                "game_matchup"
+            ] = None
+
+            review += 1
+
+            review_reasons[
+                "NEW_EVENT_SELECTED_TEAM_CONFLICT"
+            ] = (
+                review_reasons.get(
+                    "NEW_EVENT_SELECTED_TEAM_CONFLICT",
+                    0,
+                )
+                + 1
+            )
+
+            print(
+                "PREGAME NEW EVENT SELECTED TEAM CONFLICT:",
+                pick.get("picker"),
+                "|",
+                pick.get("selection"),
+                "| selected team:",
+                anchor.get(
+                    "selected_team"
+                ),
+                "| ESPN teams:",
+                anchor.get(
+                    "event_teams"
+                ),
             )
 
             continue
@@ -1324,13 +2261,28 @@ def enrich_schedule():
     )
 
     print(
-        "Existing locks matchup-validated:",
+        "Existing locks validated:",
         existing_locks_validated,
     )
 
     print(
-        "Existing locks without full matchup evidence:",
+        "Existing locks without full independent evidence:",
         existing_locks_unverifiable,
+    )
+
+    print(
+        "Historical matchup metadata repaired:",
+        metadata_repairs,
+    )
+
+    print(
+        "Metadata repair failures:",
+        repair_failures,
+    )
+
+    print(
+        "Selected-team/event conflicts:",
+        selected_team_conflicts,
     )
 
     print(
@@ -1344,7 +2296,7 @@ def enrich_schedule():
     )
 
     print(
-        "Stored event matchup conflicts:",
+        "Stored event matchup conflicts requiring review:",
         stored_event_conflicts,
     )
 
