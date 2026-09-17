@@ -8,189 +8,325 @@ from common import (
     save_json,
 )
 
-from grade import (
+from espn_resolver import (
     build_complete_week_slate,
-    is_official_result,
-    resolve_event,
-    season_year_for_pick,
+    event_date,
+    event_matchup_text,
+    find_event_by_id,
+    lock_pick_to_event,
+    resolve_event_detailed,
 )
 
 
 # ============================================================
-# HELPERS
+# BARSTOOL PICK EM — PREGAME SCHEDULE ENRICHMENT
+# ============================================================
+#
+# PURPOSE
+# -------
+# Match every provisional college-football wager to the exact
+# ESPN event BEFORE grading.
+#
+# This file intentionally contains NO team aliases and NO
+# event-matching algorithm.
+#
+# Those now live in:
+#
+#   football_identity.py
+#   espn_resolver.py
+#
+# That means ingestion, schedule matching and grading can use
+# the same permanent football identity system.
+#
+# DESIGN RULE
+# -----------
+# FAIL CLOSED.
+#
+# If we cannot confidently identify the game, we mark the pick
+# for review and keep trying on later workflow runs.
+#
+# We never guess an ESPN event.
 # ============================================================
 
-def week_num(pick):
+
+# ============================================================
+# BASIC PICK HELPERS
+# ============================================================
+
+def week_num(
+    pick
+):
     try:
         return int(
-            pick.get("week")
+            pick.get(
+                "week"
+            )
             or 0
         )
+
     except Exception:
         return 0
 
 
-def event_id(event):
-    if not event:
-        return None
-
-    value = event.get("id")
-
-    if value is None:
-        return None
-
-    return str(value)
-
-
-def event_kickoff(event):
-    """
-    ESPN normally provides kickoff as an ISO timestamp.
-
-    Example:
-        2026-09-12T23:30Z
-
-    We keep the UTC ESPN timestamp in picks.json.
-    The website will convert it to Pacific time.
-    """
-
-    if not event:
-        return None
-
-    value = event.get("date")
-
-    if not value:
-        competitions = (
-            event.get("competitions")
-            or []
-        )
-
-        if competitions:
-            value = (
-                competitions[0].get("date")
-            )
-
-    if not value:
-        return None
-
-    return str(value)
-
-
-def event_matchup_text(event):
-    """
-    Human-readable matchup saved for auditing.
-    """
-
-    competitions = (
-        event.get("competitions")
-        or []
-    )
-
-    if not competitions:
-        return None
-
-    competitors = (
-        competitions[0].get("competitors")
-        or []
-    )
-
-    if len(competitors) != 2:
-        return None
-
-    teams = []
-
-    for comp in competitors:
-
-        team = (
-            comp.get("team")
-            or {}
-        )
-
-        name = (
-            team.get("shortDisplayName")
-            or team.get("displayName")
-            or team.get("location")
-            or team.get("abbreviation")
-        )
-
-        if name:
-            teams.append(name)
-
-    if len(teams) != 2:
-        return None
-
-    return (
-        f"{teams[0]} vs {teams[1]}"
-    )
-
-
-def find_event_by_id(
-    events,
-    stored_event_id,
+def season_year_for_pick(
+    pick
 ):
     """
-    Strict exact ESPN ID lookup.
+    Determine football season year without depending on grade.py.
 
-    No fuzzy fallback is used here.
+    Priority:
+      1. explicit season_year
+      2. explicit season
+      3. source post timestamp
+      4. current UTC year
+
+    College-football Pick Em runs during the fall, so the
+    timestamp year is the appropriate season year.
     """
 
-    if not stored_event_id:
-        return None
+    for key in (
+        "season_year",
+        "season",
+    ):
+        value = pick.get(
+            key
+        )
 
-    stored_event_id = str(
-        stored_event_id
+        if value is None:
+            continue
+
+        try:
+            year = int(
+                value
+            )
+
+            if (
+                2000
+                <= year
+                <= 2100
+            ):
+                return year
+
+        except Exception:
+            pass
+
+    for key in (
+        "posted_at",
+        "created_at",
+    ):
+        value = pick.get(
+            key
+        )
+
+        if not value:
+            continue
+
+        try:
+            parsed = (
+                datetime.fromisoformat(
+                    str(value).replace(
+                        "Z",
+                        "+00:00",
+                    )
+                )
+            )
+
+            return parsed.year
+
+        except Exception:
+            pass
+
+    return datetime.now(
+        timezone.utc
+    ).year
+
+
+def is_official_result(
+    pick
+):
+    """
+    PAT HILL result-card rows are authoritative historical
+    results and should never be rematched by pregame schedule
+    enrichment.
+    """
+
+    return bool(
+        pick.get(
+            "official_reconciled"
+        )
     )
 
-    matches = [
-        event
-        for event in events
-        if str(
-            event.get("id")
+
+def is_cfb_pick(
+    pick
+):
+    return (
+        str(
+            pick.get(
+                "sport"
+            )
             or ""
         )
-        == stored_event_id
-    ]
+        .upper()
+        .strip()
+        in {
+            "CFB",
+            "NCAAF",
+        }
+    )
 
-    if len(matches) == 1:
-        return matches[0]
 
-    return None
+def is_provisional_cfb(
+    pick
+):
+    return (
+        is_cfb_pick(
+            pick
+        )
+        and not is_official_result(
+            pick
+        )
+    )
 
+
+def utc_now_iso():
+    return datetime.now(
+        timezone.utc
+    ).isoformat()
+
+
+# ============================================================
+# REVIEW STATE
+# ============================================================
 
 def mark_review(
     pick,
     reason,
+    *,
+    method=None,
+    candidate_event_ids=None,
 ):
     """
-    Mark a provisional pick as requiring matchup review.
+    Preserve the wager while recording exactly why it was not
+    matched.
 
-    We never guess when ESPN resolution is ambiguous.
+    The pick remains retryable on the next workflow run.
     """
 
-    pick["game_match_status"] = (
-        "REVIEW"
+    pick[
+        "game_match_status"
+    ] = "REVIEW"
+
+    pick[
+        "game_match_confidence"
+    ] = "NONE"
+
+    pick[
+        "game_match_source"
+    ] = "ESPN"
+
+    pick[
+        "game_match_review_reason"
+    ] = reason
+
+    pick[
+        "event_resolution_reason"
+    ] = reason
+
+    if method:
+        pick[
+            "event_resolution_method"
+        ] = method
+
+    else:
+        pick.pop(
+            "event_resolution_method",
+            None,
+        )
+
+    pick[
+        "event_resolution_candidates"
+    ] = (
+        candidate_event_ids
+        or []
     )
 
-    pick["game_match_confidence"] = (
-        "NONE"
-    )
+    pick[
+        "schedule_checked_at"
+    ] = utc_now_iso()
 
-    pick["game_match_source"] = (
-        "ESPN"
-    )
 
-    pick["game_match_review_reason"] = (
-        reason
-    )
-
-    pick["schedule_checked_at"] = (
-        datetime.now(
-            timezone.utc
-        ).isoformat()
+def mark_schedule_unavailable(
+    pick
+):
+    mark_review(
+        pick,
+        "ESPN_WEEK_SCHEDULE_UNAVAILABLE",
+        method=
+            "ESPN_WEEK_SCHEDULE_UNAVAILABLE",
     )
 
 
 # ============================================================
-# PREGAME SCHEDULE ENRICHMENT
+# MATCHED STATE
+# ============================================================
+
+def apply_match(
+    pick,
+    event,
+    *,
+    method,
+    confidence,
+):
+    """
+    Persist the exact ESPN event lock and the compatibility
+    fields already used by the existing website/tracker.
+    """
+
+    lock_pick_to_event(
+        pick,
+        event,
+        method=method,
+    )
+
+    # Existing tracker/UI field names.
+    pick[
+        "game_match_status"
+    ] = "MATCHED"
+
+    pick[
+        "game_match_source"
+    ] = "ESPN"
+
+    pick[
+        "game_match_confidence"
+    ] = confidence
+
+    pick[
+        "game_matchup"
+    ] = event_matchup_text(
+        event
+    )
+
+    pick[
+        "game_match_review_reason"
+    ] = None
+
+    pick[
+        "event_resolution_reason"
+    ] = None
+
+    pick[
+        "event_resolution_candidates"
+    ] = []
+
+    pick[
+        "schedule_checked_at"
+    ] = utc_now_iso()
+
+
+# ============================================================
+# SCHEDULE ENRICHMENT
 # ============================================================
 
 def enrich_schedule():
@@ -206,35 +342,18 @@ def enrich_schedule():
     ):
         picks = []
 
-
-    # --------------------------------------------------------
-    # Only provisional college-football picks need matching.
-    #
-    # PAT HILL official rows are already final and immutable.
-    # --------------------------------------------------------
-
     provisional = [
         pick
         for pick in picks
-        if (
-            pick.get("sport")
-            in {
-                "CFB",
-                "NCAAF",
-            }
-            and not is_official_result(
-                pick
-            )
+        if is_provisional_cfb(
+            pick
         )
     ]
 
-
     print()
-
     print(
         "========== PREGAME SCHEDULE =========="
     )
-
 
     if not provisional:
 
@@ -248,10 +367,9 @@ def enrich_schedule():
 
         return
 
-
-    # --------------------------------------------------------
-    # Determine which Pick Em weeks require ESPN schedules.
-    # --------------------------------------------------------
+    # ========================================================
+    # DETERMINE REQUIRED WEEKS
+    # ========================================================
 
     required_weeks = sorted({
         (
@@ -268,19 +386,16 @@ def enrich_schedule():
         ) > 0
     })
 
-
     print(
         "Weeks to enrich:",
         required_weeks,
     )
 
-
     week_cache = {}
 
-
-    # --------------------------------------------------------
-    # Fetch ESPN schedule once per required week.
-    # --------------------------------------------------------
+    # ========================================================
+    # FETCH EACH ESPN WEEK SLATE ONCE
+    # ========================================================
 
     for (
         season,
@@ -319,7 +434,6 @@ def enrich_schedule():
                 )
             ] = events
 
-
             print(
                 "Loaded ESPN schedule:",
                 season,
@@ -328,7 +442,6 @@ def enrich_schedule():
                 "| events:",
                 len(events),
             )
-
 
         except Exception as exc:
 
@@ -342,15 +455,21 @@ def enrich_schedule():
                 exc,
             )
 
+    # ========================================================
+    # COUNTERS
+    # ========================================================
 
     newly_matched = 0
     refreshed = 0
     review = 0
+    stored_event_missing = 0
 
+    resolution_methods = {}
+    review_reasons = {}
 
-    # --------------------------------------------------------
-    # Resolve every provisional pick before grading.
-    # --------------------------------------------------------
+    # ========================================================
+    # RESOLVE EVERY PROVISIONAL PICK
+    # ========================================================
 
     for pick in provisional:
 
@@ -370,42 +489,61 @@ def enrich_schedule():
                     season,
                     week,
                 ),
-                []
+                [],
             )
         )
 
+        # ----------------------------------------------------
+        # ESPN SLATE UNAVAILABLE
+        # ----------------------------------------------------
 
         if not events:
 
-            mark_review(
-                pick,
-                "ESPN_WEEK_SCHEDULE_UNAVAILABLE",
+            mark_schedule_unavailable(
+                pick
             )
 
             review += 1
 
+            review_reasons[
+                "ESPN_WEEK_SCHEDULE_UNAVAILABLE"
+            ] = (
+                review_reasons.get(
+                    "ESPN_WEEK_SCHEDULE_UNAVAILABLE",
+                    0,
+                )
+                + 1
+            )
+
             print(
                 "PREGAME REVIEW:",
-                pick.get("picker"),
+                pick.get(
+                    "picker"
+                ),
                 "|",
-                pick.get("selection"),
+                pick.get(
+                    "selection"
+                ),
                 "| ESPN schedule unavailable",
             )
 
             continue
 
-
-        stored_event_id = (
-            pick.get("event_id")
-        )
-
+        stored_event_id = str(
+            pick.get(
+                "event_id"
+            )
+            or ""
+        ).strip()
 
         # ====================================================
-        # EXISTING MATCH:
-        # Refresh kickoff using the exact same ESPN event.
+        # EXISTING EVENT LOCK
+        # ====================================================
         #
-        # This allows kickoff changes from ESPN to flow into
-        # the website without changing the matched game.
+        # Existing event IDs are NEVER automatically replaced
+        # by another event.
+        #
+        # We only refresh metadata from the exact same ESPN ID.
         # ====================================================
 
         if stored_event_id:
@@ -415,216 +553,308 @@ def enrich_schedule():
                 stored_event_id,
             )
 
-
             if event is None:
 
                 mark_review(
                     pick,
                     "STORED_EVENT_NOT_FOUND",
+                    method=
+                        "EXISTING_EVENT_ID_MISSING",
                 )
 
                 review += 1
+                stored_event_missing += 1
+
+                review_reasons[
+                    "STORED_EVENT_NOT_FOUND"
+                ] = (
+                    review_reasons.get(
+                        "STORED_EVENT_NOT_FOUND",
+                        0,
+                    )
+                    + 1
+                )
 
                 print(
                     "PREGAME STORED EVENT MISSING:",
-                    pick.get("picker"),
+                    pick.get(
+                        "picker"
+                    ),
                     "|",
-                    pick.get("selection"),
+                    pick.get(
+                        "selection"
+                    ),
                     "| event:",
                     stored_event_id,
                 )
 
                 continue
 
-
-            kickoff = event_kickoff(
-                event
+            apply_match(
+                pick,
+                event,
+                method=
+                    "EXISTING_EVENT_ID",
+                confidence=
+                    "LOCKED",
             )
-
-
-            pick["game_time"] = (
-                kickoff
-            )
-
-            pick["game_match_status"] = (
-                "MATCHED"
-            )
-
-            pick["game_match_source"] = (
-                "ESPN"
-            )
-
-            pick[
-                "game_match_confidence"
-            ] = "LOCKED"
-
-            pick["game_matchup"] = (
-                event_matchup_text(
-                    event
-                )
-            )
-
-            pick[
-                "game_match_review_reason"
-            ] = None
-
-            pick["schedule_checked_at"] = (
-                datetime.now(
-                    timezone.utc
-                ).isoformat()
-            )
-
 
             refreshed += 1
 
+            resolution_methods[
+                "EXISTING_EVENT_ID"
+            ] = (
+                resolution_methods.get(
+                    "EXISTING_EVENT_ID",
+                    0,
+                )
+                + 1
+            )
 
             print(
                 "PREGAME MATCH REFRESHED:",
-                pick.get("picker"),
+                pick.get(
+                    "picker"
+                ),
                 "|",
-                pick.get("selection"),
+                pick.get(
+                    "selection"
+                ),
                 "| event:",
                 stored_event_id,
                 "| kickoff:",
-                kickoff,
+                event_date(
+                    event
+                ),
                 "|",
-                pick.get(
-                    "game_matchup"
+                event_matchup_text(
+                    event
                 ),
             )
 
-
             continue
 
-
         # ====================================================
-        # NEW MATCH:
-        # Use the SAME conservative resolver as grade.py.
+        # NEW EVENT RESOLUTION
         # ====================================================
 
-        event = resolve_event(
-            pick,
-            events,
+        result = (
+            resolve_event_detailed(
+                pick,
+                events,
+            )
         )
 
+        event = result.get(
+            "event"
+        )
+
+        method = (
+            result.get(
+                "method"
+            )
+            or
+            "NO_CONFIDENT_EVENT_MATCH"
+        )
+
+        reason = (
+            result.get(
+                "reason"
+            )
+            or
+            "NO_CONFIDENT_EVENT_MATCH"
+        )
+
+        candidates = (
+            result.get(
+                "candidate_event_ids"
+            )
+            or []
+        )
+
+        # ----------------------------------------------------
+        # UNRESOLVED
+        # ----------------------------------------------------
 
         if event is None:
 
-            pick["event_id"] = None
+            # No event was ever locked, so these fields should
+            # remain empty. We deliberately do NOT fabricate
+            # schedule information.
+            pick[
+                "event_id"
+            ] = None
 
-            pick["game_time"] = None
+            pick[
+                "game_time"
+            ] = None
 
-            pick["game_matchup"] = None
-
+            pick[
+                "game_matchup"
+            ] = None
 
             mark_review(
                 pick,
-                "NO_CONFIDENT_EVENT_MATCH",
+                reason,
+                method=method,
+                candidate_event_ids=
+                    candidates,
             )
-
 
             review += 1
 
+            review_reasons[
+                method
+            ] = (
+                review_reasons.get(
+                    method,
+                    0,
+                )
+                + 1
+            )
 
             print(
                 "PREGAME UNMATCHED:",
-                pick.get("picker"),
+                pick.get(
+                    "picker"
+                ),
                 "|",
-                pick.get("selection"),
-                "| matchup:",
-                pick.get("matchup"),
-                "| team:",
-                pick.get("team"),
+                pick.get(
+                    "selection"
+                ),
             )
 
+            print(
+                "  matchup:",
+                pick.get(
+                    "matchup"
+                ),
+            )
+
+            print(
+                "  team:",
+                pick.get(
+                    "team"
+                ),
+                "| opponent:",
+                pick.get(
+                    "opponent"
+                ),
+            )
+
+            print(
+                "  method:",
+                method,
+            )
+
+            print(
+                "  reason:",
+                reason,
+            )
+
+            if candidates:
+
+                print(
+                    "  candidate event IDs:",
+                    candidates,
+                )
 
             continue
 
-
-        matched_event_id = (
-            event_id(
-                event
-            )
-        )
-
-        kickoff = (
-            event_kickoff(
-                event
-            )
-        )
-
-
         # ----------------------------------------------------
-        # Save the exact ESPN event before kickoff.
+        # SUCCESSFUL NEW LOCK
         # ----------------------------------------------------
 
-        pick["event_id"] = (
-            matched_event_id
-        )
-
-        pick["game_time"] = (
-            kickoff
-        )
-
-        pick["game_match_status"] = (
-            "MATCHED"
-        )
-
-        pick["game_match_source"] = (
-            "ESPN"
-        )
-
-        pick[
-            "game_match_confidence"
-        ] = "EXACT"
-
-        pick["game_matchup"] = (
-            event_matchup_text(
-                event
+        confidence_value = (
+            result.get(
+                "confidence"
             )
         )
 
-        pick[
-            "game_match_review_reason"
-        ] = None
+        if (
+            confidence_value
+            is not None
+            and confidence_value
+            >= 0.99
+        ):
+            confidence_label = (
+                "EXACT"
+            )
 
-        pick["schedule_checked_at"] = (
-            datetime.now(
-                timezone.utc
-            ).isoformat()
+        else:
+            confidence_label = (
+                "UNIQUE"
+            )
+
+        apply_match(
+            pick,
+            event,
+            method=method,
+            confidence=
+                confidence_label,
         )
-
 
         newly_matched += 1
 
+        resolution_methods[
+            method
+        ] = (
+            resolution_methods.get(
+                method,
+                0,
+            )
+            + 1
+        )
 
         print(
             "PREGAME MATCHED:",
-            pick.get("picker"),
+            pick.get(
+                "picker"
+            ),
             "|",
-            pick.get("selection"),
+            pick.get(
+                "selection"
+            ),
             "| event:",
-            matched_event_id,
+            pick.get(
+                "event_id"
+            ),
             "| kickoff:",
-            kickoff,
+            pick.get(
+                "game_time"
+            ),
             "|",
             pick.get(
                 "game_matchup"
             ),
+            "| method:",
+            method,
         )
 
-
-    # --------------------------------------------------------
+    # ========================================================
     # SAVE
-    # --------------------------------------------------------
+    # ========================================================
 
     save_json(
         PICKS_FILE,
         picks,
     )
 
+    # ========================================================
+    # AUDIT SUMMARY
+    # ========================================================
 
     print()
+    print(
+        "========== PREGAME AUDIT ============="
+    )
+
+    print(
+        "Provisional CFB wagers:",
+        len(
+            provisional
+        ),
+    )
 
     print(
         "Pregame newly matched:",
@@ -640,6 +870,65 @@ def enrich_schedule():
         "Pregame needs review:",
         review,
     )
+
+    print(
+        "Stored event IDs missing:",
+        stored_event_missing,
+    )
+
+    print()
+
+    print(
+        "Resolution methods:"
+    )
+
+    if resolution_methods:
+
+        for method in sorted(
+            resolution_methods
+        ):
+
+            print(
+                " ",
+                method,
+                ":",
+                resolution_methods[
+                    method
+                ],
+            )
+
+    else:
+
+        print(
+            "  none"
+        )
+
+    print()
+
+    print(
+        "Review reasons:"
+    )
+
+    if review_reasons:
+
+        for reason in sorted(
+            review_reasons
+        ):
+
+            print(
+                " ",
+                reason,
+                ":",
+                review_reasons[
+                    reason
+                ],
+            )
+
+    else:
+
+        print(
+            "  none"
+        )
 
     print(
         "======================================"
