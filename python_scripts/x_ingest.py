@@ -18,6 +18,21 @@ from common import (
     save_json,
 )
 
+from football_identity import (
+    SUPPORTED_MARKETS,
+    base_market,
+    best_matchup_hints,
+    canonical_game_identity,
+    canonical_pick_key,
+    clean_text,
+    market_period,
+    normalize_bet_type,
+    safe_float,
+    side_identity,
+    spread_line_from_selection,
+    total_direction,
+)
+
 
 # ============================================================
 # CONFIG
@@ -50,115 +65,30 @@ MAX_PARENT_DEPTH = 3
 INITIAL_BACKFILL_DAYS = 10
 INITIAL_BACKFILL_PAGES = 3
 
-# Tuesday result reconciliation looks back several days so it
-# can recover the complete official standings thread.
 STANDINGS_LOOKBACK_DAYS = 5
 STANDINGS_MAX_PAGES = 4
 
 PROCESSED_IDS_FLAG = (
-    "processed_ids_initialized_v2"
+    "processed_ids_initialized_v3"
 )
 
 OFFICIAL_RESULT_STATE_KEY = (
     "official_result_threads_processed"
 )
 
-
-SUPPORTED_MARKETS = {
-    "SPREAD",
-    "TOTAL",
-    "MONEYLINE",
-    "TEAM_TOTAL",
-
-    "FIRST_QUARTER_SPREAD",
-    "FIRST_QUARTER_TOTAL",
-    "FIRST_QUARTER_MONEYLINE",
-    "FIRST_QUARTER_TEAM_TOTAL",
-
-    "FIRST_HALF_SPREAD",
-    "FIRST_HALF_TOTAL",
-    "FIRST_HALF_MONEYLINE",
-    "FIRST_HALF_TEAM_TOTAL",
-}
+MAX_PROCESSED_POST_IDS = 2000
+MAX_FAILED_POST_IDS = 250
 
 
 # ============================================================
 # BASIC HELPERS
 # ============================================================
 
-def clean_text(value):
-    value = str(value or "")
-
-    return (
-        value
-        .replace("−", "-")
-        .replace("–", "-")
-        .replace("—", "-")
-        .replace("½", ".5")
-        .replace("&amp;", "&")
-        .strip()
-    )
-
-
-def norm(value):
-    value = clean_text(
-        value
-    ).lower()
-
-    value = value.replace(
-        "&",
-        " and ",
-    )
-
-    value = re.sub(
-        r"\s+",
-        " ",
-        value,
-    )
-
-    value = re.sub(
-        r"[^a-z0-9+.\-/'()@ ]",
-        "",
-        value,
-    )
-
-    return value.strip()
-
-
-def safe_float(value):
-    if value is None:
-        return None
-
-    try:
-        return float(value)
-
-    except Exception:
-        pass
-
-    match = re.search(
-        r"[-+]?\d+(?:\.\d+)?",
-        str(value),
-    )
-
-    if not match:
-        return None
-
-    try:
-        return float(
-            match.group(0)
-        )
-
-    except Exception:
-        return None
-
-
 def stable_id(value):
     return (
         hashlib
         .sha1(
-            str(value).encode(
-                "utf-8"
-            )
+            str(value).encode("utf-8")
         )
         .hexdigest()[:16]
     )
@@ -167,463 +97,88 @@ def stable_id(value):
 def pick_week(pick):
     try:
         return int(
-            pick.get("week")
-            or 0
+            pick.get("week") or 0
         )
-
     except Exception:
         return 0
 
 
-# ============================================================
-# TEAM NORMALIZATION
-# ============================================================
+def post_numeric_sort(value):
+    value = str(value or "")
 
-TEAM_ALIASES = {
-    "nd": "notre dame",
-    "notre dame": "notre dame",
+    if value.isdigit():
+        return int(value)
 
-    "wis": "wisconsin",
-    "wisc": "wisconsin",
-    "wisconsin": "wisconsin",
-
-    "byu": "byu",
-    "brigham young": "byu",
-
-    "utah tech": "utah tech",
-
-    "wazzu": "washington state",
-    "wsu": "washington state",
-    "wash state": "washington state",
-    "washington state": "washington state",
-
-    "wash": "washington",
-    "uw": "washington",
-    "washington": "washington",
-
-    "california": "cal",
-    "cal": "cal",
-
-    "ore": "oregon",
-    "oregon": "oregon",
-
-    "hou": "houston",
-    "houston": "houston",
-
-    "mem": "memphis",
-    "memphis": "memphis",
-
-    "iu": "indiana",
-    "indiana": "indiana",
-
-    "a and m": "texas a&m",
-    "texas am": "texas a&m",
-    "texas a and m": "texas a&m",
-    "tamu": "texas a&m",
-    "texas a&m": "texas a&m",
-
-    "cmu": "central michigan",
-    "central michigan": "central michigan",
-
-    "ok st": "oklahoma state",
-    "ok state": "oklahoma state",
-    "oklahoma state": "oklahoma state",
-}
+    return 0
 
 
-def normalize_team(value):
-    value = norm(value)
-
-    return TEAM_ALIASES.get(
-        value,
-        value,
-    )
-
-
-# ============================================================
-# MARKET NORMALIZATION
-# ============================================================
-
-def normalize_bet_type(value):
+def parse_json_response(raw):
     raw = str(
-        value or "OTHER"
-    ).upper().strip()
+        raw or ""
+    ).strip()
 
-    aliases = {
-        "1Q_SPREAD":
-            "FIRST_QUARTER_SPREAD",
-
-        "1Q_TOTAL":
-            "FIRST_QUARTER_TOTAL",
-
-        "1Q_MONEYLINE":
-            "FIRST_QUARTER_MONEYLINE",
-
-        "1Q_TEAM_TOTAL":
-            "FIRST_QUARTER_TEAM_TOTAL",
-
-        "1H_SPREAD":
-            "FIRST_HALF_SPREAD",
-
-        "1H_TOTAL":
-            "FIRST_HALF_TOTAL",
-
-        "1H_MONEYLINE":
-            "FIRST_HALF_MONEYLINE",
-
-        "1H_TEAM_TOTAL":
-            "FIRST_HALF_TEAM_TOTAL",
-    }
-
-    return aliases.get(
+    raw = re.sub(
+        r"^```(?:json)?\s*",
+        "",
         raw,
-        raw,
-    )
-
-
-def normalize_side(value):
-    value = clean_text(
-        value
-    )
-
-    if value.upper() in {
-        "OVER",
-        "UNDER",
-    }:
-        return value.upper()
-
-    return normalize_team(
-        value
-    )
-
-
-# ============================================================
-# MATCHUP NORMALIZATION
-# ============================================================
-
-def matchup_key(value):
-    value = norm(value)
-
-    if not value:
-        return ""
-
-    pieces = re.split(
-        r"\s*@\s*"
-        r"|\s*/\s*"
-        r"|\s+vs\.?\s+"
-        r"|\s+v\.?\s+"
-        r"|\s+at\s+",
-        value,
         flags=re.I,
     )
 
-    pieces = [
-        normalize_team(piece)
-        for piece in pieces
-        if normalize_team(piece)
-    ]
+    raw = re.sub(
+        r"\s*```$",
+        "",
+        raw,
+    )
 
-    if len(pieces) >= 2:
-        return "::".join(
-            sorted(
-                pieces[:2]
-            )
+    if not raw:
+        raise ValueError(
+            "AI returned an empty response"
         )
 
-    return normalize_team(
-        value
-    )
+    payload = json.loads(raw)
 
-
-def structured_matchup_key(pick):
-    team = normalize_team(
-        pick.get("team")
-    )
-
-    opponent = normalize_team(
-        pick.get("opponent")
-    )
-
-    if team and opponent:
-        return "::".join(
-            sorted(
-                [
-                    team,
-                    opponent,
-                ]
-            )
-        )
-
-    return matchup_key(
-        pick.get("matchup")
-    )
-
-
-# ============================================================
-# CANONICAL PICK KEY
-# ============================================================
-
-def canonical_pick_key(pick):
-    """
-    Same picker + same week + same actual wager = same pick.
-
-    Source post ID is intentionally excluded so an official
-    repost/reply does not create a duplicate wager.
-    """
-
-    picker = (
-        normalize_picker(
-            pick.get("picker")
-        )
-        or ""
-    )
-
-    week = pick_week(
-        pick
-    )
-
-    bet_type = normalize_bet_type(
-        pick.get("bet_type")
-    )
-
-    side = normalize_side(
-        pick.get("side")
-    )
-
-    line = safe_float(
-        pick.get("line")
-    )
-
-    line_key = (
-        ""
-        if line is None
-        else f"{line:.3f}"
-    )
-
-    team = normalize_team(
-        pick.get("team")
-    )
-
-    selection = norm(
-        pick.get("selection")
-    )
-
-    game = structured_matchup_key(
-        pick
-    )
-
-    if bet_type in {
-        "SPREAD",
-        "FIRST_QUARTER_SPREAD",
-        "FIRST_HALF_SPREAD",
-    }:
-
-        wager_team = (
-            team
-            or (
-                side
-                if side not in {
-                    "",
-                    "OVER",
-                    "UNDER",
-                }
-                else ""
-            )
-        )
-
-        return (
-            picker,
-            week,
-            bet_type,
-            wager_team,
-            line_key,
-            selection
-            if not wager_team
-            else "",
-        )
-
-    if bet_type in {
-        "TEAM_TOTAL",
-        "FIRST_QUARTER_TEAM_TOTAL",
-        "FIRST_HALF_TEAM_TOTAL",
-    }:
-
-        return (
-            picker,
-            week,
-            bet_type,
-            team,
-            side,
-            line_key,
-        )
-
-    if bet_type in {
-        "TOTAL",
-        "FIRST_QUARTER_TOTAL",
-        "FIRST_HALF_TOTAL",
-    }:
-
-        return (
-            picker,
-            week,
-            bet_type,
-            game,
-            side,
-            line_key,
-        )
-
-    if bet_type in {
-        "MONEYLINE",
-        "FIRST_QUARTER_MONEYLINE",
-        "FIRST_HALF_MONEYLINE",
-    }:
-
-        return (
-            picker,
-            week,
-            bet_type,
-            team or side,
-        )
-
-    return (
-        picker,
-        week,
-        bet_type,
-        selection,
-        side,
-        line_key,
-    )
-
-
-# ============================================================
-# DEDUPE
-# ============================================================
-
-def pick_quality(pick):
-    score = 0
-
-    result = str(
-        pick.get("result")
-        or ""
-    ).upper()
-
-    if result in {
-        "WIN",
-        "LOSS",
-        "PUSH",
-    }:
-        score += 100
-
-    if pick.get(
-        "official_reconciled"
+    if not isinstance(
+        payload,
+        dict,
     ):
-        score += 1000
-
-    if pick.get(
-        "event_id"
-    ):
-        score += 20
-
-    if pick.get(
-        "final_score"
-    ):
-        score += 15
-
-    if pick.get(
-        "matchup"
-    ):
-        score += 5
-
-    if pick.get(
-        "team"
-    ):
-        score += 3
-
-    return score
-
-
-def dedupe_picks(picks):
-    groups = {}
-
-    for index, pick in enumerate(
-        picks
-    ):
-
-        key = canonical_pick_key(
-            pick
+        raise ValueError(
+            "AI response is not a JSON object"
         )
 
-        groups.setdefault(
-            key,
-            [],
-        ).append(
-            (
-                index,
-                pick,
-            )
-        )
+    return payload
 
-    keep_indexes = set()
-    removed = 0
 
-    for _, members in groups.items():
+def safe_bool(value):
+    if isinstance(value, bool):
+        return value
 
-        if len(members) == 1:
+    if isinstance(value, str):
+        lowered = value.strip().lower()
 
-            keep_indexes.add(
-                members[0][0]
-            )
+        if lowered in {
+            "true",
+            "yes",
+            "1",
+        }:
+            return True
 
-            continue
+        if lowered in {
+            "false",
+            "no",
+            "0",
+        }:
+            return False
 
-        best_index, _ = max(
-            members,
-            key=lambda item:
-                (
-                    pick_quality(
-                        item[1]
-                    ),
-                    -item[0],
-                )
-        )
+    return bool(value)
 
-        keep_indexes.add(
-            best_index
-        )
 
-        for index, duplicate in members:
+def normalize_picker_safe(value):
+    picker = normalize_picker(value)
 
-            if index == best_index:
-                continue
+    if picker in TRACKED_PICKERS:
+        return picker
 
-            removed += 1
-
-            print(
-                "DUPLICATE REMOVED:",
-                duplicate.get(
-                    "picker"
-                ),
-                "|",
-                duplicate.get(
-                    "selection"
-                ),
-            )
-
-    cleaned = [
-        pick
-        for index, pick
-        in enumerate(picks)
-        if index in keep_indexes
-    ]
-
-    if removed:
-
-        print(
-            "Duplicate wagers removed:",
-            removed,
-        )
-
-    return cleaned
+    return None
 
 
 # ============================================================
@@ -641,10 +196,7 @@ def explicit_week_from_text(text):
         return None
 
     try:
-        return int(
-            match.group(1)
-        )
-
+        return int(match.group(1))
     except Exception:
         return None
 
@@ -654,19 +206,16 @@ def infer_week_from_date(created_at):
         return None
 
     try:
-
         dt = datetime.fromisoformat(
             str(created_at).replace(
                 "Z",
                 "+00:00",
             )
         )
-
     except Exception:
         return None
 
     if dt.tzinfo is None:
-
         dt = dt.replace(
             tzinfo=timezone.utc
         )
@@ -677,40 +226,23 @@ def infer_week_from_date(created_at):
         .date()
     )
 
-
     # --------------------------------------------------------
-    # 2026 VERIFIED WINDOWS
+    # VERIFIED 2026 PICK EM WINDOWS
     # --------------------------------------------------------
 
     if d.year == 2026:
 
         if (
-            date(
-                2026,
-                8,
-                22,
-            )
+            date(2026, 8, 22)
             <= d
-            <= date(
-                2026,
-                9,
-                7,
-            )
+            <= date(2026, 9, 7)
         ):
             return 1
 
         if (
-            date(
-                2026,
-                9,
-                8,
-            )
+            date(2026, 9, 8)
             <= d
-            <= date(
-                2026,
-                9,
-                13,
-            )
+            <= date(2026, 9, 13)
         ):
             return 2
 
@@ -721,19 +253,14 @@ def infer_week_from_date(created_at):
         )
 
         if d >= week3_start:
-
             return (
                 3
-                +
-                (
-                    d
-                    - week3_start
-                ).days
-                // 7
+                + (
+                    d - week3_start
+                ).days // 7
             )
 
         return None
-
 
     # --------------------------------------------------------
     # FUTURE-SEASON FALLBACK
@@ -748,14 +275,12 @@ def infer_week_from_date(created_at):
     first_monday = (
         september_1
         - timedelta(
-            days=
-                september_1.weekday()
+            days=september_1.weekday()
         )
     )
 
     delta = (
-        d
-        - first_monday
+        d - first_monday
     ).days
 
     if delta < -10:
@@ -773,11 +298,8 @@ def infer_week(
     text,
     created_at,
 ):
-
     explicit = (
-        explicit_week_from_text(
-            text
-        )
+        explicit_week_from_text(text)
     )
 
     if explicit:
@@ -795,14 +317,12 @@ def standings_target_week(
     Tuesday standings settle the week that just finished.
 
     Example:
-    Tuesday during Week 2 -> official results for Week 1.
+        Tuesday during Week 2 -> Week 1 results.
     """
 
     current_week = infer_week(
         root_post.get("text"),
-        root_post.get(
-            "created_at"
-        ),
+        root_post.get("created_at"),
     )
 
     if not current_week:
@@ -822,7 +342,6 @@ def x_get(
     path,
     params=None,
 ):
-
     token = os.environ[
         "X_BEARER_TOKEN"
     ]
@@ -843,10 +362,8 @@ def x_get(
 
 
 def resolve_user_id():
-
     payload = x_get(
-        f"/users/by/username/"
-        f"{USERNAME}"
+        f"/users/by/username/{USERNAME}"
     )
 
     return str(
@@ -855,12 +372,9 @@ def resolve_user_id():
 
 
 def iso_x_time(dt):
-
     return (
         dt
-        .astimezone(
-            timezone.utc
-        )
+        .astimezone(timezone.utc)
         .strftime(
             "%Y-%m-%dT%H:%M:%SZ"
         )
@@ -878,13 +392,10 @@ def fetch_user_posts(
     start_time=None,
     max_pages=1,
 ):
-
     params = {
-        "max_results":
-            100,
+        "max_results": 100,
 
-        "exclude":
-            "retweets",
+        "exclude": "retweets",
 
         "tweet.fields": (
             "author_id,"
@@ -908,15 +419,11 @@ def fetch_user_posts(
     }
 
     if since_id:
-
         params[
             "since_id"
-        ] = str(
-            since_id
-        )
+        ] = str(since_id)
 
     if start_time:
-
         params[
             "start_time"
         ] = iso_x_time(
@@ -929,10 +436,8 @@ def fetch_user_posts(
     pages = 0
 
     while True:
-
         payload = x_get(
-            f"/users/"
-            f"{user_id}/tweets",
+            f"/users/{user_id}/tweets",
             params,
         )
 
@@ -940,57 +445,35 @@ def fetch_user_posts(
             "data",
             [],
         ):
-
             if (
                 str(
-                    post.get(
-                        "author_id"
-                    )
+                    post.get("author_id")
                     or ""
                 )
-                != str(
-                    user_id
-                )
+                != str(user_id)
             ):
                 continue
 
-            posts.append(
-                post
-            )
+            posts.append(post)
 
         for media in (
             payload
-            .get(
-                "includes",
-                {},
-            )
-            .get(
-                "media",
-                [],
-            )
+            .get("includes", {})
+            .get("media", [])
         ):
-
             key = media.get(
                 "media_key"
             )
 
             if key:
-
-                media_map[
-                    key
-                ] = media
+                media_map[key] = media
 
         pages += 1
 
         next_token = (
             payload
-            .get(
-                "meta",
-                {},
-            )
-            .get(
-                "next_token"
-            )
+            .get("meta", {})
+            .get("next_token")
         )
 
         if not next_token:
@@ -1010,7 +493,6 @@ def fetch_user_posts(
 
 
 def fetch_post_by_id(post_id):
-
     payload = x_get(
         f"/tweets/{post_id}",
         {
@@ -1036,33 +518,21 @@ def fetch_post_by_id(post_id):
         },
     )
 
-    post = payload.get(
-        "data"
-    )
+    post = payload.get("data")
 
     media_map = {}
 
     for media in (
         payload
-        .get(
-            "includes",
-            {},
-        )
-        .get(
-            "media",
-            [],
-        )
+        .get("includes", {})
+        .get("media", [])
     ):
-
         key = media.get(
             "media_key"
         )
 
         if key:
-
-            media_map[
-                key
-            ] = media
+            media_map[key] = media
 
     return (
         post,
@@ -1078,23 +548,15 @@ def image_urls_for_post(
     post,
     media_map,
 ):
-
     urls = []
 
     keys = (
         post
-        .get(
-            "attachments",
-            {},
-        )
-        .get(
-            "media_keys",
-            [],
-        )
+        .get("attachments", {})
+        .get("media_keys", [])
     )
 
     for key in keys:
-
         media = media_map.get(
             key,
             {},
@@ -1104,13 +566,9 @@ def image_urls_for_post(
             media.get("type")
             == "photo"
         ):
-
-            url = media.get(
-                "url"
-            )
+            url = media.get("url")
 
         else:
-
             url = media.get(
                 "preview_image_url"
             )
@@ -1119,10 +577,7 @@ def image_urls_for_post(
             url
             and url not in urls
         ):
-
-            urls.append(
-                url
-            )
+            urls.append(url)
 
     return urls
 
@@ -1132,38 +587,27 @@ def image_urls_for_post(
 # ============================================================
 
 def replied_to_post_id(post):
-
     for reference in (
         post.get(
             "referenced_tweets"
         )
         or []
     ):
-
         if (
             reference.get("type")
             == "replied_to"
         ):
-
-            value = reference.get(
-                "id"
-            )
+            value = reference.get("id")
 
             if value:
-
-                return str(
-                    value
-                )
+                return str(value)
 
     return None
 
 
 def is_reply_post(post):
-
     return bool(
-        replied_to_post_id(
-            post
-        )
+        replied_to_post_id(post)
         or post.get(
             "in_reply_to_user_id"
         )
@@ -1175,11 +619,8 @@ def official_parent_context(
     official_user_id,
     cache,
 ):
-
     current_id = (
-        replied_to_post_id(
-            post
-        )
+        replied_to_post_id(post)
     )
 
     pieces = []
@@ -1187,22 +628,17 @@ def official_parent_context(
 
     while (
         current_id
-        and depth
-        < MAX_PARENT_DEPTH
+        and depth < MAX_PARENT_DEPTH
     ):
-
         depth += 1
 
         if current_id in cache:
-
             parent = cache[
                 current_id
             ]
 
         else:
-
             try:
-
                 parent, _ = (
                     fetch_post_by_id(
                         current_id
@@ -1210,7 +646,6 @@ def official_parent_context(
                 )
 
             except Exception as exc:
-
                 print(
                     "PARENT FETCH FAILED:",
                     current_id,
@@ -1231,39 +666,30 @@ def official_parent_context(
         if not parent:
             break
 
-
-        # Never use fan / outside account parent context.
+        # Never consume fan / outside-account context.
         if (
             str(
-                parent.get(
-                    "author_id"
-                )
+                parent.get("author_id")
                 or ""
             )
             != str(
                 official_user_id
             )
         ):
-
             break
 
         parent_text = str(
-            parent.get(
-                "text"
-            )
+            parent.get("text")
             or ""
         ).strip()
 
         if parent_text:
-
             pieces.append(
                 parent_text
             )
 
         current_id = (
-            replied_to_post_id(
-                parent
-            )
+            replied_to_post_id(parent)
         )
 
     return "\n\n".join(
@@ -1272,65 +698,46 @@ def official_parent_context(
 
 
 # ============================================================
-# PICKER HINTS
+# PICKER / ADDED PICK HINTS
 # ============================================================
 
 def picker_hint_from_text(text):
-
     text = str(
         text or ""
     ).lower()
 
     if (
-        "barstoolbigcat"
-        in text
-        or "big cat"
-        in text
-        or "bigcat"
-        in text
+        "barstoolbigcat" in text
+        or "big cat" in text
+        or "bigcat" in text
     ):
-
         return "Big Cat"
 
     if (
-        "stoolpresidente"
-        in text
-        or "stool presidente"
-        in text
-        or "dave portnoy"
-        in text
-        or "portnoy"
-        in text
-        or "el pres"
-        in text
+        "stoolpresidente" in text
+        or "stool presidente" in text
+        or "dave portnoy" in text
+        or "portnoy" in text
+        or "el pres" in text
     ):
-
-        return (
-            "Stool Presidente"
-        )
+        return "Stool Presidente"
 
     if (
-        "return_of_rb"
-        in text
-        or "returnofrb"
-        in text
-        or "rico bosco"
-        in text
-        or "ricobosco"
-        in text
+        "return_of_rb" in text
+        or "returnofrb" in text
+        or "rico bosco" in text
+        or "ricobosco" in text
         or re.search(
             r"\brico\b",
             text,
         )
     ):
-
         return "Rico Bosco"
 
     return None
 
 
 def is_added_post(text):
-
     text = str(
         text or ""
     ).lower()
@@ -1351,11 +758,10 @@ def is_added_post(text):
 
 
 # ============================================================
-# PAT HILL STANDINGS DETECTION
+# PAT HILL DETECTION
 # ============================================================
 
 def is_pat_hill_text(text):
-
     return (
         "pat hill standings"
         in str(
@@ -1368,7 +774,6 @@ def is_standings_context(
     text,
     parent_text="",
 ):
-
     combined = (
         str(text or "")
         + "\n"
@@ -1381,10 +786,6 @@ def is_standings_context(
 
 
 def should_scan_standings():
-    """
-    Scheduled standings reconciliation runs Tuesday Pacific.
-    """
-
     now_pt = datetime.now(
         PACIFIC
     )
@@ -1400,14 +801,6 @@ def should_scan_standings():
 # ============================================================
 
 def parse_printed_standings(text):
-    """
-    Example:
-
-    @Return_Of_RB 13-5 (72%)
-    @BarstoolBigCat 16-19 (46%)
-    @stoolpresidente 5-6 (45%)
-    """
-
     output = {}
 
     patterns = {
@@ -1432,9 +825,7 @@ def parse_printed_standings(text):
     for picker, picker_patterns in (
         patterns.items()
     ):
-
         for pattern in picker_patterns:
-
             match = re.search(
                 pattern,
                 lowered,
@@ -1444,30 +835,18 @@ def parse_printed_standings(text):
             if not match:
                 continue
 
-            wins = int(
-                match.group(1)
-            )
-
-            losses = int(
-                match.group(2)
-            )
-
-            pushes = int(
-                match.group(3)
-                or 0
-            )
-
-            output[
-                picker
-            ] = {
+            output[picker] = {
                 "wins":
-                    wins,
+                    int(match.group(1)),
 
                 "losses":
-                    losses,
+                    int(match.group(2)),
 
                 "pushes":
-                    pushes,
+                    int(
+                        match.group(3)
+                        or 0
+                    ),
             }
 
             break
@@ -1476,13 +855,21 @@ def parse_printed_standings(text):
 
 
 # ============================================================
-# NORMAL PICK POST FILTER
+# CANDIDATE NORMAL-PICK FILTER
 # ============================================================
 
 def looks_like_pick_post(
     text,
     image_urls,
 ):
+    """
+    This is intentionally a broad candidate filter.
+
+    It does NOT decide whether the post really contains picks.
+    The validated AI extraction makes that decision.
+
+    Images are candidates because initial cards are image-heavy.
+    """
 
     if image_urls:
         return True
@@ -1504,13 +891,13 @@ def looks_like_pick_post(
         "first half",
         "adds for",
         "add for",
+        "added pick",
     ]
 
     if any(
         keyword in text
         for keyword in keywords
     ):
-
         return True
 
     if re.search(
@@ -1519,7 +906,6 @@ def looks_like_pick_post(
         text,
         flags=re.I,
     ):
-
         return True
 
     return False
@@ -1530,14 +916,17 @@ def looks_like_pick_post(
 # ============================================================
 
 def normalize_extracted_market(pick):
-
     pick = dict(
-        pick
+        pick or {}
     )
 
     selection = clean_text(
         pick.get("selection")
     )
+
+    pick[
+        "selection"
+    ] = selection
 
     text = selection.lower()
 
@@ -1547,11 +936,7 @@ def normalize_extracted_market(pick):
 
     first_quarter = bool(
         re.search(
-            r"\b(?:"
-            r"1q|"
-            r"first quarter|"
-            r"1st quarter"
-            r")\b",
+            r"\b(?:1q|first quarter|1st quarter)\b",
             text,
             flags=re.I,
         )
@@ -1559,11 +944,7 @@ def normalize_extracted_market(pick):
 
     first_half = bool(
         re.search(
-            r"\b(?:"
-            r"1h|"
-            r"first half|"
-            r"1st half"
-            r")\b",
+            r"\b(?:1h|first half|1st half)\b",
             text,
             flags=re.I,
         )
@@ -1571,34 +952,25 @@ def normalize_extracted_market(pick):
 
     team_total = bool(
         re.search(
-            r"\b(?:"
-            r"tt|"
-            r"team total"
-            r")\b",
+            r"\b(?:tt|team total)\b",
             text,
             flags=re.I,
         )
     )
 
     if team_total:
-
         if first_quarter:
-
             bet_type = (
                 "FIRST_QUARTER_TEAM_TOTAL"
             )
 
         elif first_half:
-
             bet_type = (
                 "FIRST_HALF_TEAM_TOTAL"
             )
 
         else:
-
-            bet_type = (
-                "TEAM_TOTAL"
-            )
+            bet_type = "TEAM_TOTAL"
 
         compact = re.search(
             r"\b(?:tt|team total)"
@@ -1617,13 +989,10 @@ def normalize_extracted_market(pick):
         )
 
         if compact:
-
             pick["side"] = (
                 "OVER"
                 if (
-                    compact
-                    .group(1)
-                    .lower()
+                    compact.group(1).lower()
                     == "o"
                 )
                 else "UNDER"
@@ -1634,7 +1003,6 @@ def normalize_extracted_market(pick):
             )
 
         elif verbose:
-
             pick["side"] = (
                 verbose
                 .group(1)
@@ -1649,7 +1017,6 @@ def normalize_extracted_market(pick):
         first_quarter
         or first_half
     ):
-
         prefix = (
             "FIRST_QUARTER"
             if first_quarter
@@ -1661,7 +1028,6 @@ def normalize_extracted_market(pick):
             text,
             flags=re.I,
         ):
-
             bet_type = (
                 f"{prefix}_TOTAL"
             )
@@ -1671,23 +1037,19 @@ def normalize_extracted_market(pick):
             text,
             flags=re.I,
         ):
-
             bet_type = (
                 f"{prefix}_MONEYLINE"
             )
 
         elif re.search(
-            r"[+-]\s*"
-            r"\d+(?:\.\d+)?",
+            r"[+-]\s*\d+(?:\.\d+)?",
             text,
         ):
-
             bet_type = (
                 f"{prefix}_SPREAD"
             )
 
     else:
-
         total = re.search(
             r"\b(over|under)"
             r"\s*"
@@ -1697,9 +1059,7 @@ def normalize_extracted_market(pick):
         )
 
         if total:
-
             if bet_type == "OTHER":
-
                 bet_type = "TOTAL"
 
             pick["side"] = (
@@ -1712,11 +1072,34 @@ def normalize_extracted_market(pick):
                 total.group(2)
             )
 
-    pick["bet_type"] = (
-        normalize_bet_type(
-            bet_type
-        )
+    pick[
+        "bet_type"
+    ] = normalize_bet_type(
+        bet_type
     )
+
+    # --------------------------------------------------------
+    # Spread sign protection.
+    #
+    # Visible selection is authoritative.
+    # --------------------------------------------------------
+
+    if (
+        base_market(
+            pick["bet_type"]
+        )
+        == "SPREAD"
+    ):
+        visible_line = (
+            spread_line_from_selection(
+                pick
+            )
+        )
+
+        if visible_line is not None:
+            pick[
+                "line"
+            ] = visible_line
 
     return pick
 
@@ -1736,14 +1119,28 @@ def parse_post_with_ai(
     reply_hint,
     parent_text,
 ):
+    """
+    Extract one official source post.
+
+    IMPORTANT:
+    This function returns a payload, not merely a list of picks.
+
+    The payload contains explicit extraction-completeness metadata
+    which is validated before the post may be marked processed.
+    """
 
     from openai import OpenAI
 
     client = OpenAI()
 
+    supplied_image_count = len(
+        image_urls
+    )
+
     prompt = f"""
-You extract NCAA college football gambling picks from the
-official @barstoolpickem X account.
+You are a strict extraction engine for NCAA college football
+gambling picks from the verified official @barstoolpickem X
+account.
 
 TRACK ONLY:
 - Big Cat
@@ -1754,7 +1151,7 @@ ACTUAL SOURCE POST:
 URL: {post_url}
 POSTED: {posted_at}
 
-TEXT:
+SOURCE POST TEXT:
 {text}
 
 VERIFIED OFFICIAL PARENT CONTEXT:
@@ -1769,36 +1166,179 @@ DEFAULT WEEK:
 IS OFFICIAL REPLY:
 {reply_hint}
 
-RULES:
+NUMBER OF SOURCE IMAGES SUPPLIED:
+{supplied_image_count}
 
-1. Only wagers contained in the ACTUAL SOURCE POST may create
-   picks.
+============================================================
+SOURCE BOUNDARY
+============================================================
 
-2. Parent context may identify the picker, but never copy a
-   wager from the parent into the child.
+Only wagers physically contained in the ACTUAL SOURCE POST may
+be returned as picks.
 
-3. Never use fan content.
+Parent context may identify the picker or explain the reply,
+but NEVER copy a wager from a parent post into this child post.
 
-4. Read every attached image.
+Never use fan content.
 
-5. Extract every wager visible on the card.
+Never use historical tracker data.
 
-6. Each bullet belongs to the closest matchup heading above it.
+This extraction is for NEW PICKS, not weekly result cards.
 
-7. Do not treat historical record text, kickoff times, final
-   scores, check marks or red Xs as new picks.
+============================================================
+IMAGE COMPLETENESS
+============================================================
 
-8. This function is for NEW PICKS, not result cards.
+You MUST inspect every supplied source image.
+
+If {supplied_image_count} images were supplied, inspect all
+{supplied_image_count} images before responding.
+
+Return images_supplied={supplied_image_count}.
+
+Return images_read as the number of supplied images you were
+actually able to inspect.
+
+If any supplied image cannot be read well enough to determine
+whether it contains wagers, set complete=false.
+
+For every image, return an image_checks entry with:
+- image_index: 1-based index
+- readable: true/false
+- contains_wagers: true/false
+- wager_count: number of individual wagers extracted from it
+
+Do not count matchup headings as wagers.
+
+Do not count records, kickoff times, scores, checkmarks, red Xs,
+or decorative text as wagers.
+
+If a card spans multiple images, read all pages.
+
+============================================================
+PICK EXTRACTION
+============================================================
+
+Extract EVERY individual wager contained in this source post.
+
+Each wager must be its own pick object.
+
+For card-style images:
+- matchup headings establish game context
+- each wager underneath belongs to the closest applicable
+  matchup heading
+- preserve that matchup on the wager
+- do not allow a total such as "Over 58.5" or "Under 53.5" to
+  lose its matchup context
+
+Preserve:
+- picker
+- matchup
+- selected team
+- opponent
+- market
+- side
+- exact signed spread
+- total
+- 1Q distinction
+- 1H distinction
+- team-total distinction
+- added-pick status
+
+For spreads, the sign shown in the source is critical:
+- Team -3 means line=-3
+- Team +3 means line=3
+
+For totals:
+- side must be OVER or UNDER
+- line must be the total number
+- matchup must identify the game whenever the source provides
+  the matchup context
+
+For team totals:
+- team must identify the team whose total is being wagered
+- side must be OVER or UNDER
+
+For moneylines:
+- team must identify the selected team
+
+============================================================
+PICKER
+============================================================
+
+Normalize only to:
+- Big Cat
+- Rico Bosco
+- Stool Presidente
+
+If the source itself does not name the picker but the verified
+official parent context clearly identifies the picker, you may
+use that picker.
+
+If picker identity is still genuinely unknown for a wager, set
+complete=false rather than guessing.
+
+============================================================
+IS THIS ACTUALLY A PICK POST?
+============================================================
+
+The outer system intentionally sends some image posts that are
+not gambling-pick posts.
+
+Set is_pick_post=true ONLY if the ACTUAL SOURCE POST contains at
+least one new tracked wager.
+
+If it contains no new tracked wager, set is_pick_post=false and
+return picks=[].
+
+A result card or PAT HILL standings card is NOT a new-pick post.
+
+============================================================
+COMPLETENESS
+============================================================
+
+Set complete=true only when:
+
+1. Every supplied image was inspected.
+2. Every readable wager in the actual source post was extracted.
+3. No wager was copied from parent context.
+4. Every returned wager has a known tracked picker.
+5. Every returned wager has a usable market and selection.
+6. Every spread/total/team-total that requires a numeric line
+   has that line.
+7. Every total with source matchup context retains that matchup.
+8. You did not have to guess through an unreadable/cropped card.
+
+If uncertain whether extraction is complete, set complete=false.
+
+Do NOT invent data merely to make complete=true.
+
+============================================================
+OUTPUT
+============================================================
 
 Return JSON only:
 
 {{
+  "complete": true,
+  "is_pick_post": true,
+  "images_supplied": {supplied_image_count},
+  "images_read": {supplied_image_count},
+  "image_checks": [
+    {{
+      "image_index": 1,
+      "readable": true,
+      "contains_wagers": true,
+      "wager_count": 3
+    }}
+  ],
+  "extraction_notes": "",
   "picks": [
     {{
       "picker": "Big Cat|Stool Presidente|Rico Bosco",
       "sport": "CFB",
-      "matchup": "matchup or null",
-      "team": "team or null",
+      "matchup": "Team A @ Team B or null",
+      "team": "selected/team-total team or null",
       "opponent": "opponent or null",
       "bet_type": "SPREAD|TOTAL|MONEYLINE|TEAM_TOTAL|FIRST_QUARTER_SPREAD|FIRST_QUARTER_TOTAL|FIRST_QUARTER_MONEYLINE|FIRST_QUARTER_TEAM_TOTAL|FIRST_HALF_SPREAD|FIRST_HALF_TOTAL|FIRST_HALF_MONEYLINE|FIRST_HALF_TEAM_TOTAL|OTHER",
       "selection": "concise exact wager",
@@ -1814,91 +1354,42 @@ Return JSON only:
 }}
 
 No markdown.
+No commentary outside JSON.
 JSON only.
 """
 
     content = [
         {
-            "type":
-                "input_text",
-
-            "text":
-                prompt,
+            "type": "input_text",
+            "text": prompt,
         }
     ]
 
     for image_url in image_urls:
-
         content.append(
             {
-                "type":
-                    "input_image",
-
-                "image_url":
-                    image_url,
+                "type": "input_image",
+                "image_url": image_url,
             }
         )
 
     response = client.responses.create(
         model=OPENAI_MODEL,
-
         input=[
             {
-                "role":
-                    "user",
-
-                "content":
-                    content,
+                "role": "user",
+                "content": content,
             }
         ],
     )
 
-    raw = str(
+    return parse_json_response(
         response.output_text
-        or ""
-    ).strip()
-
-    raw = re.sub(
-        r"^```(?:json)?\s*",
-        "",
-        raw,
-        flags=re.I,
     )
-
-    raw = re.sub(
-        r"\s*```$",
-        "",
-        raw,
-    )
-
-    payload = json.loads(
-        raw
-    )
-
-    picks = payload.get(
-        "picks",
-        [],
-    )
-
-    if not isinstance(
-        picks,
-        list,
-    ):
-
-        raise ValueError(
-            "AI picks is not a list"
-        )
-
-    return [
-        normalize_extracted_market(
-            pick
-        )
-        for pick in picks
-    ]
 
 
 # ============================================================
-# NORMALIZE NORMAL AI PICK
+# NORMALIZE ONE EXTRACTED PICK
 # ============================================================
 
 def normalize_ai_pick(
@@ -1907,49 +1398,58 @@ def normalize_ai_pick(
     default_week,
     picker_hint,
 ):
+    if not isinstance(
+        raw_pick,
+        dict,
+    ):
+        raise ValueError(
+            "Extracted pick is not an object"
+        )
 
-    pick = dict(
-        raw_pick or {}
+    pick = normalize_extracted_market(
+        raw_pick
     )
 
-    picker = normalize_picker(
+    picker = normalize_picker_safe(
         pick.get("picker")
     )
 
     if not picker:
-
-        picker = normalize_picker(
+        picker = normalize_picker_safe(
             picker_hint
         )
 
-    if picker not in TRACKED_PICKERS:
-        return None
+    if not picker:
+        raise ValueError(
+            "Extracted wager has no valid tracked picker"
+        )
 
     selection = clean_text(
         pick.get("selection")
     )
 
     if not selection:
-        return None
-
-    pick["picker"] = picker
-    pick["selection"] = selection
+        raise ValueError(
+            f"{picker} extracted wager has empty selection"
+        )
 
     try:
-
         week = int(
             pick.get("week")
             or default_week
         )
-
     except Exception:
-
         week = default_week
 
     if not week:
-        return None
+        raise ValueError(
+            f"{picker} {selection}: no valid week"
+        )
 
-    pick["week"] = week
+    pick["picker"] = picker
+    pick["sport"] = "CFB"
+    pick["selection"] = selection
+    pick["week"] = int(week)
 
     pick["bet_type"] = (
         normalize_bet_type(
@@ -1957,50 +1457,549 @@ def normalize_ai_pick(
         )
     )
 
+    pick["matchup"] = (
+        clean_text(
+            pick.get("matchup")
+        )
+        or None
+    )
+
+    pick["team"] = (
+        clean_text(
+            pick.get("team")
+        )
+        or None
+    )
+
+    pick["opponent"] = (
+        clean_text(
+            pick.get("opponent")
+        )
+        or None
+    )
+
+    side = clean_text(
+        pick.get("side")
+    )
+
+    if side.upper() in {
+        "OVER",
+        "UNDER",
+    }:
+        side = side.upper()
+
+    pick["side"] = (
+        side or None
+    )
+
     pick["line"] = safe_float(
         pick.get("line")
     )
 
-    side = pick.get(
-        "side"
+    try:
+        confidence = float(
+            pick.get("confidence")
+            or 0.95
+        )
+    except Exception:
+        confidence = 0.95
+
+    pick["confidence"] = max(
+        0.0,
+        min(
+            confidence,
+            1.0,
+        ),
     )
 
-    if side is not None:
-
-        if str(
-            side
-        ).upper() in {
-            "OVER",
-            "UNDER",
-        }:
-
-            pick["side"] = (
-                str(side).upper()
-            )
-
-        else:
-
-            pick["side"] = (
-                clean_text(side)
-            )
+    pick["added_pick"] = safe_bool(
+        pick.get("added_pick")
+    )
 
     try:
-
-        pick["confidence"] = (
-            float(
-                pick.get(
-                    "confidence"
-                )
-                or 0.95
-            )
+        pick["units"] = float(
+            pick.get("units")
+            or 1.0
         )
-
     except Exception:
-
-        pick["confidence"] = 0.95
+        pick["units"] = 1.0
 
     return pick
 
+
+# ============================================================
+# STRUCTURAL PICK VALIDATION
+# ============================================================
+
+def validate_normal_pick(pick):
+    """
+    Validate one normalized wager before the source post can be
+    committed as processed.
+
+    This is intentionally fail-closed.
+    """
+
+    errors = []
+
+    picker = normalize_picker_safe(
+        pick.get("picker")
+    )
+
+    if not picker:
+        errors.append(
+            "invalid picker"
+        )
+
+    week = pick_week(pick)
+
+    if week <= 0:
+        errors.append(
+            "invalid week"
+        )
+
+    selection = clean_text(
+        pick.get("selection")
+    )
+
+    if not selection:
+        errors.append(
+            "empty selection"
+        )
+
+    bet_type = normalize_bet_type(
+        pick.get("bet_type")
+    )
+
+    if bet_type not in SUPPORTED_MARKETS:
+        errors.append(
+            f"unsupported market {bet_type}"
+        )
+
+    market = base_market(
+        bet_type
+    )
+
+    line = safe_float(
+        pick.get("line")
+    )
+
+    if market in {
+        "SPREAD",
+        "TOTAL",
+        "TEAM_TOTAL",
+    }:
+        if line is None:
+            errors.append(
+                f"{market} has no numeric line"
+            )
+
+    if market == "SPREAD":
+        selected = side_identity(
+            pick
+        )
+
+        if not selected:
+            errors.append(
+                "spread has no selected team"
+            )
+
+        visible_line = (
+            spread_line_from_selection(
+                pick
+            )
+        )
+
+        if visible_line is not None:
+            pick["line"] = visible_line
+
+    if market == "TOTAL":
+        direction = total_direction(
+            pick
+        )
+
+        if direction not in {
+            "OVER",
+            "UNDER",
+        }:
+            errors.append(
+                "total has no OVER/UNDER direction"
+            )
+
+        # A full-game/period total must identify its game.
+        # This is the exact class of historical failure where
+        # "Over 58.5" became detached from its matchup.
+        game = canonical_game_identity(
+            pick
+        )
+
+        hints = best_matchup_hints(
+            pick
+        )
+
+        if (
+            not game
+            and len(hints) != 2
+        ):
+            errors.append(
+                "total has no complete matchup identity"
+            )
+
+    if market == "TEAM_TOTAL":
+        direction = total_direction(
+            pick
+        )
+
+        if direction not in {
+            "OVER",
+            "UNDER",
+        }:
+            errors.append(
+                "team total has no OVER/UNDER direction"
+            )
+
+        selected = side_identity(
+            pick
+        )
+
+        if not selected:
+            errors.append(
+                "team total has no team identity"
+            )
+
+    if market == "MONEYLINE":
+        selected = side_identity(
+            pick
+        )
+
+        if not selected:
+            errors.append(
+                "moneyline has no selected team"
+            )
+
+    if errors:
+        raise ValueError(
+            (
+                f"{picker or 'Unknown'} | "
+                f"{selection or 'Unknown wager'} | "
+                + "; ".join(errors)
+            )
+        )
+
+    return pick
+
+
+# ============================================================
+# VALIDATE ENTIRE NORMAL-POST EXTRACTION
+# ============================================================
+
+def validate_normal_post_payload(
+    payload,
+    *,
+    image_urls,
+    default_week,
+    picker_hint,
+):
+    """
+    Transaction boundary.
+
+    Nothing from this source post may be committed until this
+    function succeeds completely.
+    """
+
+    if not isinstance(
+        payload,
+        dict,
+    ):
+        raise ValueError(
+            "Normal extraction payload is not an object"
+        )
+
+    complete = safe_bool(
+        payload.get("complete")
+    )
+
+    if not complete:
+        notes = clean_text(
+            payload.get(
+                "extraction_notes"
+            )
+        )
+
+        raise ValueError(
+            "AI marked source extraction incomplete"
+            + (
+                f": {notes}"
+                if notes
+                else ""
+            )
+        )
+
+    expected_images = len(
+        image_urls
+    )
+
+    try:
+        reported_supplied = int(
+            payload.get(
+                "images_supplied"
+            )
+            or 0
+        )
+    except Exception:
+        reported_supplied = -1
+
+    try:
+        images_read = int(
+            payload.get(
+                "images_read"
+            )
+            or 0
+        )
+    except Exception:
+        images_read = -1
+
+    if (
+        reported_supplied
+        != expected_images
+    ):
+        raise ValueError(
+            "AI image-count mismatch: "
+            f"source supplied {expected_images}, "
+            f"AI reported {reported_supplied}"
+        )
+
+    if images_read != expected_images:
+        raise ValueError(
+            "AI did not confirm reading every image: "
+            f"{images_read}/{expected_images}"
+        )
+
+    checks = payload.get(
+        "image_checks"
+    )
+
+    if checks is None:
+        checks = []
+
+    if not isinstance(
+        checks,
+        list,
+    ):
+        raise ValueError(
+            "image_checks is not a list"
+        )
+
+    if expected_images:
+        if len(checks) != expected_images:
+            raise ValueError(
+                "AI image_checks count mismatch: "
+                f"{len(checks)}/{expected_images}"
+            )
+
+        indexes = set()
+
+        for check in checks:
+            if not isinstance(
+                check,
+                dict,
+            ):
+                raise ValueError(
+                    "Invalid image_checks entry"
+                )
+
+            try:
+                image_index = int(
+                    check.get(
+                        "image_index"
+                    )
+                )
+            except Exception:
+                raise ValueError(
+                    "Image check has invalid index"
+                )
+
+            indexes.add(
+                image_index
+            )
+
+            if not safe_bool(
+                check.get("readable")
+            ):
+                raise ValueError(
+                    f"Source image {image_index} "
+                    "was not readable"
+                )
+
+            try:
+                wager_count = int(
+                    check.get(
+                        "wager_count"
+                    )
+                    or 0
+                )
+            except Exception:
+                raise ValueError(
+                    f"Source image {image_index} "
+                    "has invalid wager_count"
+                )
+
+            if wager_count < 0:
+                raise ValueError(
+                    f"Source image {image_index} "
+                    "has negative wager_count"
+                )
+
+        expected_indexes = set(
+            range(
+                1,
+                expected_images + 1,
+            )
+        )
+
+        if indexes != expected_indexes:
+            raise ValueError(
+                "Image check indexes do not cover "
+                "every supplied image"
+            )
+
+    is_pick_post = safe_bool(
+        payload.get(
+            "is_pick_post"
+        )
+    )
+
+    raw_picks = payload.get(
+        "picks"
+    )
+
+    if not isinstance(
+        raw_picks,
+        list,
+    ):
+        raise ValueError(
+            "AI picks is not a list"
+        )
+
+    if (
+        is_pick_post
+        and not raw_picks
+    ):
+        raise ValueError(
+            "AI says this is a pick post "
+            "but extracted zero wagers"
+        )
+
+    if (
+        not is_pick_post
+        and raw_picks
+    ):
+        raise ValueError(
+            "AI says this is not a pick post "
+            "but returned wagers"
+        )
+
+    # --------------------------------------------------------
+    # Non-pick candidate.
+    #
+    # It may safely be marked processed because:
+    # - extraction is complete
+    # - every image was read
+    # - AI explicitly says no new tracked wagers exist
+    # --------------------------------------------------------
+
+    if not is_pick_post:
+        return {
+            "is_pick_post": False,
+            "picks": [],
+            "image_wager_count": 0,
+        }
+
+    normalized = []
+
+    for raw_pick in raw_picks:
+        pick = normalize_ai_pick(
+            raw_pick,
+            default_week=default_week,
+            picker_hint=picker_hint,
+        )
+
+        validate_normal_pick(
+            pick
+        )
+
+        normalized.append(
+            pick
+        )
+
+    # --------------------------------------------------------
+    # Validate image-reported wager count against extraction.
+    #
+    # This catches the most important multi-image omission case.
+    # --------------------------------------------------------
+
+    image_wager_count = 0
+
+    for check in checks:
+        try:
+            image_wager_count += int(
+                check.get(
+                    "wager_count"
+                )
+                or 0
+            )
+        except Exception:
+            raise ValueError(
+                "Invalid image wager count"
+            )
+
+    # Text-only posts have no image count to reconcile.
+    if expected_images:
+        if (
+            image_wager_count
+            != len(normalized)
+        ):
+            raise ValueError(
+                "Image wager-count reconciliation failed: "
+                f"image checks report "
+                f"{image_wager_count}, "
+                f"but {len(normalized)} wagers "
+                "were extracted"
+            )
+
+    # --------------------------------------------------------
+    # Internal canonical duplicate validation.
+    #
+    # AI must not return the same wager twice from one post.
+    # --------------------------------------------------------
+
+    local_keys = set()
+
+    for pick in normalized:
+        key = canonical_pick_key(
+            pick
+        )
+
+        if key in local_keys:
+            raise ValueError(
+                "AI returned duplicate wager within "
+                f"the same source post: "
+                f"{pick.get('picker')} | "
+                f"{pick.get('selection')}"
+            )
+
+        local_keys.add(key)
+
+    return {
+        "is_pick_post": True,
+        "picks": normalized,
+        "image_wager_count":
+            image_wager_count,
+    }
+
+
+# ============================================================
+# BUILD STORED NORMAL PICK
+# ============================================================
 
 def stored_pick_from_ai(
     extracted,
@@ -2010,11 +2009,8 @@ def stored_pick_from_ai(
     reply_hint,
     added_hint,
 ):
-
     bet_type = normalize_bet_type(
-        extracted.get(
-            "bet_type"
-        )
+        extracted.get("bet_type")
     )
 
     confidence = float(
@@ -2024,29 +2020,22 @@ def stored_pick_from_ai(
         or 0.95
     )
 
-    if (
-        confidence >= 0.90
-        and bet_type
-        in SUPPORTED_MARKETS
-    ):
-
-        status = "OPEN"
-
-    else:
-
-        status = "REVIEW"
+    status = (
+        "OPEN"
+        if (
+            confidence >= 0.90
+            and bet_type
+            in SUPPORTED_MARKETS
+        )
+        else "REVIEW"
+    )
 
     pick = {
         "picker":
-            extracted[
-                "picker"
-            ],
+            extracted["picker"],
 
         "sport":
-            extracted.get(
-                "sport"
-            )
-            or "CFB",
+            "CFB",
 
         "matchup":
             extracted.get(
@@ -2095,7 +2084,7 @@ def stored_pick_from_ai(
                 extracted.get(
                     "units"
                 )
-                or 1
+                or 1.0
             ),
 
         "mortal_lock":
@@ -2103,9 +2092,7 @@ def stored_pick_from_ai(
 
         "week":
             int(
-                extracted[
-                    "week"
-                ]
+                extracted["week"]
             ),
 
         "added_pick":
@@ -2130,9 +2117,7 @@ def stored_pick_from_ai(
 
         "source_post_id":
             str(
-                post.get(
-                    "id"
-                )
+                post.get("id")
             ),
 
         "source_url":
@@ -2140,16 +2125,12 @@ def stored_pick_from_ai(
 
         "source_text":
             str(
-                post.get(
-                    "text"
-                )
+                post.get("text")
                 or ""
             ),
 
         "source_is_reply":
-            bool(
-                reply_hint
-            ),
+            bool(reply_hint),
 
         "conversation_id":
             post.get(
@@ -2172,6 +2153,12 @@ def stored_pick_from_ai(
 
         "official_reconciled":
             False,
+
+        "ingest_validated":
+            True,
+
+        "ingest_validation_version":
+            3,
     }
 
     pick["id"] = stable_id(
@@ -2186,6 +2173,142 @@ def stored_pick_from_ai(
 
 
 # ============================================================
+# PICK QUALITY / PERMANENT CANONICAL DEDUPE
+# ============================================================
+
+def pick_quality(pick):
+    score = 0
+
+    result = str(
+        pick.get("result")
+        or ""
+    ).upper()
+
+    if result in {
+        "WIN",
+        "LOSS",
+        "PUSH",
+    }:
+        score += 100
+
+    if pick.get(
+        "official_reconciled"
+    ):
+        score += 1000
+
+    if pick.get("event_id"):
+        score += 30
+
+    if pick.get("final_score"):
+        score += 15
+
+    if pick.get("matchup"):
+        score += 10
+
+    if pick.get("team"):
+        score += 5
+
+    if pick.get(
+        "ingest_validated"
+    ):
+        score += 3
+
+    return score
+
+
+def dedupe_picks(picks):
+    """
+    One permanent canonical identity system.
+
+    canonical_pick_key comes from football_identity.py and
+    includes game identity for spreads as well as totals.
+    """
+
+    groups = {}
+
+    for index, pick in enumerate(
+        picks
+    ):
+        key = canonical_pick_key(
+            pick
+        )
+
+        groups.setdefault(
+            key,
+            [],
+        ).append(
+            (
+                index,
+                pick,
+            )
+        )
+
+    keep_indexes = set()
+    removed = 0
+
+    for _, members in groups.items():
+        if len(members) == 1:
+            keep_indexes.add(
+                members[0][0]
+            )
+            continue
+
+        best_index, _ = max(
+            members,
+            key=lambda item: (
+                pick_quality(
+                    item[1]
+                ),
+                -item[0],
+            ),
+        )
+
+        keep_indexes.add(
+            best_index
+        )
+
+        for index, duplicate in members:
+            if index == best_index:
+                continue
+
+            removed += 1
+
+            print(
+                "DUPLICATE REMOVED:",
+                duplicate.get(
+                    "picker"
+                ),
+                "| Week",
+                duplicate.get(
+                    "week"
+                ),
+                "|",
+                duplicate.get(
+                    "selection"
+                ),
+                "| matchup:",
+                duplicate.get(
+                    "matchup"
+                ),
+            )
+
+    cleaned = [
+        pick
+        for index, pick
+        in enumerate(picks)
+        if index in keep_indexes
+    ]
+
+    if removed:
+        print(
+            "Duplicate wagers removed:",
+            removed,
+        )
+
+    return cleaned
+
+
+# ============================================================
 # PROCESSED NORMAL POST STATE
 # ============================================================
 
@@ -2193,11 +2316,9 @@ def initialize_processed_ids(
     existing,
     state,
 ):
-
     if state.get(
         PROCESSED_IDS_FLAG
     ):
-
         return
 
     ids = {
@@ -2212,22 +2333,33 @@ def initialize_processed_ids(
         )
     }
 
+    # Preserve any prior processed state as well.
+    ids.update(
+        str(value)
+        for value in (
+            state.get(
+                "processed_post_ids",
+                [],
+            )
+            or []
+        )
+    )
+
     state[
         "processed_post_ids"
     ] = sorted(
         ids,
-        key=lambda value:
-            int(value)
-            if str(value).isdigit()
-            else 0,
-    )[-1000:]
+        key=post_numeric_sort,
+    )[
+        -MAX_PROCESSED_POST_IDS:
+    ]
 
     state[
         PROCESSED_IDS_FLAG
     ] = True
 
     print(
-        "Seeded processed post IDs:",
+        "Seeded/validated processed post IDs:",
         len(ids),
     )
 
@@ -2240,7 +2372,6 @@ def fetch_retry_posts(
     state,
     official_user_id,
 ):
-
     failed_ids = list(
         state.get(
             "failed_post_ids",
@@ -2254,9 +2385,7 @@ def fetch_retry_posts(
     still_failed = []
 
     for post_id in failed_ids:
-
         try:
-
             post, media = (
                 fetch_post_by_id(
                     post_id
@@ -2264,7 +2393,6 @@ def fetch_retry_posts(
             )
 
         except Exception as exc:
-
             print(
                 "RETRY FETCH FAILED:",
                 post_id,
@@ -2273,41 +2401,34 @@ def fetch_retry_posts(
             )
 
             still_failed.append(
-                post_id
+                str(post_id)
             )
 
             continue
 
         if not post:
-
             still_failed.append(
-                post_id
+                str(post_id)
             )
-
             continue
 
         if (
             str(
-                post.get(
-                    "author_id"
-                )
+                post.get("author_id")
                 or ""
             )
             != str(
                 official_user_id
             )
         ):
-
             continue
 
-        posts.append(
-            post
-        )
+        posts.append(post)
 
-        media_map.update(
-            media
-        )
+        media_map.update(media)
 
+    # Successfully re-fetched IDs will be re-added below if
+    # validation fails again.
     state[
         "failed_post_ids"
     ] = still_failed
@@ -2319,7 +2440,7 @@ def fetch_retry_posts(
 
 
 # ============================================================
-# PROCESS NORMAL NEW POSTS
+# PROCESS NORMAL POSTS — TRANSACTIONAL
 # ============================================================
 
 def process_normal_posts(
@@ -2329,13 +2450,10 @@ def process_normal_posts(
     official_user_id,
     state,
 ):
-
     parent_cache = {}
 
     seen_wagers = {
-        canonical_pick_key(
-            pick
-        )
+        canonical_pick_key(pick)
         for pick in existing
     }
 
@@ -2363,20 +2481,19 @@ def process_normal_posts(
 
     candidate_count = 0
     new_pick_count = 0
+    validated_post_count = 0
+    non_pick_candidate_count = 0
+    duplicate_count = 0
 
     for post in sorted(
         posts,
         key=lambda item:
-            int(
+            post_numeric_sort(
                 item.get("id")
-                or 0
             ),
     ):
-
         post_id = str(
-            post.get(
-                "id"
-            )
+            post.get("id")
             or ""
         )
 
@@ -2385,25 +2502,19 @@ def process_normal_posts(
 
         if (
             str(
-                post.get(
-                    "author_id"
-                )
+                post.get("author_id")
                 or ""
             )
             != str(
                 official_user_id
             )
         ):
-
             continue
 
         if (
-            post_id
-            in processed_ids
-            and post_id
-            not in failed_ids
+            post_id in processed_ids
+            and post_id not in failed_ids
         ):
-
             continue
 
         image_urls = (
@@ -2414,22 +2525,17 @@ def process_normal_posts(
         )
 
         text = str(
-            post.get(
-                "text"
-            )
+            post.get("text")
             or ""
         )
 
         reply_hint = (
-            is_reply_post(
-                post
-            )
+            is_reply_post(post)
         )
 
         parent_text = ""
 
         if reply_hint:
-
             parent_text = (
                 official_parent_context(
                     post,
@@ -2438,16 +2544,17 @@ def process_normal_posts(
                 )
             )
 
-
         # ----------------------------------------------------
-        # PAT HILL RESULT CARDS MUST NEVER BECOME NEW PICKS
+        # PAT HILL RESULT POSTS
+        #
+        # Safe to mark processed by normal ingestion because
+        # they are handled separately by official reconciliation.
         # ----------------------------------------------------
 
         if is_standings_context(
             text,
             parent_text,
         ):
-
             print(
                 "NORMAL INGEST SKIPPING "
                 "PAT HILL RESULT POST:",
@@ -2464,12 +2571,14 @@ def process_normal_posts(
 
             continue
 
+        # ----------------------------------------------------
+        # Clearly irrelevant posts
+        # ----------------------------------------------------
 
         if not looks_like_pick_post(
             text,
             image_urls,
         ):
-
             processed_ids.add(
                 post_id
             )
@@ -2511,8 +2620,9 @@ def process_normal_posts(
             f"{post_id}"
         )
 
+        print()
         print(
-            "PARSING NEW PICK POST:",
+            "PARSING CANDIDATE PICK POST:",
             post_id,
             "| week:",
             week,
@@ -2520,36 +2630,32 @@ def process_normal_posts(
             reply_hint,
             "| picker:",
             picker_hint,
+            "| images:",
+            len(image_urls),
         )
 
-        try:
+        # ----------------------------------------------------
+        # PHASE 1: EXTRACT
+        # ----------------------------------------------------
 
-            raw_picks = (
-                parse_post_with_ai(
-                    text=text,
-                    image_urls=
-                        image_urls,
-                    post_url=
-                        post_url,
-                    posted_at=
-                        post.get(
-                            "created_at"
-                        ),
-                    inferred_week=
-                        week,
-                    picker_hint=
-                        picker_hint,
-                    reply_hint=
-                        reply_hint,
-                    parent_text=
-                        parent_text,
-                )
+        try:
+            payload = parse_post_with_ai(
+                text=text,
+                image_urls=image_urls,
+                post_url=post_url,
+                posted_at=post.get(
+                    "created_at"
+                ),
+                inferred_week=week,
+                picker_hint=picker_hint,
+                reply_hint=reply_hint,
+                parent_text=parent_text,
             )
 
         except Exception as exc:
-
             print(
-                "PARSE FAILED — QUEUED FOR RETRY:",
+                "EXTRACTION FAILED — "
+                "QUEUED FOR RETRY:",
                 post_id,
                 type(exc).__name__,
                 exc,
@@ -2559,63 +2665,196 @@ def process_normal_posts(
                 post_id
             )
 
+            processed_ids.discard(
+                post_id
+            )
+
             continue
 
-        failed_ids.discard(
-            post_id
-        )
+        # ----------------------------------------------------
+        # PHASE 2: VALIDATE THE ENTIRE SOURCE POST
+        #
+        # THIS MUST PASS BEFORE ANY WAGER IS COMMITTED.
+        # ----------------------------------------------------
 
-        processed_ids.add(
-            post_id
-        )
-
-        for raw_pick in raw_picks:
-
-            extracted = (
-                normalize_ai_pick(
-                    raw_pick,
-                    default_week=
-                        week,
-                    picker_hint=
-                        picker_hint,
+        try:
+            validated = (
+                validate_normal_post_payload(
+                    payload,
+                    image_urls=image_urls,
+                    default_week=week,
+                    picker_hint=picker_hint,
                 )
             )
 
-            if not extracted:
-                continue
-
-            key = canonical_pick_key(
-                extracted
+        except Exception as exc:
+            print(
+                "VALIDATION FAILED — "
+                "POST NOT PROCESSED / "
+                "QUEUED FOR RETRY:",
+                post_id,
+                type(exc).__name__,
+                exc,
             )
 
-            if key in seen_wagers:
+            failed_ids.add(
+                post_id
+            )
 
-                print(
-                    "DUPLICATE SKIPPED:",
-                    extracted.get(
-                        "picker"
-                    ),
-                    "|",
-                    extracted.get(
-                        "selection"
-                    ),
+            processed_ids.discard(
+                post_id
+            )
+
+            continue
+
+        # ----------------------------------------------------
+        # Complete extraction says this broad candidate did not
+        # actually contain a new tracked wager.
+        # ----------------------------------------------------
+
+        if not validated[
+            "is_pick_post"
+        ]:
+            print(
+                "VALIDATED NON-PICK CANDIDATE:",
+                post_id,
+                "| all source material inspected",
+            )
+
+            processed_ids.add(
+                post_id
+            )
+
+            failed_ids.discard(
+                post_id
+            )
+
+            validated_post_count += 1
+            non_pick_candidate_count += 1
+
+            continue
+
+        extracted_picks = (
+            validated["picks"]
+        )
+
+        # ----------------------------------------------------
+        # PHASE 3: BUILD THE TRANSACTION IN MEMORY
+        #
+        # No mutation of existing[] yet.
+        # ----------------------------------------------------
+
+        pending_rows = []
+        pending_keys = set()
+
+        transaction_failed = False
+
+        for extracted in extracted_picks:
+            try:
+                key = canonical_pick_key(
+                    extracted
                 )
 
-                continue
+                if key in pending_keys:
+                    raise ValueError(
+                        "Duplicate canonical wager "
+                        "inside transaction"
+                    )
 
-            stored = (
-                stored_pick_from_ai(
+                pending_keys.add(key)
+
+                if key in seen_wagers:
+                    duplicate_count += 1
+
+                    print(
+                        "EXISTING WAGER RECOGNIZED:",
+                        extracted.get(
+                            "picker"
+                        ),
+                        "| Week",
+                        extracted.get(
+                            "week"
+                        ),
+                        "|",
+                        extracted.get(
+                            "selection"
+                        ),
+                        "| matchup:",
+                        extracted.get(
+                            "matchup"
+                        ),
+                    )
+
+                    continue
+
+                stored = stored_pick_from_ai(
                     extracted,
                     post=post,
-                    post_url=
-                        post_url,
-                    reply_hint=
-                        reply_hint,
-                    added_hint=
-                        added_hint,
+                    post_url=post_url,
+                    reply_hint=reply_hint,
+                    added_hint=added_hint,
                 )
+
+                # Final identity sanity check on the exact row
+                # that would be stored.
+                stored_key = (
+                    canonical_pick_key(
+                        stored
+                    )
+                )
+
+                if stored_key != key:
+                    raise ValueError(
+                        "Stored-row canonical identity "
+                        "changed after normalization"
+                    )
+
+                pending_rows.append(
+                    (
+                        stored_key,
+                        stored,
+                    )
+                )
+
+            except Exception as exc:
+                transaction_failed = True
+
+                print(
+                    "TRANSACTION BUILD FAILED:",
+                    post_id,
+                    type(exc).__name__,
+                    exc,
+                )
+
+                break
+
+        if transaction_failed:
+            failed_ids.add(
+                post_id
             )
 
+            processed_ids.discard(
+                post_id
+            )
+
+            continue
+
+        # ----------------------------------------------------
+        # PHASE 4: COMMIT
+        #
+        # At this point:
+        # - AI completed extraction
+        # - every image was accounted for
+        # - image wager count reconciled
+        # - every wager normalized
+        # - every wager structurally validated
+        # - internal duplicates rejected
+        # - canonical identities built
+        #
+        # ONLY NOW may the post become processed.
+        # ----------------------------------------------------
+
+        for key, stored in pending_rows:
             existing.append(
                 stored
             )
@@ -2627,7 +2866,7 @@ def process_normal_posts(
             new_pick_count += 1
 
             print(
-                "ADDED NEW PICK:",
+                "ADDED VALIDATED PICK:",
                 stored.get(
                     "picker"
                 ),
@@ -2639,32 +2878,72 @@ def process_normal_posts(
                 stored.get(
                     "selection"
                 ),
+                "| matchup:",
+                stored.get(
+                    "matchup"
+                ),
             )
+
+        processed_ids.add(
+            post_id
+        )
+
+        failed_ids.discard(
+            post_id
+        )
+
+        validated_post_count += 1
+
+        print(
+            "POST TRANSACTION COMMITTED:",
+            post_id,
+            "| extracted:",
+            len(extracted_picks),
+            "| new:",
+            len(pending_rows),
+            "| existing duplicates:",
+            (
+                len(extracted_picks)
+                - len(pending_rows)
+            ),
+        )
 
     state[
         "processed_post_ids"
     ] = sorted(
         processed_ids,
-        key=lambda value:
-            int(value)
-            if str(value).isdigit()
-            else 0,
-    )[-1000:]
+        key=post_numeric_sort,
+    )[
+        -MAX_PROCESSED_POST_IDS:
+    ]
 
     state[
         "failed_post_ids"
     ] = sorted(
         failed_ids,
-        key=lambda value:
-            int(value)
-            if str(value).isdigit()
-            else 0,
-    )[-100:]
+        key=post_numeric_sort,
+    )[
+        -MAX_FAILED_POST_IDS:
+    ]
 
     return (
         existing,
-        candidate_count,
-        new_pick_count,
+        {
+            "candidate_count":
+                candidate_count,
+
+            "new_pick_count":
+                new_pick_count,
+
+            "validated_post_count":
+                validated_post_count,
+
+            "non_pick_candidate_count":
+                non_pick_candidate_count,
+
+            "duplicate_count":
+                duplicate_count,
+        },
     )
 
 
@@ -2679,7 +2958,6 @@ def parse_official_result_cards(
     media_map,
     target_week,
 ):
-
     from openai import OpenAI
 
     client = OpenAI()
@@ -2687,34 +2965,28 @@ def parse_official_result_cards(
     image_urls = []
 
     for post in thread_posts:
-
         for image_url in (
             image_urls_for_post(
                 post,
                 media_map,
             )
         ):
-
             if (
                 image_url
                 not in image_urls
             ):
-
                 image_urls.append(
                     image_url
                 )
 
     if not image_urls:
-
         raise ValueError(
             "PAT HILL thread has no images"
         )
 
     thread_text = "\n\n".join(
         str(
-            post.get(
-                "text"
-            )
+            post.get("text")
             or ""
         )
         for post in thread_posts
@@ -2733,6 +3005,8 @@ TARGET WEEK:
 THREAD TEXT:
 {thread_text}
 
+NUMBER OF IMAGES:
+{len(image_urls)}
 
 TASK
 ====
@@ -2753,7 +3027,6 @@ A RED X means LOSS.
 A push/tie symbol, if shown, means PUSH.
 
 The official result cards are the final source of truth.
-
 
 CRITICAL RULES
 ==============
@@ -2776,7 +3049,7 @@ CRITICAL RULES
 
 7. Do not invent any wager not visible on the cards.
 
-8. Do not use our historical tracker data.
+8. Do not use historical tracker data.
 
 9. Read the printed record on each card, such as 13-5-0.
 
@@ -2789,6 +3062,9 @@ CRITICAL RULES
 
 12. Never guess merely to make the totals work.
 
+13. Inspect all {len(image_urls)} supplied images. Return
+    images_read={len(image_urls)} only if every image was
+    actually inspected.
 
 OUTPUT JSON ONLY
 ================
@@ -2796,6 +3072,7 @@ OUTPUT JSON ONLY
 {{
   "complete": true,
   "week": {target_week},
+  "images_read": {len(image_urls)},
   "pickers": [
     {{
       "picker": "Rico Bosco",
@@ -2830,65 +3107,57 @@ JSON only.
 
     content = [
         {
-            "type":
-                "input_text",
-
-            "text":
-                prompt,
+            "type": "input_text",
+            "text": prompt,
         }
     ]
 
     for image_url in image_urls:
-
         content.append(
             {
-                "type":
-                    "input_image",
-
-                "image_url":
-                    image_url,
+                "type": "input_image",
+                "image_url": image_url,
             }
         )
 
     response = client.responses.create(
         model=OPENAI_MODEL,
-
         input=[
             {
-                "role":
-                    "user",
-
-                "content":
-                    content,
+                "role": "user",
+                "content": content,
             }
         ],
     )
 
-    raw = str(
+    payload = parse_json_response(
         response.output_text
-        or ""
-    ).strip()
-
-    raw = re.sub(
-        r"^```(?:json)?\s*",
-        "",
-        raw,
-        flags=re.I,
     )
 
-    raw = re.sub(
-        r"\s*```$",
-        "",
-        raw,
-    )
+    try:
+        images_read = int(
+            payload.get(
+                "images_read"
+            )
+            or 0
+        )
+    except Exception:
+        images_read = -1
 
-    return json.loads(
-        raw
-    )
+    if images_read != len(
+        image_urls
+    ):
+        raise ValueError(
+            "Official result extraction did not "
+            "confirm every image was read: "
+            f"{images_read}/{len(image_urls)}"
+        )
+
+    return payload
 
 
 # ============================================================
-# VALIDATE OFFICIAL RESULT-CARD EXTRACTION
+# VALIDATE OFFICIAL RESULT CARD EXTRACTION
 # ============================================================
 
 def validate_official_results(
@@ -2897,23 +3166,18 @@ def validate_official_results(
     printed_standings,
     target_week,
 ):
-
-    if not payload.get(
-        "complete"
+    if not safe_bool(
+        payload.get("complete")
     ):
-
         raise ValueError(
             "AI marked result thread incomplete"
         )
 
     try:
-
         payload_week = int(
             payload.get("week")
         )
-
     except Exception:
-
         raise ValueError(
             "Official result payload "
             "has no valid week"
@@ -2922,33 +3186,46 @@ def validate_official_results(
     if payload_week != int(
         target_week
     ):
-
         raise ValueError(
             "Official result week mismatch: "
             f"{payload_week} vs {target_week}"
         )
 
     picker_rows = (
-        payload.get(
-            "pickers"
-        )
+        payload.get("pickers")
         or []
     )
+
+    if not isinstance(
+        picker_rows,
+        list,
+    ):
+        raise ValueError(
+            "Official pickers payload is not a list"
+        )
 
     by_picker = {}
 
     for row in picker_rows:
+        if not isinstance(
+            row,
+            dict,
+        ):
+            continue
 
-        picker = normalize_picker(
+        picker = normalize_picker_safe(
             row.get("picker")
         )
 
-        if picker not in TRACKED_PICKERS:
+        if not picker:
             continue
 
-        by_picker[
-            picker
-        ] = row
+        if picker in by_picker:
+            raise ValueError(
+                f"Duplicate official card for {picker}"
+            )
+
+        by_picker[picker] = row
 
     missing = (
         TRACKED_PICKERS
@@ -2958,7 +3235,6 @@ def validate_official_results(
     )
 
     if missing:
-
         raise ValueError(
             "Missing official result cards for: "
             + ", ".join(
@@ -2971,10 +3247,7 @@ def validate_official_results(
     for picker in sorted(
         TRACKED_PICKERS
     ):
-
-        row = by_picker[
-            picker
-        ]
+        row = by_picker[picker]
 
         record = (
             row.get(
@@ -2984,32 +3257,32 @@ def validate_official_results(
         )
 
         wins = int(
-            record.get(
-                "wins"
-            )
+            record.get("wins")
             or 0
         )
 
         losses = int(
-            record.get(
-                "losses"
-            )
+            record.get("losses")
             or 0
         )
 
         pushes = int(
-            record.get(
-                "pushes"
-            )
+            record.get("pushes")
             or 0
         )
 
         picks = (
-            row.get(
-                "picks"
-            )
+            row.get("picks")
             or []
         )
+
+        if not isinstance(
+            picks,
+            list,
+        ):
+            raise ValueError(
+                f"{picker} official picks is not a list"
+            )
 
         result_counts = {
             "WIN": 0,
@@ -3019,30 +3292,35 @@ def validate_official_results(
 
         normalized_picks = []
 
-        for pick in picks:
+        for source_pick in picks:
+            if not isinstance(
+                source_pick,
+                dict,
+            ):
+                raise ValueError(
+                    f"{picker} official pick is not an object"
+                )
 
             result = str(
-                pick.get(
+                source_pick.get(
                     "result"
                 )
                 or ""
             ).upper()
 
             if result not in result_counts:
-
                 raise ValueError(
                     f"{picker} has invalid "
                     f"official result: {result}"
                 )
 
             selection = clean_text(
-                pick.get(
+                source_pick.get(
                     "selection"
                 )
             )
 
             if not selection:
-
                 raise ValueError(
                     f"{picker} has official "
                     "pick with empty selection"
@@ -3050,7 +3328,7 @@ def validate_official_results(
 
             normalized = (
                 normalize_extracted_market(
-                    dict(pick)
+                    dict(source_pick)
                 )
             )
 
@@ -3070,7 +3348,6 @@ def validate_official_results(
                 result
             ] += 1
 
-
         # ----------------------------------------------------
         # CARD INTERNAL VALIDATION
         # ----------------------------------------------------
@@ -3079,7 +3356,6 @@ def validate_official_results(
             result_counts["WIN"]
             != wins
         ):
-
             raise ValueError(
                 f"{picker} image validation failed: "
                 f"expected {wins} wins, extracted "
@@ -3090,7 +3366,6 @@ def validate_official_results(
             result_counts["LOSS"]
             != losses
         ):
-
             raise ValueError(
                 f"{picker} image validation failed: "
                 f"expected {losses} losses, extracted "
@@ -3101,7 +3376,6 @@ def validate_official_results(
             result_counts["PUSH"]
             != pushes
         ):
-
             raise ValueError(
                 f"{picker} image validation failed: "
                 f"expected {pushes} pushes, extracted "
@@ -3115,18 +3389,15 @@ def validate_official_results(
             + losses
             + pushes
         ):
-
             raise ValueError(
                 f"{picker} official count mismatch"
             )
 
-
         # ----------------------------------------------------
-        # ROOT TWEET RECORD VALIDATION
+        # ROOT PRINTED STANDINGS VALIDATION
         # ----------------------------------------------------
 
         if picker in printed_standings:
-
             tweet_record = (
                 printed_standings[
                     picker
@@ -3134,15 +3405,9 @@ def validate_official_results(
             )
 
             expected_tuple = (
-                tweet_record[
-                    "wins"
-                ],
-                tweet_record[
-                    "losses"
-                ],
-                tweet_record[
-                    "pushes"
-                ],
+                tweet_record["wins"],
+                tweet_record["losses"],
+                tweet_record["pushes"],
             )
 
             image_tuple = (
@@ -3155,7 +3420,6 @@ def validate_official_results(
                 expected_tuple
                 != image_tuple
             ):
-
                 raise ValueError(
                     f"{picker} standings-text "
                     "record does not match card: "
@@ -3163,18 +3427,10 @@ def validate_official_results(
                     f"{image_tuple}"
                 )
 
-        validated[
-            picker
-        ] = {
-            "wins":
-                wins,
-
-            "losses":
-                losses,
-
-            "pushes":
-                pushes,
-
+        validated[picker] = {
+            "wins": wins,
+            "losses": losses,
+            "pushes": pushes,
             "picks":
                 normalized_picks,
         }
@@ -3192,11 +3448,8 @@ def build_official_week_rows(
     target_week,
     root_post,
 ):
-
     root_id = str(
-        root_post.get(
-            "id"
-        )
+        root_post.get("id")
     )
 
     root_url = (
@@ -3214,33 +3467,24 @@ def build_official_week_rows(
         "Big Cat",
         "Stool Presidente",
     ]:
-
         picker_data = validated[
             picker
         ]
 
         for index, source_pick in enumerate(
-            picker_data[
-                "picks"
-            ]
+            picker_data["picks"]
         ):
-
             result = str(
-                source_pick[
-                    "result"
-                ]
+                source_pick["result"]
             ).upper()
 
             if result == "WIN":
-
                 profit_units = 1.0
 
             elif result == "LOSS":
-
                 profit_units = -1.0
 
             else:
-
                 profit_units = 0.0
 
             row = {
@@ -3301,9 +3545,7 @@ def build_official_week_rows(
                     False,
 
                 "week":
-                    int(
-                        target_week
-                    ),
+                    int(target_week),
 
                 "added_pick":
                     bool(
@@ -3337,10 +3579,12 @@ def build_official_week_rows(
                     False,
 
                 "conversation_id":
-                    root_post.get(
-                        "conversation_id"
-                    )
-                    or root_id,
+                    (
+                        root_post.get(
+                            "conversation_id"
+                        )
+                        or root_id
+                    ),
 
                 "posted_at":
                     root_post.get(
@@ -3376,17 +3620,13 @@ def build_official_week_rows(
                         str(target_week),
                         picker,
                         str(index),
-                        row[
-                            "selection"
-                        ],
+                        row["selection"],
                         result,
                     ]
                 )
             )
 
-            rows.append(
-                row
-            )
+            rows.append(row)
 
     return rows
 
@@ -3401,35 +3641,22 @@ def replace_week_with_official(
     official_rows,
     target_week,
 ):
-
     kept = []
-
     removed_count = 0
 
     for pick in existing:
-
         if (
-            pick_week(
-                pick
-            )
-            == int(
-                target_week
-            )
-            and normalize_picker(
-                pick.get(
-                    "picker"
-                )
+            pick_week(pick)
+            == int(target_week)
+            and normalize_picker_safe(
+                pick.get("picker")
             )
             in TRACKED_PICKERS
         ):
-
             removed_count += 1
-
             continue
 
-        kept.append(
-            pick
-        )
+        kept.append(pick)
 
     print(
         "Existing provisional Week",
@@ -3442,9 +3669,7 @@ def replace_week_with_official(
         "Official Week",
         target_week,
         "rows inserted:",
-        len(
-            official_rows
-        ),
+        len(official_rows),
     )
 
     return (
@@ -3464,20 +3689,6 @@ def official_week_is_healthy(
     printed_standings,
     result_post_id,
 ):
-    """
-    A processed standings thread is never trusted blindly.
-
-    Stored official rows must still exactly match:
-      - official picker record
-      - official total pick count
-      - valid WIN / LOSS / PUSH
-      - FINAL status
-      - official_reconciled=True
-      - correct source standings post
-
-    If anything is broken, reconciliation runs again.
-    """
-
     print()
     print(
         "VALIDATING STORED OFFICIAL WEEK:",
@@ -3491,7 +3702,6 @@ def official_week_is_healthy(
         "Big Cat",
         "Stool Presidente",
     ]:
-
         expected = (
             printed_standings.get(
                 picker
@@ -3499,7 +3709,6 @@ def official_week_is_healthy(
         )
 
         if not expected:
-
             print(
                 "OFFICIAL VALIDATION FAILED:",
                 picker,
@@ -3507,32 +3716,20 @@ def official_week_is_healthy(
             )
 
             healthy = False
-
             continue
 
         rows = [
             pick
             for pick in existing
             if (
-                pick_week(
-                    pick
-                )
-                == int(
-                    target_week
-                )
-                and normalize_picker(
-                    pick.get(
-                        "picker"
-                    )
+                pick_week(pick)
+                == int(target_week)
+                and normalize_picker_safe(
+                    pick.get("picker")
                 )
                 == picker
             )
         ]
-
-
-        # ----------------------------------------------------
-        # ALL ROWS MUST BE OFFICIAL
-        # ----------------------------------------------------
 
         non_official = [
             pick
@@ -3543,22 +3740,14 @@ def official_week_is_healthy(
         ]
 
         if non_official:
-
             print(
                 "OFFICIAL VALIDATION FAILED:",
                 picker,
                 "| non-official rows:",
-                len(
-                    non_official
-                ),
+                len(non_official),
             )
 
             healthy = False
-
-
-        # ----------------------------------------------------
-        # ALL ROWS MUST COME FROM THIS RESULT POST
-        # ----------------------------------------------------
 
         wrong_source = [
             pick
@@ -3575,31 +3764,21 @@ def official_week_is_healthy(
         ]
 
         if wrong_source:
-
             print(
                 "OFFICIAL VALIDATION FAILED:",
                 picker,
                 "| wrong result source rows:",
-                len(
-                    wrong_source
-                ),
+                len(wrong_source),
             )
 
             healthy = False
-
-
-        # ----------------------------------------------------
-        # ALL ROWS MUST HAVE VALID FINAL RESULTS
-        # ----------------------------------------------------
 
         invalid_rows = [
             pick
             for pick in rows
             if (
                 str(
-                    pick.get(
-                        "result"
-                    )
+                    pick.get("result")
                     or ""
                 ).upper()
                 not in {
@@ -3608,9 +3787,7 @@ def official_week_is_healthy(
                     "PUSH",
                 }
                 or str(
-                    pick.get(
-                        "status"
-                    )
+                    pick.get("status")
                     or ""
                 ).upper()
                 != "FINAL"
@@ -3618,47 +3795,20 @@ def official_week_is_healthy(
         ]
 
         if invalid_rows:
-
             print(
                 "OFFICIAL VALIDATION FAILED:",
                 picker,
                 "| invalid/pending official rows:",
-                len(
-                    invalid_rows
-                ),
+                len(invalid_rows),
             )
 
-            for pick in invalid_rows:
-
-                print(
-                    "   INVALID:",
-                    pick.get(
-                        "selection"
-                    ),
-                    "| result:",
-                    pick.get(
-                        "result"
-                    ),
-                    "| status:",
-                    pick.get(
-                        "status"
-                    ),
-                )
-
             healthy = False
-
-
-        # ----------------------------------------------------
-        # CURRENT STORED RECORD
-        # ----------------------------------------------------
 
         wins = sum(
             1
             for pick in rows
             if str(
-                pick.get(
-                    "result"
-                )
+                pick.get("result")
                 or ""
             ).upper()
             == "WIN"
@@ -3668,9 +3818,7 @@ def official_week_is_healthy(
             1
             for pick in rows
             if str(
-                pick.get(
-                    "result"
-                )
+                pick.get("result")
                 or ""
             ).upper()
             == "LOSS"
@@ -3680,32 +3828,24 @@ def official_week_is_healthy(
             1
             for pick in rows
             if str(
-                pick.get(
-                    "result"
-                )
+                pick.get("result")
                 or ""
             ).upper()
             == "PUSH"
         )
 
         expected_wins = int(
-            expected.get(
-                "wins"
-            )
+            expected.get("wins")
             or 0
         )
 
         expected_losses = int(
-            expected.get(
-                "losses"
-            )
+            expected.get("losses")
             or 0
         )
 
         expected_pushes = int(
-            expected.get(
-                "pushes"
-            )
+            expected.get("pushes")
             or 0
         )
 
@@ -3724,27 +3864,18 @@ def official_week_is_healthy(
             f"{expected_losses}-"
             f"{expected_pushes}",
             "| rows:",
-            len(
-                rows
-            ),
+            len(rows),
             "/",
             expected_total,
         )
 
-
-        # ----------------------------------------------------
-        # RECORD MUST MATCH
-        # ----------------------------------------------------
-
         if (
-            wins
-            != expected_wins
+            wins != expected_wins
             or losses
             != expected_losses
             or pushes
             != expected_pushes
         ):
-
             print(
                 "OFFICIAL VALIDATION FAILED:",
                 picker,
@@ -3753,37 +3884,24 @@ def official_week_is_healthy(
 
             healthy = False
 
-
-        # ----------------------------------------------------
-        # PICK COUNT MUST MATCH
-        # ----------------------------------------------------
-
-        if len(
-            rows
-        ) != expected_total:
-
+        if len(rows) != expected_total:
             print(
                 "OFFICIAL VALIDATION FAILED:",
                 picker,
                 "| expected",
                 expected_total,
                 "official rows but found",
-                len(
-                    rows
-                ),
+                len(rows),
             )
 
             healthy = False
 
-
     if healthy:
-
         print(
             "STORED OFFICIAL WEEK IS HEALTHY"
         )
 
     else:
-
         print(
             "STORED OFFICIAL WEEK FAILED VALIDATION"
         )
@@ -3800,7 +3918,6 @@ def reconcile_pat_hill_standings(
     state,
     official_user_id,
 ):
-
     print()
     print(
         "===================================="
@@ -3811,13 +3928,6 @@ def reconcile_pat_hill_standings(
     print(
         "===================================="
     )
-
-
-    # ========================================================
-    # LOOK BACK SEVERAL DAYS
-    #
-    # This intentionally ignores last_x_post_id.
-    # ========================================================
 
     start_time = (
         datetime.now(
@@ -3832,30 +3942,21 @@ def reconcile_pat_hill_standings(
     posts, media_map = (
         fetch_user_posts(
             official_user_id,
-            start_time=
-                start_time,
+            start_time=start_time,
             max_pages=
                 STANDINGS_MAX_PAGES,
         )
     )
 
-
-    # ========================================================
-    # FIND OFFICIAL ROOT POSTS
-    # ========================================================
-
     root_candidates = [
         post
         for post in posts
         if is_pat_hill_text(
-            post.get(
-                "text"
-            )
+            post.get("text")
         )
     ]
 
     if not root_candidates:
-
         print(
             "No PAT HILL STANDINGS "
             "root post found yet."
@@ -3863,16 +3964,11 @@ def reconcile_pat_hill_standings(
 
         return existing
 
-
-    # Newest standings first.
     root_candidates = sorted(
         root_candidates,
         key=lambda post:
-            int(
-                post.get(
-                    "id"
-                )
-                or 0
+            post_numeric_sort(
+                post.get("id")
             ),
         reverse=True,
     )
@@ -3888,17 +3984,9 @@ def reconcile_pat_hill_standings(
         )
     )
 
-
-    # ========================================================
-    # PROCESS STANDINGS THREADS
-    # ========================================================
-
     for root_post in root_candidates:
-
         root_id = str(
-            root_post.get(
-                "id"
-            )
+            root_post.get("id")
             or ""
         )
 
@@ -3912,9 +4000,8 @@ def reconcile_pat_hill_standings(
             or root_id
         )
 
-
         # ----------------------------------------------------
-        # ROOT + ALL OFFICIAL REPLIES/SUBTWEETS
+        # Root + all OFFICIAL replies/subtweets only.
         # ----------------------------------------------------
 
         thread_posts = [
@@ -3925,15 +4012,11 @@ def reconcile_pat_hill_standings(
                     post.get(
                         "conversation_id"
                     )
-                    or post.get(
-                        "id"
-                    )
+                    or post.get("id")
                 )
                 == conversation_id
                 and str(
-                    post.get(
-                        "author_id"
-                    )
+                    post.get("author_id")
                     or ""
                 )
                 == str(
@@ -3944,14 +4027,11 @@ def reconcile_pat_hill_standings(
 
         if not any(
             str(
-                post.get(
-                    "id"
-                )
+                post.get("id")
             )
             == root_id
             for post in thread_posts
         ):
-
             thread_posts.append(
                 root_post
             )
@@ -3959,18 +4039,10 @@ def reconcile_pat_hill_standings(
         thread_posts = sorted(
             thread_posts,
             key=lambda post:
-                int(
-                    post.get(
-                        "id"
-                    )
-                    or 0
+                post_numeric_sort(
+                    post.get("id")
                 ),
         )
-
-
-        # ----------------------------------------------------
-        # DETERMINE COMPLETED WEEK
-        # ----------------------------------------------------
 
         target_week = (
             standings_target_week(
@@ -3979,34 +4051,21 @@ def reconcile_pat_hill_standings(
         )
 
         if not target_week:
-
             print(
                 "Could not determine standings week:",
                 root_id,
             )
-
             continue
-
-
-        # ----------------------------------------------------
-        # READ ROOT PRINTED RECORDS
-        # ----------------------------------------------------
 
         printed_standings = (
             parse_printed_standings(
-                root_post.get(
-                    "text"
-                )
+                root_post.get("text")
             )
         )
 
-        if (
-            len(
-                printed_standings
-            )
-            != 3
-        ):
-
+        if len(
+            printed_standings
+        ) != 3:
             print(
                 "PAT HILL standings text "
                 "does not contain all 3 pickers yet."
@@ -4018,7 +4077,6 @@ def reconcile_pat_hill_standings(
             )
 
             continue
-
 
         print()
         print(
@@ -4037,9 +4095,7 @@ def reconcile_pat_hill_standings(
 
         print(
             "Official thread posts found:",
-            len(
-                thread_posts
-            ),
+            len(thread_posts),
         )
 
         print(
@@ -4052,13 +4108,11 @@ def reconcile_pat_hill_standings(
             printed_standings,
         )
 
-
-        # ====================================================
-        # SELF-HEALING VALIDATION
-        # ====================================================
+        # ----------------------------------------------------
+        # Self-heal already-processed official threads.
+        # ----------------------------------------------------
 
         if root_id in processed:
-
             healthy = (
                 official_week_is_healthy(
                     existing,
@@ -4072,7 +4126,6 @@ def reconcile_pat_hill_standings(
             )
 
             if healthy:
-
                 print(
                     "Already reconciled and "
                     "validated standings thread:",
@@ -4081,39 +4134,31 @@ def reconcile_pat_hill_standings(
 
                 continue
 
-
             print()
             print(
                 "****************************************"
             )
-
             print(
                 "OFFICIAL WEEK DATA IS NOT HEALTHY"
             )
-
             print(
                 "RE-RUNNING PAT HILL RECONCILIATION"
             )
-
             print(
                 "****************************************"
             )
 
-
-        # ====================================================
-        # EXTRACT + VALIDATE ALL RESULT CARDS
-        # ====================================================
+        # ----------------------------------------------------
+        # Extract + validate all official result cards.
+        # ----------------------------------------------------
 
         try:
-
             payload = (
                 parse_official_result_cards(
-                    root_post=
-                        root_post,
+                    root_post=root_post,
                     thread_posts=
                         thread_posts,
-                    media_map=
-                        media_map,
+                    media_map=media_map,
                     target_week=
                         target_week,
                 )
@@ -4130,7 +4175,6 @@ def reconcile_pat_hill_standings(
             )
 
         except Exception as exc:
-
             print(
                 "OFFICIAL RECONCILIATION "
                 "NOT READY / FAILED:"
@@ -4152,11 +4196,6 @@ def reconcile_pat_hill_standings(
 
             continue
 
-
-        # ====================================================
-        # REPORT VALIDATED RESULTS
-        # ====================================================
-
         print()
         print(
             "OFFICIAL CARD VALIDATION PASSED"
@@ -4167,10 +4206,7 @@ def reconcile_pat_hill_standings(
             "Big Cat",
             "Stool Presidente",
         ]:
-
-            data = validated[
-                picker
-            ]
+            data = validated[picker]
 
             print(
                 picker,
@@ -4179,74 +4215,43 @@ def reconcile_pat_hill_standings(
                 f"{data['losses']}-"
                 f"{data['pushes']}",
                 "| picks:",
-                len(
-                    data[
-                        "picks"
-                    ]
-                ),
+                len(data["picks"]),
             )
-
-
-        # ====================================================
-        # BUILD OFFICIAL ROWS
-        # ====================================================
 
         official_rows = (
             build_official_week_rows(
-                validated=
-                    validated,
-                target_week=
-                    target_week,
-                root_post=
-                    root_post,
+                validated=validated,
+                target_week=target_week,
+                root_post=root_post,
             )
         )
 
         expected_total = sum(
             (
-                data[
-                    "wins"
-                ]
-                + data[
-                    "losses"
-                ]
-                + data[
-                    "pushes"
-                ]
+                data["wins"]
+                + data["losses"]
+                + data["pushes"]
             )
             for data in (
                 validated.values()
             )
         )
 
-
-        # ----------------------------------------------------
-        # FINAL PRE-REPLACEMENT SAFETY CHECK
-        # ----------------------------------------------------
-
         if len(
             official_rows
         ) != expected_total:
-
             print(
                 "OFFICIAL RECONCILIATION ABORTED:"
             )
 
             print(
                 "Built",
-                len(
-                    official_rows
-                ),
+                len(official_rows),
                 "rows but expected",
                 expected_total,
             )
 
             continue
-
-
-        # ====================================================
-        # REPLACE ONLY THE COMPLETED WEEK
-        # ====================================================
 
         existing = (
             replace_week_with_official(
@@ -4257,11 +4262,6 @@ def reconcile_pat_hill_standings(
                     target_week,
             )
         )
-
-
-        # ====================================================
-        # VERIFY REPLACEMENT
-        # ====================================================
 
         post_replace_healthy = (
             official_week_is_healthy(
@@ -4276,16 +4276,10 @@ def reconcile_pat_hill_standings(
         )
 
         if not post_replace_healthy:
-
             raise RuntimeError(
                 "Official rows failed "
                 "post-reconciliation validation."
             )
-
-
-        # ====================================================
-        # SAVE SUCCESS STATE
-        # ====================================================
 
         processed.add(
             root_id
@@ -4295,17 +4289,12 @@ def reconcile_pat_hill_standings(
             OFFICIAL_RESULT_STATE_KEY
         ] = sorted(
             processed,
-            key=lambda value:
-                int(value)
-                if value.isdigit()
-                else 0,
+            key=post_numeric_sort,
         )[-100:]
 
         state[
             "last_official_reconciled_week"
-        ] = int(
-            target_week
-        )
+        ] = int(target_week)
 
         state[
             "last_official_result_post_id"
@@ -4319,13 +4308,11 @@ def reconcile_pat_hill_standings(
         print(
             "===================================="
         )
-
         print(
             "OFFICIAL WEEK",
             target_week,
             "RECONCILIATION COMPLETE"
         )
-
         print(
             "===================================="
         )
@@ -4341,7 +4328,6 @@ def print_week_audit(
     picks,
     week,
 ):
-
     print()
     print(
         f"========== WEEK {week} AUDIT =========="
@@ -4352,23 +4338,16 @@ def print_week_audit(
         "Big Cat",
         "Stool Presidente",
     ]:
-
         rows = [
             pick
             for pick in picks
             if (
-                normalize_picker(
-                    pick.get(
-                        "picker"
-                    )
+                normalize_picker_safe(
+                    pick.get("picker")
                 )
                 == picker
-                and pick_week(
-                    pick
-                )
-                == int(
-                    week
-                )
+                and pick_week(pick)
+                == int(week)
             )
         ]
 
@@ -4376,9 +4355,7 @@ def print_week_audit(
             1
             for pick in rows
             if str(
-                pick.get(
-                    "result"
-                )
+                pick.get("result")
                 or ""
             ).upper()
             == "WIN"
@@ -4388,9 +4365,7 @@ def print_week_audit(
             1
             for pick in rows
             if str(
-                pick.get(
-                    "result"
-                )
+                pick.get("result")
                 or ""
             ).upper()
             == "LOSS"
@@ -4400,9 +4375,7 @@ def print_week_audit(
             1
             for pick in rows
             if str(
-                pick.get(
-                    "result"
-                )
+                pick.get("result")
                 or ""
             ).upper()
             == "PUSH"
@@ -4452,7 +4425,6 @@ def print_week_audit(
 # ============================================================
 
 def ingest():
-
     print()
     print(
         "===================================="
@@ -4478,23 +4450,20 @@ def ingest():
         existing,
         list,
     ):
-
         existing = []
 
-
-    # ========================================================
-    # 1. SEED PROCESSED IDS FROM EXISTING PICKS
-    # ========================================================
+    # --------------------------------------------------------
+    # 1. Seed processed IDs without losing old state.
+    # --------------------------------------------------------
 
     initialize_processed_ids(
         existing,
         state,
     )
 
-
-    # ========================================================
-    # 2. RESOLVE OFFICIAL ACCOUNT
-    # ========================================================
+    # --------------------------------------------------------
+    # 2. Resolve official account.
+    # --------------------------------------------------------
 
     official_user_id = (
         resolve_user_id()
@@ -4507,10 +4476,9 @@ def ingest():
         official_user_id,
     )
 
-
-    # ========================================================
-    # 3. RETRY FAILED NORMAL PICK POSTS
-    # ========================================================
+    # --------------------------------------------------------
+    # 3. Retry previously failed posts.
+    # --------------------------------------------------------
 
     retry_posts, retry_media = (
         fetch_retry_posts(
@@ -4519,17 +4487,15 @@ def ingest():
         )
     )
 
-
-    # ========================================================
-    # 4. FETCH ONLY NEW NORMAL TIMELINE POSTS
-    # ========================================================
+    # --------------------------------------------------------
+    # 4. Fetch only new timeline posts.
+    # --------------------------------------------------------
 
     last_x_post_id = state.get(
         "last_x_post_id"
     )
 
     if last_x_post_id:
-
         timeline_posts, timeline_media = (
             fetch_user_posts(
                 official_user_id,
@@ -4540,7 +4506,6 @@ def ingest():
         )
 
     else:
-
         timeline_posts, timeline_media = (
             fetch_user_posts(
                 official_user_id,
@@ -4558,10 +4523,9 @@ def ingest():
             )
         )
 
-
-    # ========================================================
-    # 5. COMBINE RETRIES + NEW POSTS
-    # ========================================================
+    # --------------------------------------------------------
+    # 5. Combine retries + new posts.
+    # --------------------------------------------------------
 
     post_map = {}
 
@@ -4569,16 +4533,12 @@ def ingest():
         retry_posts
         + timeline_posts
     ):
-
         post_id = str(
-            post.get(
-                "id"
-            )
+            post.get("id")
             or ""
         )
 
         if post_id:
-
             post_map[
                 post_id
             ] = post
@@ -4595,15 +4555,13 @@ def ingest():
         timeline_media
     )
 
-
-    # ========================================================
-    # 6. NORMAL NEW-PICK INGEST
-    # ========================================================
+    # --------------------------------------------------------
+    # 6. Transactional normal-pick ingestion.
+    # --------------------------------------------------------
 
     (
         existing,
-        candidate_count,
-        new_pick_count,
+        ingest_stats,
     ) = process_normal_posts(
         existing,
         combined_posts,
@@ -4612,36 +4570,30 @@ def ingest():
         state,
     )
 
-
-    # ========================================================
-    # 7. ADVANCE NORMAL X CURSOR
-    # ========================================================
+    # --------------------------------------------------------
+    # 7. Advance timeline cursor.
+    #
+    # This is safe even when a candidate failed validation,
+    # because failed_post_ids is an independent durable retry
+    # queue and fetch_retry_posts retrieves those exact posts.
+    # --------------------------------------------------------
 
     timeline_ids = [
         int(
-            post.get(
-                "id"
-            )
+            post.get("id")
         )
         for post in timeline_posts
         if (
-            post.get(
-                "id"
-            )
+            post.get("id")
             and str(
-                post.get(
-                    "id"
-                )
+                post.get("id")
             ).isdigit()
         )
     ]
 
     if timeline_ids:
-
         newest_id = str(
-            max(
-                timeline_ids
-            )
+            max(timeline_ids)
         )
 
         old_id = state.get(
@@ -4650,25 +4602,18 @@ def ingest():
 
         if (
             not old_id
-            or int(
-                newest_id
-            )
-            > int(
-                old_id
-            )
+            or int(newest_id)
+            > int(old_id)
         ):
-
             state[
                 "last_x_post_id"
             ] = newest_id
 
-
-    # ========================================================
-    # 8. TUESDAY OFFICIAL RESULT RECONCILIATION
-    # ========================================================
+    # --------------------------------------------------------
+    # 8. Tuesday official result reconciliation.
+    # --------------------------------------------------------
 
     if should_scan_standings():
-
         existing = (
             reconcile_pat_hill_standings(
                 existing,
@@ -4678,29 +4623,30 @@ def ingest():
         )
 
     else:
-
         print(
             "Not Tuesday Pacific — "
             "skipping PAT HILL reconciliation scan."
         )
 
-
-    # ========================================================
-    # 9. FINAL DEDUPE
-    # ========================================================
+    # --------------------------------------------------------
+    # 9. Permanent canonical dedupe.
+    # --------------------------------------------------------
 
     existing = dedupe_picks(
         existing
     )
 
-
-    # ========================================================
-    # 10. SAVE
-    # ========================================================
+    # --------------------------------------------------------
+    # 10. Save atomically at end of successful ingest run.
+    # --------------------------------------------------------
 
     state[
         "updated_at"
     ] = now_iso()
+
+    state[
+        "ingest_validation_version"
+    ] = 3
 
     save_json(
         PICKS_FILE,
@@ -4712,10 +4658,9 @@ def ingest():
         state,
     )
 
-
-    # ========================================================
-    # SUMMARY
-    # ========================================================
+    # --------------------------------------------------------
+    # Summary
+    # --------------------------------------------------------
 
     print()
     print(
@@ -4724,26 +4669,47 @@ def ingest():
 
     print(
         "New official timeline posts:",
-        len(
-            timeline_posts
-        ),
+        len(timeline_posts),
     )
 
     print(
         "Retry posts:",
-        len(
-            retry_posts
-        ),
+        len(retry_posts),
     )
 
     print(
         "Candidate new-pick posts:",
-        candidate_count,
+        ingest_stats[
+            "candidate_count"
+        ],
+    )
+
+    print(
+        "Validated candidate posts:",
+        ingest_stats[
+            "validated_post_count"
+        ],
+    )
+
+    print(
+        "Validated non-pick candidates:",
+        ingest_stats[
+            "non_pick_candidate_count"
+        ],
+    )
+
+    print(
+        "Existing wagers recognized:",
+        ingest_stats[
+            "duplicate_count"
+        ],
     )
 
     print(
         "New wagers added:",
-        new_pick_count,
+        ingest_stats[
+            "new_pick_count"
+        ],
     )
 
     print(
@@ -4758,9 +4724,7 @@ def ingest():
 
     print(
         "Total stored wagers:",
-        len(
-            existing
-        ),
+        len(existing),
     )
 
     print(
@@ -4778,13 +4742,15 @@ def ingest():
     )
 
     print(
-        "===================================="
+        "Ingest validation version:",
+        state.get(
+            "ingest_validation_version"
+        ),
     )
 
-
-    # ========================================================
-    # AUDIT CURRENTLY IMPORTANT COMPLETED WEEK
-    # ========================================================
+    print(
+        "===================================="
+    )
 
     print_week_audit(
         existing,
