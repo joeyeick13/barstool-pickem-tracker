@@ -557,6 +557,32 @@ def competitor_identity_values(
     return values
 
 
+def competitor_identity_anchor(
+    competitor
+):
+    """
+    Return ESPN's school/location identity for this competitor.
+
+    The runtime identity registry requires one safe anchor plus the
+    alternate names ESPN attached to the same stable team ID.
+
+    We intentionally use ESPN's location field as the anchor rather
+    than guessing a school name by stripping mascot words from a
+    display name.
+    """
+    team = competitor_team(
+        competitor
+    )
+
+    anchor = clean_text(
+        team.get(
+            "location"
+        )
+    )
+
+    return anchor or None
+
+
 def register_competitor_identity(
     competitor
 ):
@@ -564,13 +590,22 @@ def register_competitor_identity(
         competitor
     )
 
+    anchor = competitor_identity_anchor(
+        competitor
+    )
+
     values = competitor_identity_values(
         competitor
     )
 
-    if team_id and values:
+    if (
+        team_id
+        and anchor
+        and values
+    ):
         register_espn_team_identity(
             team_id,
+            anchor,
             values,
         )
 
