@@ -67,6 +67,7 @@ INITIAL_BACKFILL_PAGES = 3
 
 STANDINGS_LOOKBACK_DAYS = 14
 STANDINGS_MAX_PAGES = 6
+PAT_HILL_THREAD_MAX_PAGES = 10
 
 PROCESSED_IDS_FLAG = (
     "processed_ids_initialized_v3"
@@ -510,6 +511,294 @@ def fetch_user_posts(
         posts,
         media_map,
     )
+
+
+def fetch_recent_official_conversation(
+    *,
+    conversation_id,
+    official_user_id,
+    max_pages=PAT_HILL_THREAD_MAX_PAGES,
+):
+    """
+    Exhaustively fetch the official account's posts in one X
+    conversation using recent search.
+
+    The normal user timeline is intentionally still used for broad PAT
+    HILL discovery. This targeted pass exists because a busy account
+    timeline can be paginated/truncated before every reply in a result
+    thread has been collected.
+
+    Failures are returned to the caller so it can use the deeper timeline
+    fallback instead of weakening reconciliation validation.
+    """
+
+    params = {
+        "query": (
+            f"conversation_id:{conversation_id} "
+            f"from:{USERNAME} -is:retweet"
+        ),
+        "max_results": 100,
+        "tweet.fields": (
+            "author_id,"
+            "created_at,"
+            "attachments,"
+            "text,"
+            "referenced_tweets,"
+            "conversation_id,"
+            "in_reply_to_user_id"
+        ),
+        "expansions":
+            "attachments.media_keys",
+        "media.fields": (
+            "media_key,"
+            "type,"
+            "url,"
+            "preview_image_url"
+        ),
+    }
+
+    posts = []
+    media_map = {}
+    pages = 0
+
+    while True:
+        payload = x_get(
+            "/tweets/search/recent",
+            params,
+        )
+
+        for post in payload.get(
+            "data",
+            [],
+        ):
+            if (
+                str(
+                    post.get("author_id")
+                    or ""
+                )
+                != str(official_user_id)
+            ):
+                continue
+
+            if (
+                str(
+                    post.get("conversation_id")
+                    or post.get("id")
+                    or ""
+                )
+                != str(conversation_id)
+            ):
+                continue
+
+            posts.append(post)
+
+        for media in (
+            payload
+            .get("includes", {})
+            .get("media", [])
+        ):
+            key = media.get("media_key")
+
+            if key:
+                media_map[key] = media
+
+        pages += 1
+
+        next_token = (
+            payload
+            .get("meta", {})
+            .get("next_token")
+        )
+
+        if not next_token:
+            break
+
+        if pages >= max_pages:
+            break
+
+        params["next_token"] = next_token
+
+    return posts, media_map
+
+
+def merge_post_collections(
+    *collections,
+):
+    """Merge post/media collections without losing media expansions."""
+
+    by_id = {}
+    media_map = {}
+
+    for posts, media in collections:
+        for post in posts or []:
+            post_id = str(
+                post.get("id")
+                or ""
+            )
+
+            if post_id:
+                by_id[post_id] = post
+
+        media_map.update(
+            media or {}
+        )
+
+    posts = sorted(
+        by_id.values(),
+        key=lambda post:
+            post_numeric_sort(
+                post.get("id")
+            ),
+    )
+
+    return posts, media_map
+
+
+def collect_pat_hill_thread(
+    *,
+    root_post,
+    discovery_posts,
+    discovery_media_map,
+    official_user_id,
+    standings_start_time,
+):
+    """
+    Build the most complete official PAT HILL result thread available.
+
+    Collection is deliberately stronger than validation:
+    1. keep every matching post already found by standings discovery;
+    2. query X recent search directly for the conversation;
+    3. independently perform a deeper official-account timeline pass;
+    4. merge/dedupe all sources by post id and preserve every media map.
+
+    No result is accepted here. The existing result-card validator remains
+    the authority on whether the collected source is complete enough to
+    replace a week.
+    """
+
+    root_id = str(
+        root_post.get("id")
+        or ""
+    )
+
+    conversation_id = str(
+        root_post.get("conversation_id")
+        or root_id
+    )
+
+    base_posts = [
+        post
+        for post in discovery_posts
+        if (
+            str(
+                post.get("author_id")
+                or ""
+            )
+            == str(official_user_id)
+            and str(
+                post.get("conversation_id")
+                or post.get("id")
+                or ""
+            )
+            == conversation_id
+        )
+    ]
+
+    collections = [
+        (
+            base_posts,
+            discovery_media_map,
+        )
+    ]
+
+    try:
+        search_posts, search_media = (
+            fetch_recent_official_conversation(
+                conversation_id=conversation_id,
+                official_user_id=official_user_id,
+            )
+        )
+
+        collections.append(
+            (search_posts, search_media)
+        )
+
+        print(
+            "PAT HILL targeted conversation search posts:",
+            len(search_posts),
+        )
+
+    except Exception as exc:
+        print(
+            "PAT HILL targeted conversation search unavailable:",
+            type(exc).__name__,
+            exc,
+        )
+
+    try:
+        deep_posts, deep_media = (
+            fetch_user_posts(
+                official_user_id,
+                start_time=standings_start_time,
+                max_pages=
+                    PAT_HILL_THREAD_MAX_PAGES,
+            )
+        )
+
+        deep_thread_posts = [
+            post
+            for post in deep_posts
+            if (
+                str(
+                    post.get("author_id")
+                    or ""
+                )
+                == str(official_user_id)
+                and str(
+                    post.get("conversation_id")
+                    or post.get("id")
+                    or ""
+                )
+                == conversation_id
+            )
+        ]
+
+        collections.append(
+            (deep_thread_posts, deep_media)
+        )
+
+        print(
+            "PAT HILL deep timeline thread posts:",
+            len(deep_thread_posts),
+        )
+
+    except Exception as exc:
+        print(
+            "PAT HILL deep timeline fallback failed:",
+            type(exc).__name__,
+            exc,
+        )
+
+    thread_posts, media_map = (
+        merge_post_collections(
+            *collections
+        )
+    )
+
+    if root_id and not any(
+        str(post.get("id")) == root_id
+        for post in thread_posts
+    ):
+        thread_posts.append(root_post)
+        thread_posts = sorted(
+            thread_posts,
+            key=lambda post:
+                post_numeric_sort(
+                    post.get("id")
+                ),
+        )
+
+    return thread_posts, media_map
 
 
 def fetch_post_by_id(post_id):
@@ -4201,47 +4490,23 @@ def reconcile_pat_hill_standings(
         )
 
         # ----------------------------------------------------
-        # Root + all OFFICIAL replies/subtweets only.
+        # Exhaustive official PAT HILL source collection.
+        #
+        # Do not trust only the broad account-timeline page set.
+        # Collect the conversation again through targeted recent
+        # search plus an independent deeper timeline pass, merge
+        # all official posts/media, and let the existing strict
+        # result-card validation decide whether Week N is safe.
         # ----------------------------------------------------
 
-        thread_posts = [
-            post
-            for post in posts
-            if (
-                str(
-                    post.get(
-                        "conversation_id"
-                    )
-                    or post.get("id")
-                )
-                == conversation_id
-                and str(
-                    post.get("author_id")
-                    or ""
-                )
-                == str(
-                    official_user_id
-                )
+        thread_posts, thread_media_map = (
+            collect_pat_hill_thread(
+                root_post=root_post,
+                discovery_posts=posts,
+                discovery_media_map=media_map,
+                official_user_id=official_user_id,
+                standings_start_time=start_time,
             )
-        ]
-
-        if not any(
-            str(
-                post.get("id")
-            )
-            == root_id
-            for post in thread_posts
-        ):
-            thread_posts.append(
-                root_post
-            )
-
-        thread_posts = sorted(
-            thread_posts,
-            key=lambda post:
-                post_numeric_sort(
-                    post.get("id")
-                ),
         )
 
         target_week = (
@@ -4359,7 +4624,7 @@ def reconcile_pat_hill_standings(
                     root_post=root_post,
                     thread_posts=
                         thread_posts,
-                    media_map=media_map,
+                    media_map=thread_media_map,
                     target_week=
                         target_week,
                 )
