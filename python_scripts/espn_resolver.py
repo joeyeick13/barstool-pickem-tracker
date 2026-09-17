@@ -22,22 +22,19 @@ from football_identity import (
 # BARSTOOL PICK EM — SHARED ESPN EVENT RESOLVER
 # ============================================================
 #
-# SINGLE SOURCE OF TRUTH FOR:
+# PERMANENT RESPONSIBILITIES
 #
-#   - Pick Em week windows
-#   - ESPN scoreboard retrieval
-#   - FBS/FCS slate merging
-#   - ESPN team identity
-#   - matchup resolution
-#   - event_id locking
-#   - schedule metadata
-#   - resolution diagnostics
+#   1. Build a complete ESPN CFB slate
+#   2. Normalize ESPN team identity
+#   3. Resolve wagers to exactly one ESPN event
+#   4. Preserve existing event locks
+#   5. Fail closed when resolution is not safe
 #
-# DESIGN RULE:
+# IMPORTANT:
 #
-# FAIL CLOSED.
+# This file contains NO week-specific event IDs and NO
+# matchup-specific patches.
 #
-# Never guess an ESPN event.
 # ============================================================
 
 
@@ -48,10 +45,49 @@ ESPN_SCOREBOARD = (
 
 REQUEST_TIMEOUT = 30
 
+# ESPN's CFB scoreboard does NOT reliably treat arbitrarily
+# large limits as "give me everything".
+#
+# limit=100 is intentionally used because that is the stable
+# scoreboard size used by the ESPN site/API behavior.
+ESPN_LIMIT = 100
+
+
+# ------------------------------------------------------------
+# ESPN GROUPS
+# ------------------------------------------------------------
+#
+# We deliberately query multiple overlapping views.
+#
+# 80 = FBS
+# 81 = FCS
+#
+# Conference views provide another independent way to recover
+# games if ESPN's aggregate FBS/FCS views are incomplete.
+#
+# Duplicates are harmless because every response is merged by
+# ESPN event_id.
+# ------------------------------------------------------------
+
 ESPN_GROUPS = (
     None,
-    80,
-    81,
+
+    # Division-level views
+    80,     # FBS
+    81,     # FCS
+
+    # Major / FBS conference views
+    1,      # ACC
+    4,      # Big 12
+    5,      # Big Ten
+    8,      # SEC
+    9,      # Pac-12 / legacy ESPN grouping
+    12,     # Conference USA
+    15,     # MAC
+    17,     # Mountain West
+    18,     # FBS Independents
+    37,     # Sun Belt
+    151,    # American
 )
 
 
@@ -66,19 +102,19 @@ def request_json(
     attempts=3,
 ):
     """
-    ESPN request behavior intentionally mirrors the request
-    headers already proven to work in the production grader.
+    ESPN request behavior mirrors the request headers that have
+    already worked successfully in the production grader.
     """
 
     last_error = None
 
     headers = {
-        "Accept": (
-            "application/json, "
-            "text/plain, */*"
-        ),
+        "Accept":
+            "application/json, text/plain, */*",
+
         "Origin":
             "https://www.espn.com",
+
         "Referer":
             "https://www.espn.com/",
     }
@@ -87,6 +123,7 @@ def request_json(
         1,
         attempts + 1,
     ):
+
         try:
 
             response = requests.get(
@@ -98,7 +135,17 @@ def request_json(
 
             response.raise_for_status()
 
-            return response.json()
+            payload = response.json()
+
+            if not isinstance(
+                payload,
+                dict,
+            ):
+                raise RuntimeError(
+                    "ESPN response was not a JSON object."
+                )
+
+            return payload
 
         except Exception as exc:
 
@@ -196,12 +243,6 @@ def week_window(
 
     # --------------------------------------------------------
     # FUTURE-SEASON FALLBACK
-    # --------------------------------------------------------
-    #
-    # This is schedule discovery only.
-    #
-    # The audit layer we add later will prevent silently using
-    # an unverified future season calendar for final grading.
     # --------------------------------------------------------
 
     september_1 = date(
@@ -426,7 +467,7 @@ def event_completed(
 
 
 # ============================================================
-# ESPN TEAM IDENTITIES
+# ESPN TEAM IDENTITY
 # ============================================================
 
 def competitor_team(
@@ -475,7 +516,14 @@ def competitor_identity_values(
     competitor
 ):
     """
-    Deliberately excludes mascot-only team["name"].
+    IMPORTANT:
+
+    Do NOT use mascot-only team["name"].
+
+    Example:
+        "Tigers"
+
+    is not a safe football identity.
     """
 
     team = competitor_team(
@@ -554,7 +602,7 @@ def competitor_aliases(
 
 
 # ============================================================
-# AMBIGUOUS ALIASES
+# CONTEXTUAL AMBIGUOUS IDENTITIES
 # ============================================================
 
 AMBIGUOUS_CONTEXT_GROUPS = {
@@ -583,24 +631,6 @@ def comp_matches_ambiguous_hint(
     competitor,
     hint,
 ):
-    """
-    Bare ambiguous aliases never resolve by themselves.
-
-    They MAY participate in a two-team matchup when the other
-    side of the matchup makes the ESPN event unique.
-
-    Example:
-        OSU @ Houston
-
-    can match Oregon State @ Houston if that is the only
-    qualifying event.
-
-    But:
-        OSU +3
-
-    cannot resolve on OSU alone.
-    """
-
     candidates = (
         ambiguous_candidate_teams(
             hint
@@ -610,16 +640,14 @@ def comp_matches_ambiguous_hint(
     if not candidates:
         return False
 
-    comp_aliases = (
-        competitor_aliases(
-            competitor
-        )
+    aliases = competitor_aliases(
+        competitor
     )
 
     for candidate in candidates:
 
         if (
-            comp_aliases
+            aliases
             & alias_group(
                 candidate
             )
@@ -672,7 +700,8 @@ def event_contains_team(
     hint,
 ):
     """
-    Single-team matching never accepts a bare ambiguous alias.
+    Bare ambiguous aliases never qualify for one-team
+    resolution.
     """
 
     if (
@@ -701,11 +730,15 @@ def event_contains_pair(
     second,
 ):
     """
-    Two-team matching.
+    Two-team matching can safely use a contextual ambiguous
+    alias because the second team constrains the game.
 
-    Ambiguous aliases such as OSU are allowed only here, where
-    the opponent can provide the context needed to identify one
-    unique ESPN event.
+    Example:
+
+        OSU @ Houston
+
+    can resolve if exactly one ESPN event contains Houston and
+    one of the legitimate OSU candidates.
     """
 
     if (
@@ -1017,50 +1050,98 @@ def merge_events(
 
 
 # ============================================================
-# ESPN SCOREBOARD FETCHING
+# ESPN SCOREBOARD RETRIEVAL
 # ============================================================
 
-def fetch_scoreboard_view(
-    params,
-    *,
-    label,
+def fetch_scoreboard_group(
+    day,
+    group,
 ):
+    """
+    Fetch one ESPN scoreboard view.
+
+    We use exactly one calendar day per request. This avoids the
+    date-range endpoint that ESPN is currently rejecting.
+    """
+
+    datestring = (
+        day.strftime(
+            "%Y%m%d"
+        )
+    )
+
+    params = {
+        "dates":
+            datestring,
+
+        "limit":
+            ESPN_LIMIT,
+    }
+
+    if group is not None:
+
+        params[
+            "groups"
+        ] = group
+
+    payload = request_json(
+        ESPN_SCOREBOARD,
+        params,
+    )
+
+    events = (
+        payload.get(
+            "events"
+        )
+        or []
+    )
+
+    return events
+
+
+def fetch_complete_day(
+    day
+):
+    """
+    Build one day's slate from overlapping ESPN group views.
+
+    This intentionally favors completeness over minimizing API
+    calls.
+
+    A game returned through multiple views is merged by
+    event_id.
+    """
+
     all_events = []
+
+    successful_views = 0
 
     for group in ESPN_GROUPS:
 
-        view_params = dict(
-            params
+        label = (
+            str(group)
+            if group is not None
+            else "default"
         )
-
-        if group is not None:
-
-            view_params[
-                "groups"
-            ] = group
 
         try:
 
-            payload = request_json(
-                ESPN_SCOREBOARD,
-                view_params,
+            events = (
+                fetch_scoreboard_group(
+                    day,
+                    group,
+                )
             )
 
-            events = (
-                payload.get(
-                    "events"
-                )
-                or []
-            )
+            successful_views += 1
 
             print(
-                label,
-                "| group:",
-                (
-                    group
-                    if group is not None
-                    else "default"
+                "ESPN DAY VIEW:",
+                day.strftime(
+                    "%Y%m%d"
                 ),
+                "| group:",
+                label,
                 "| events:",
                 len(
                     events
@@ -1074,70 +1155,41 @@ def fetch_scoreboard_view(
         except Exception as exc:
 
             print(
-                label,
+                "ESPN DAY VIEW:",
+                day.strftime(
+                    "%Y%m%d"
+                ),
                 "FAILED",
                 "| group:",
-                (
-                    group
-                    if group is not None
-                    else "default"
-                ),
+                label,
                 "|",
                 type(exc).__name__,
                 exc,
             )
 
-    return merge_events(
+    if successful_views == 0:
+
+        raise RuntimeError(
+            "Every ESPN scoreboard view failed for "
+            f"{day.isoformat()}."
+        )
+
+    merged = merge_events(
         all_events
     )
 
-
-def fetch_day_events(
-    day
-):
-    datestring = (
+    print(
+        "ESPN COMPLETE DAY:",
         day.strftime(
             "%Y%m%d"
-        )
-    )
-
-    return fetch_scoreboard_view(
-        {
-            "dates":
-                datestring,
-
-            "limit":
-                1000,
-        },
-        label=(
-            f"ESPN DAY VIEW: "
-            f"{datestring}"
+        ),
+        "| unique events:",
+        len(
+            merged
         ),
     )
 
-
-def fetch_date_range_events(
-    start,
-    end,
-):
-    datestring = (
-        f"{start.strftime('%Y%m%d')}-"
-        f"{end.strftime('%Y%m%d')}"
-    )
-
-    return fetch_scoreboard_view(
-        {
-            "dates":
-                datestring,
-
-            "limit":
-                1000,
-        },
-        label=(
-            f"ESPN DATE-RANGE VIEW: "
-            f"{datestring}"
-        ),
-    )
+    return merged
 
 
 def build_complete_week_slate(
@@ -1146,13 +1198,18 @@ def build_complete_week_slate(
     week,
 ):
     """
-    Build candidate slate from the same two ESPN retrieval
-    strategies already proven in the production grader:
+    Exhaustively build the Pick Em week's ESPN candidate slate.
 
-      1. every individual day in the Pick Em window
-      2. ESPN date-range endpoint
+    Retrieval strategy:
 
-    The two feeds are merged by ESPN event_id.
+      - every calendar day in the Pick Em window
+      - default ESPN scoreboard
+      - FBS aggregate
+      - FCS aggregate
+      - every major FBS conference view
+      - merge everything by ESPN event_id
+
+    There is intentionally no date-range dependency.
     """
 
     start, end = week_window(
@@ -1180,14 +1237,20 @@ def build_complete_week_slate(
         end.isoformat(),
     )
     print(
+        "ESPN limit:",
+        ESPN_LIMIT,
+    )
+    print(
+        "ESPN group views:",
+        len(
+            ESPN_GROUPS
+        ),
+    )
+    print(
         "===================================="
     )
 
     all_events = []
-
-    # --------------------------------------------------------
-    # DAILY VIEWS
-    # --------------------------------------------------------
 
     current = start
 
@@ -1195,21 +1258,21 @@ def build_complete_week_slate(
 
         try:
 
-            events = (
-                fetch_day_events(
+            day_events = (
+                fetch_complete_day(
                     current
                 )
             )
 
             all_events.extend(
-                events
+                day_events
             )
 
         except Exception as exc:
 
             print(
-                "ESPN DAY FETCH FAILED:",
-                current,
+                "ESPN COMPLETE DAY FAILED:",
+                current.isoformat(),
                 "|",
                 type(exc).__name__,
                 exc,
@@ -1217,55 +1280,6 @@ def build_complete_week_slate(
 
         current += timedelta(
             days=1
-        )
-
-    daily_merged = merge_events(
-        all_events
-    )
-
-    print(
-        "Date-based slate:",
-        len(
-            daily_merged
-        ),
-        "unique events",
-    )
-
-    # --------------------------------------------------------
-    # DATE-RANGE VIEW
-    # --------------------------------------------------------
-
-    try:
-
-        range_events = (
-            fetch_date_range_events(
-                start,
-                end,
-            )
-        )
-
-        print(
-            "Date-range slate:",
-            len(
-                range_events
-            ),
-            "unique events",
-        )
-
-        all_events.extend(
-            range_events
-        )
-
-    except Exception as exc:
-
-        print(
-            "ESPN DATE-RANGE FETCH FAILED:",
-            season_year,
-            "Week",
-            week,
-            "|",
-            type(exc).__name__,
-            exc,
         )
 
     merged = merge_events(
@@ -1418,7 +1432,7 @@ def filter_events_near_post_time(
     """
     Tie-breaker only.
 
-    Never creates a match.
+    Never manufactures a match.
     """
 
     posted = pick_posted_datetime(
@@ -1520,7 +1534,7 @@ def resolution_result(
 
 
 # ============================================================
-# PERMANENT EVENT RESOLUTION
+# EVENT RESOLUTION
 # ============================================================
 
 def resolve_event_detailed(
@@ -1528,17 +1542,16 @@ def resolve_event_detailed(
     events,
 ):
     """
-    Resolution hierarchy:
+    Permanent resolution hierarchy:
 
-      0. existing event_id lock
+      0. existing event_id
       1. explicit matchup
       2. structured team + opponent
       3. matchup embedded in selection
       4. canonical game identity
-      5. selected-team-only fallback
+      5. unique selected-team fallback
 
-    Every successful resolution must identify exactly one ESPN
-    event.
+    A successful match must resolve to exactly one ESPN event.
     """
 
     # --------------------------------------------------------
@@ -1566,8 +1579,7 @@ def resolve_event_detailed(
                 method=
                     "EXISTING_EVENT_ID",
                 reason=
-                    "Stored ESPN event_id "
-                    "found in current slate.",
+                    "Stored ESPN event_id found.",
                 candidates=[
                     locked
                 ],
@@ -1579,9 +1591,8 @@ def resolve_event_detailed(
             method=
                 "EXISTING_EVENT_ID_MISSING",
             reason=
-                "Stored event_id was not found "
-                "in current ESPN slate; "
-                "automatic rematching blocked.",
+                "Stored event_id was not found. "
+                "Automatic rematching blocked.",
             candidates=[],
             confidence=0.0,
         )
@@ -1624,8 +1635,8 @@ def resolve_event_detailed(
                 method=
                     "EXPLICIT_MATCHUP",
                 reason=
-                    "Exact two-team alias match "
-                    "from pick.matchup.",
+                    "Explicit matchup matched exactly "
+                    "one ESPN event.",
                 candidates=
                     matches,
                 confidence=1.0,
@@ -1640,15 +1651,15 @@ def resolve_event_detailed(
                 method=
                     "EXPLICIT_MATCHUP_AMBIGUOUS",
                 reason=
-                    "Explicit matchup matched "
-                    "multiple ESPN events.",
+                    "Explicit matchup matched multiple "
+                    "ESPN events.",
                 candidates=
                     matches,
                 confidence=0.0,
             )
 
     # --------------------------------------------------------
-    # 2. STRUCTURED TEAM + OPPONENT
+    # 2. TEAM + OPPONENT
     # --------------------------------------------------------
 
     team = clean_text(
@@ -1689,8 +1700,8 @@ def resolve_event_detailed(
                 method=
                     "TEAM_OPPONENT",
                 reason=
-                    "Exact two-team alias match "
-                    "from structured team/opponent.",
+                    "Structured team/opponent matched "
+                    "exactly one ESPN event.",
                 candidates=
                     matches,
                 confidence=1.0,
@@ -1705,15 +1716,15 @@ def resolve_event_detailed(
                 method=
                     "TEAM_OPPONENT_AMBIGUOUS",
                 reason=
-                    "Structured team/opponent "
-                    "matched multiple ESPN events.",
+                    "Structured team/opponent matched "
+                    "multiple ESPN events.",
                 candidates=
                     matches,
                 confidence=0.0,
             )
 
     # --------------------------------------------------------
-    # 3. MATCHUP EMBEDDED IN SELECTION
+    # 3. MATCHUP INSIDE SELECTION
     # --------------------------------------------------------
 
     selection_only_pick = dict(
@@ -1766,8 +1777,8 @@ def resolve_event_detailed(
                 method=
                     "SELECTION_MATCHUP",
                 reason=
-                    "Exact two-team alias match "
-                    "from selection text.",
+                    "Selection matchup matched exactly "
+                    "one ESPN event.",
                 candidates=
                     matches,
                 confidence=0.99,
@@ -1782,8 +1793,8 @@ def resolve_event_detailed(
                 method=
                     "SELECTION_MATCHUP_AMBIGUOUS",
                 reason=
-                    "Selection matchup matched "
-                    "multiple ESPN events.",
+                    "Selection matchup matched multiple "
+                    "ESPN events.",
                 candidates=
                     matches,
                 confidence=0.0,
@@ -1828,8 +1839,8 @@ def resolve_event_detailed(
                 method=
                     "CANONICAL_GAME_IDENTITY",
                 reason=
-                    "Canonical two-team identity "
-                    "matched exactly one ESPN event.",
+                    "Canonical game identity matched "
+                    "exactly one ESPN event.",
                 candidates=
                     matches,
                 confidence=0.99,
@@ -1917,8 +1928,8 @@ def resolve_event_detailed(
         method=
             "NO_CONFIDENT_EVENT_MATCH",
         reason=
-            "No exact or uniquely safe ESPN "
-            "event match was found.",
+            "No exact or uniquely safe ESPN event "
+            "match was found.",
         candidates=[],
         confidence=0.0,
     )
@@ -1939,7 +1950,7 @@ def resolve_event(
 
 
 # ============================================================
-# EVENT LOCK
+# EVENT LOCKING
 # ============================================================
 
 def lock_pick_to_event(
