@@ -13,6 +13,7 @@ from football_identity import (
     clean_text,
     is_ambiguous_hint,
     norm,
+    register_espn_team_identity,
     side_identity,
     split_matchup,
 )
@@ -556,13 +557,57 @@ def competitor_identity_values(
     return values
 
 
+def register_competitor_identity(
+    competitor
+):
+    team_id = competitor_team_id(
+        competitor
+    )
+
+    values = competitor_identity_values(
+        competitor
+    )
+
+    if team_id and values:
+        register_espn_team_identity(
+            team_id,
+            values,
+        )
+
+    return values
+
+
+def register_event_identities(
+    event
+):
+    for competitor in competitors(
+        event
+    ):
+        register_competitor_identity(
+            competitor
+        )
+
+    return event
+
+
+def register_slate_identities(
+    events
+):
+    for event in events:
+        register_event_identities(
+            event
+        )
+
+    return events
+
+
 def competitor_aliases(
     competitor
 ):
     result = set()
 
     for value in (
-        competitor_identity_values(
+        register_competitor_identity(
             competitor
         )
     ):
@@ -1044,9 +1089,15 @@ def merge_events(
                 current_id
             ] = event
 
-    return list(
+    merged = list(
         by_id.values()
     )
+
+    register_slate_identities(
+        merged
+    )
+
+    return merged
 
 
 # ============================================================
