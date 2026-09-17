@@ -1833,18 +1833,189 @@ def enrich_schedule():
                 )
                 == "UNIQUE_MATCH"
             ):
-                confidence = (
-                    "LOCKED_SELECTED_TEAM_VALIDATED"
+                # ------------------------------------------------
+                # SAFE COMPLETION OF MISSING TWO-TEAM METADATA
+                # ------------------------------------------------
+                #
+                # The wager has a previously stored ESPN event ID,
+                # but does not contain a complete two-team identity.
+                #
+                # The selected team independently proves that the
+                # locked event belongs to this wager. Therefore the
+                # missing matchup/opponent metadata can be completed
+                # from that exact locked ESPN event using the same
+                # trust rule used for stale historical metadata.
+                #
+                # This is generic self-healing. It contains no
+                # week-, picker-, team-, post-, or event-specific
+                # knowledge.
+                # ------------------------------------------------
+
+                repaired, details = (
+                    repair_matchup_from_locked_event(
+                        pick,
+                        event,
+                        anchor,
+                    )
                 )
 
-                existing_locks_validated += 1
+                if repaired:
+                    repaired_hints = (
+                        wager_matchup_hints(
+                            pick
+                        )
+                    )
 
-            else:
-                confidence = (
-                    "LOCKED_UNVERIFIED_MATCHUP"
+                    repaired_compatibility = (
+                        matchup_matches_event(
+                            repaired_hints,
+                            event,
+                        )
+                    )
+
+                    if repaired_compatibility is True:
+                        apply_match(
+                            pick,
+                            event,
+                            method=
+                                "EXISTING_EVENT_ID_METADATA_COMPLETION",
+                            confidence=
+                                "LOCKED_SELECTED_TEAM_VALIDATED",
+                        )
+
+                        refreshed += 1
+                        metadata_repairs += 1
+                        existing_locks_validated += 1
+
+                        resolution_methods[
+                            "EXISTING_EVENT_ID_METADATA_COMPLETION"
+                        ] = (
+                            resolution_methods.get(
+                                "EXISTING_EVENT_ID_METADATA_COMPLETION",
+                                0,
+                            )
+                            + 1
+                        )
+
+                        print(
+                            "PREGAME METADATA COMPLETED:",
+                            pick.get("picker"),
+                            "|",
+                            pick.get("selection"),
+                            "| event:",
+                            stored_event_id,
+                        )
+
+                        print(
+                            "  selected team:",
+                            anchor.get(
+                                "selected_team"
+                            ),
+                        )
+
+                        print(
+                            "  validated ESPN team:",
+                            anchor.get(
+                                "matched_team"
+                            ),
+                        )
+
+                        print(
+                            "  completed matchup:",
+                            details.get(
+                                "matchup"
+                            ),
+                        )
+
+                        print(
+                            "  completed opponent:",
+                            details.get(
+                                "opponent"
+                            ),
+                        )
+
+                        continue
+
+                    repair_failures += 1
+
+                    reason = (
+                        "METADATA_COMPLETION_POSTCHECK_FAILED"
+                    )
+
+                    mark_existing_lock_conflict(
+                        pick,
+                        event,
+                        reason,
+                    )
+
+                    review += 1
+                    stored_event_conflicts += 1
+
+                    review_reasons[
+                        reason
+                    ] = (
+                        review_reasons.get(
+                            reason,
+                            0,
+                        )
+                        + 1
+                    )
+
+                    print(
+                        "PREGAME METADATA COMPLETION "
+                        "POSTCHECK FAILED:",
+                        pick.get("picker"),
+                        "|",
+                        pick.get("selection"),
+                        "| event:",
+                        stored_event_id,
+                    )
+
+                    continue
+
+                repair_failures += 1
+
+                reason = (
+                    "SAFE_METADATA_COMPLETION_FAILED"
                 )
 
-                existing_locks_unverifiable += 1
+                mark_existing_lock_conflict(
+                    pick,
+                    event,
+                    reason,
+                )
+
+                review += 1
+                stored_event_conflicts += 1
+
+                review_reasons[
+                    reason
+                ] = (
+                    review_reasons.get(
+                        reason,
+                        0,
+                    )
+                    + 1
+                )
+
+                print(
+                    "PREGAME METADATA COMPLETION FAILED:",
+                    pick.get("picker"),
+                    "|",
+                    pick.get("selection"),
+                    "| event:",
+                    stored_event_id,
+                    "| reason:",
+                    details,
+                )
+
+                continue
+
+            confidence = (
+                "LOCKED_UNVERIFIED_MATCHUP"
+            )
+
+            existing_locks_unverifiable += 1
 
             apply_match(
                 pick,
