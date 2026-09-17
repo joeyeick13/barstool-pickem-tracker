@@ -3596,6 +3596,21 @@ def parse_official_result_cards(
     media_map,
     target_week,
 ):
+    """
+    Extract an official PAT HILL result-card set with a two-pass vision
+    workflow.
+
+    Dense weekly cards can contain dozens of small wager rows. Sending all
+    pages to one vision request can cause a model to correctly notice that
+    something is unreadable/missing and return complete=false. We therefore
+    read every image independently first, then give the model those page
+    transcripts plus every original image for a final reconciliation pass.
+
+    Safety is intentionally unchanged: this function does not decide whether
+    a week is official. validate_official_results() still requires all three
+    pickers and exact agreement with the printed standings before any atomic
+    week replacement can occur.
+    """
     from openai import OpenAI
 
     client = OpenAI()
@@ -3603,19 +3618,12 @@ def parse_official_result_cards(
     image_urls = []
 
     for post in thread_posts:
-        for image_url in (
-            image_urls_for_post(
-                post,
-                media_map,
-            )
+        for image_url in image_urls_for_post(
+            post,
+            media_map,
         ):
-            if (
-                image_url
-                not in image_urls
-            ):
-                image_urls.append(
-                    image_url
-                )
+            if image_url not in image_urls:
+                image_urls.append(image_url)
 
     if not image_urls:
         raise ValueError(
@@ -3623,19 +3631,184 @@ def parse_official_result_cards(
         )
 
     thread_text = "\n\n".join(
-        str(
-            post.get("text")
-            or ""
-        )
+        str(post.get("text") or "")
         for post in thread_posts
     )
+
+    # --------------------------------------------------------
+    # PASS 1 — READ EACH IMAGE INDEPENDENTLY
+    # --------------------------------------------------------
+    # This is deliberately page-local. It prevents one dense image from
+    # being overlooked when six or more result-card pages are supplied in
+    # the same request. The page transcript is evidence for pass 2 only;
+    # it is never written directly to picks.json.
+    # --------------------------------------------------------
+
+    page_reads = []
+
+    for image_index, image_url in enumerate(
+        image_urls,
+        start=1,
+    ):
+        page_prompt = f"""
+You are reading ONE image from the verified official
+@barstoolpickem PAT HILL STANDINGS result-card material.
+
+TARGET WEEK:
+{target_week}
+
+IMAGE NUMBER:
+{image_index} of {len(image_urls)}
+
+Read this single image at maximum care. It may be a full card, a continuation
+page, a standings graphic, or another image attached to the official result
+material.
+
+TASK
+====
+
+Transcribe every visible wager row and every visible result marker from THIS
+IMAGE ONLY.
+
+A GREEN CHECK means WIN.
+A RED X means LOSS.
+A push/tie symbol means PUSH.
+
+Preserve:
+- picker name when visible;
+- exact concise wager/selection;
+- matchup/team/opponent when visible;
+- spread/total/moneyline value;
+- 1Q, 1H and team-total distinctions;
+- whether a wager appears in an Adds section;
+- printed record when visible.
+
+Do not infer rows from another page.
+Do not invent cropped or unreadable text.
+If a row is partly unreadable, include it with readable=false and preserve the
+visible fragments in raw_text.
+
+OUTPUT JSON ONLY
+================
+
+{{
+  "image_index": {image_index},
+  "read_successfully": true,
+  "image_role": "RESULT_CARD|STANDINGS|OTHER",
+  "picker": "Rico Bosco|Big Cat|Stool Presidente|null",
+  "printed_record": {{
+    "wins": 0,
+    "losses": 0,
+    "pushes": 0
+  }},
+  "rows": [
+    {{
+      "raw_text": "visible wager text",
+      "selection": "exact concise wager or null",
+      "matchup": "matchup or null",
+      "team": "team or null",
+      "opponent": "opponent or null",
+      "bet_type": "SPREAD|TOTAL|MONEYLINE|TEAM_TOTAL|FIRST_QUARTER_SPREAD|FIRST_QUARTER_TOTAL|FIRST_QUARTER_MONEYLINE|FIRST_QUARTER_TEAM_TOTAL|FIRST_HALF_SPREAD|FIRST_HALF_TOTAL|FIRST_HALF_MONEYLINE|FIRST_HALF_TEAM_TOTAL|OTHER",
+      "side": "OVER|UNDER|team name|null",
+      "line": 0.0,
+      "result": "WIN|LOSS|PUSH|null",
+      "added_pick": false,
+      "readable": true
+    }}
+  ]
+}}
+
+Use null for a printed_record if it is not visible on this image.
+No markdown. No commentary. JSON only.
+"""
+
+        page_response = client.responses.create(
+            model=OPENAI_MODEL,
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": page_prompt,
+                        },
+                        {
+                            "type": "input_image",
+                            "image_url": image_url,
+                        },
+                    ],
+                }
+            ],
+        )
+
+        page_payload = parse_json_response(
+            page_response.output_text
+        )
+
+        try:
+            returned_index = int(
+                page_payload.get("image_index")
+                or 0
+            )
+        except Exception:
+            returned_index = -1
+
+        if returned_index != image_index:
+            raise ValueError(
+                "Official result page extraction returned "
+                "wrong image index: "
+                f"{returned_index}/{image_index}"
+            )
+
+        if not safe_bool(
+            page_payload.get("read_successfully")
+        ):
+            raise ValueError(
+                "Official result page extraction could not "
+                f"read image {image_index}"
+            )
+
+        page_reads.append(page_payload)
+
+        print(
+            "PAT HILL image read:",
+            f"{image_index}/{len(image_urls)}",
+            "| role:",
+            page_payload.get("image_role"),
+            "| picker:",
+            page_payload.get("picker"),
+            "| rows:",
+            len(page_payload.get("rows") or []),
+        )
+
+    if len(page_reads) != len(image_urls):
+        raise ValueError(
+            "Official result page extraction did not "
+            "read every image"
+        )
+
+    page_transcripts = json.dumps(
+        page_reads,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
+    # --------------------------------------------------------
+    # PASS 2 — RECONCILE ALL PAGE READS AGAINST ALL IMAGES
+    # --------------------------------------------------------
+    # The final model is not allowed to trust the transcripts blindly. It
+    # receives every original image again and must verify/deduplicate the
+    # page-local reads. If anything is genuinely missing or ambiguous it
+    # must still return complete=false, preserving the existing fail-closed
+    # behavior.
+    # --------------------------------------------------------
 
     prompt = f"""
 You are reconciling the OFFICIAL weekly results for the
 Barstool Pick Em college football show.
 
-These images come only from the verified official
-@barstoolpickem PAT HILL STANDINGS thread.
+These images come only from verified official @barstoolpickem PAT HILL
+STANDINGS result-card material.
 
 TARGET WEEK:
 {target_week}
@@ -3646,63 +3819,60 @@ THREAD TEXT:
 NUMBER OF IMAGES:
 {len(image_urls)}
 
+FIRST-PASS PAGE TRANSCRIPTS:
+{page_transcripts}
+
 TASK
 ====
 
-Read every result-card image carefully.
-
-There should be result cards for:
+Re-read ALL original images and use the page transcripts as a second source of
+visual bookkeeping. Produce the complete final result cards for:
 
 - Rico Bosco
 - Big Cat
 - Stool Presidente / Dave Portnoy / El Pres
 
-Each card contains the wagers actually counted by Barstool for
-the completed week.
-
 A GREEN CHECK means WIN.
 A RED X means LOSS.
-A push/tie symbol, if shown, means PUSH.
-
-The official result cards are the final source of truth.
+A push/tie symbol means PUSH.
 
 CRITICAL RULES
 ==============
 
-1. Extract EVERY individual wager shown on each picker's final
-   card.
+1. Extract EVERY individual wager shown on each picker's final card.
 
-2. Cards may span multiple images. Combine the pages belonging
-   to the same picker.
+2. Cards may span multiple images. Combine continuation pages belonging to the
+   same picker.
 
-3. Do not duplicate a wager simply because one card is split
-   across multiple screenshots.
+3. Do not duplicate a wager simply because the same row appears in overlapping
+   screenshots or because it appears in both a page transcript and an image.
 
 4. Preserve the actual wager line.
 
 5. Preserve 1Q, 1H and team-total distinctions.
 
-6. The section labeled "Adds:" contains legitimate additional
-   picks. Return those with added_pick=true.
+6. The section labeled "Adds:" contains legitimate additional picks. Return
+   those with added_pick=true.
 
 7. Do not invent any wager not visible on the cards.
 
 8. Do not use historical tracker data.
 
-9. Read the printed record on each card, such as 13-5-0.
+9. Read the printed record on each complete picker card when shown.
 
-10. Your extracted individual results MUST exactly add up to
-    that printed record.
+10. Your extracted individual WIN/LOSS/PUSH results for each picker MUST exactly
+    add up to that picker's printed record.
 
-11. If any card is missing, cropped so badly that the complete
-    card cannot be read, or the result totals cannot be
-    reconciled, set complete=false.
+11. The page transcripts are aids, not authority. Resolve any disagreement by
+    re-reading the original images.
 
-12. Never guess merely to make the totals work.
+12. If any required picker card is genuinely missing, a required wager row is
+    unreadable after re-reading the image, or result totals cannot be
+    reconciled, set complete=false. Never guess merely to make totals work.
 
-13. Inspect all {len(image_urls)} supplied images. Return
-    images_read={len(image_urls)} only if every image was
-    actually inspected.
+13. Inspect all {len(image_urls)} supplied original images. Return
+    images_read={len(image_urls)} only if every image was actually inspected in
+    this final pass.
 
 OUTPUT JSON ONLY
 ================
@@ -3737,10 +3907,7 @@ OUTPUT JSON ONLY
 }}
 
 Return all three tracked pickers.
-
-No markdown.
-No commentary.
-JSON only.
+No markdown. No commentary. JSON only.
 """
 
     content = [
@@ -3774,17 +3941,13 @@ JSON only.
 
     try:
         images_read = int(
-            payload.get(
-                "images_read"
-            )
+            payload.get("images_read")
             or 0
         )
     except Exception:
         images_read = -1
 
-    if images_read != len(
-        image_urls
-    ):
+    if images_read != len(image_urls):
         raise ValueError(
             "Official result extraction did not "
             "confirm every image was read: "
