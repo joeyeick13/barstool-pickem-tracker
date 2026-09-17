@@ -1,6 +1,6 @@
 {
   "last_x_post_id": "2100357106234798300",
-  "updated_at": "2026-09-17T19:47:54.439724+00:00",
+  "updated_at": "2026-09-17T19:54:31.727247+00:00",
   "backfill_complete": true,
   "reply_backfill_complete": false,
   "reply_recovery_complete": true,
@@ -58,11 +58,12 @@
   "processed_ids_initialized_v2": true,
   "failed_post_ids": [],
   "official_result_threads_processed": [
-    "2097352674010165426"
+    "2097352674010165426",
+    "2099539388594028830"
   ],
-  "last_official_reconciled_week": 1,
-  "last_official_result_post_id": "2097352674010165426",
-  "last_official_reconciled_at": "2026-09-08T20:24:03.929130+00:00",
+  "last_official_reconciled_week": 2,
+  "last_official_result_post_id": "2099539388594028830",
+  "last_official_reconciled_at": "2026-09-17T19:54:31.607943+00:00",
   "processed_ids_initialized_v3": true,
   "ingest_validation_version": 3
 }
