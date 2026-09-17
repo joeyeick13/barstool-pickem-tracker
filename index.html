@@ -115,6 +115,7 @@ h1{margin:5px 0 0;font-size:clamp(29px,7vw,46px);letter-spacing:-.045em;line-hei
 .name{font-size:14px;font-weight:900;letter-spacing:.035em;padding-right:50px}
 .record{font-size:38px;line-height:1;font-weight:950;letter-spacing:-.05em;margin:14px 0 5px}
 .pct{font-size:15px;font-weight:850}
+.thisWeek{margin-top:7px;color:var(--muted);font-size:11px;font-weight:800}
 .section{margin-top:14px;border:1px solid var(--border);background:var(--panel);border-radius:20px;overflow:hidden}
 .sectionInner{padding:17px}
 .sectionHead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px}
@@ -218,7 +219,7 @@ h1{margin:5px 0 0;font-size:clamp(29px,7vw,46px);letter-spacing:-.045em;line-hei
   .card{
     display:grid;
     grid-template-columns:1fr auto;
-    grid-template-areas:"rank rank" "name record" "pct record";
+    grid-template-areas:"rank rank" "name record" "pct record" "thisweek record";
     align-items:center;
     padding:16px;
   }
@@ -226,6 +227,7 @@ h1{margin:5px 0 0;font-size:clamp(29px,7vw,46px);letter-spacing:-.045em;line-hei
   .name{grid-area:name}
   .record{grid-area:record;margin:0;padding-left:12px;font-size:34px}
   .pct{grid-area:pct;margin-top:3px}
+  .thisWeek{grid-area:thisweek;margin-top:5px}
   .leaderTag{top:10px;right:10px}
   .sectionInner{padding:15px}
 }
@@ -384,9 +386,24 @@ function openPicker(picker){
 
 function renderCards(){
   const sorted=sortedCappers();
+  const week=latestWeek();
+
   $("#cards").innerHTML=sorted.map((c,index)=>{
     const rank=index+1;
     const pct=Number(c.win_pct||0);
+    const weekPicks=DATA.picks.filter(
+      p=>+p.week===week&&p.picker===c.picker
+    );
+    const weekStats=statsForPicks(weekPicks);
+
+    const thisWeek=weekStats.finals
+      ? `${recordFromValues(
+          weekStats.wins,
+          weekStats.losses,
+          weekStats.pushes
+        )} (${weekStats.pct.toFixed(1)}%)`
+      : "—";
+
     return `
       <article class="card ${rank===1?"leader":""}" onclick="openPicker('${c.picker}')">
         ${rank===1?`<div class="leaderTag">★ LEADER</div>`:""}
@@ -394,6 +411,7 @@ function renderCards(){
         <div class="name">${c.picker.toUpperCase()}</div>
         <div class="record">${record(c)}</div>
         <div class="pct">${pct.toFixed(1)}% overall win rate</div>
+        <div class="thisWeek">This week: ${thisWeek}</div>
       </article>
     `;
   }).join("");
@@ -465,6 +483,8 @@ function renderRace(){
     html+=`<text class="axistext" x="${xForIndex(i)}" y="${height-15}" text-anchor="middle">W${week}</text>`;
   });
 
+  const series=[];
+
   PICKERS.forEach(picker=>{
     const history=DATA.win_pct_history[picker]||[];
     const points=weeks.map((week,i)=>{
@@ -497,11 +517,70 @@ function renderRace(){
     }
 
     const last=points.at(-1);
-    if(!last) return;
+    if(last){
+      series.push({picker,color,last});
+    }
+  });
 
-    html+=`<circle cx="${last.x}" cy="${last.y}" r="19" fill="${color}"></circle>`;
-    html+=`<text class="avatarText" x="${last.x}" y="${last.y+1}">${INITIALS[picker]}</text>`;
-    html+=`<text class="endpct" x="${last.x+28}" y="${last.y+4}">${last.pct.toFixed(1)}%</text>`;
+  /*
+    Endpoint collision handling:
+    preserve each line's true endpoint, but separate only the visual
+    endpoint badges/labels when they would overlap.
+  */
+  const endpoints=series
+    .map(item=>({
+      ...item,
+      displayY:item.last.y
+    }))
+    .sort((a,b)=>a.last.y-b.last.y);
+
+  const minGap=27;
+  const minDisplayY=top+18;
+  const maxDisplayY=top+chartH-18;
+
+  for(let i=1;i<endpoints.length;i++){
+    if(endpoints[i].displayY-endpoints[i-1].displayY<minGap){
+      endpoints[i].displayY=endpoints[i-1].displayY+minGap;
+    }
+  }
+
+  if(endpoints.length){
+    const overflow=endpoints.at(-1).displayY-maxDisplayY;
+    if(overflow>0){
+      endpoints.forEach(item=>item.displayY-=overflow);
+    }
+
+    const underflow=minDisplayY-endpoints[0].displayY;
+    if(underflow>0){
+      endpoints.forEach(item=>item.displayY+=underflow);
+    }
+
+    for(let i=endpoints.length-2;i>=0;i--){
+      if(endpoints[i+1].displayY-endpoints[i].displayY<minGap){
+        endpoints[i].displayY=endpoints[i+1].displayY-minGap;
+      }
+    }
+  }
+
+  endpoints.forEach(({picker,color,last,displayY})=>{
+    if(Math.abs(displayY-last.y)>1){
+      html+=`
+        <line
+          x1="${last.x}"
+          y1="${last.y}"
+          x2="${last.x}"
+          y2="${displayY}"
+          stroke="${color}"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          opacity=".7">
+        </line>
+      `;
+    }
+
+    html+=`<circle cx="${last.x}" cy="${displayY}" r="17" fill="${color}"></circle>`;
+    html+=`<text class="avatarText" x="${last.x}" y="${displayY+1}">${INITIALS[picker]}</text>`;
+    html+=`<text class="endpct" x="${last.x+25}" y="${displayY+4}">${last.pct.toFixed(1)}%</text>`;
   });
 
   svg.innerHTML=html;
