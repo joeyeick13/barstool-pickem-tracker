@@ -68,6 +68,8 @@ INITIAL_BACKFILL_PAGES = 3
 STANDINGS_LOOKBACK_DAYS = 14
 STANDINGS_MAX_PAGES = 6
 PAT_HILL_THREAD_MAX_PAGES = 10
+PAT_HILL_ADJACENT_HOURS_BEFORE = 6
+PAT_HILL_ADJACENT_HOURS_AFTER = 18
 
 PROCESSED_IDS_FLAG = (
     "processed_ids_initialized_v3"
@@ -654,6 +656,47 @@ def merge_post_collections(
     return posts, media_map
 
 
+def parse_x_datetime(value):
+    """Parse one X created_at value as an aware UTC datetime."""
+
+    if not value:
+        return None
+
+    try:
+        parsed = datetime.fromisoformat(
+            str(value).replace(
+                "Z",
+                "+00:00",
+            )
+        )
+    except Exception:
+        return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(
+            tzinfo=timezone.utc
+        )
+
+    return parsed.astimezone(
+        timezone.utc
+    )
+
+
+def post_has_media(post):
+    return bool(
+        (
+            post.get(
+                "attachments",
+                {}
+            )
+            or {}
+        ).get(
+            "media_keys",
+            []
+        )
+    )
+
+
 def collect_pat_hill_thread(
     *,
     root_post,
@@ -663,17 +706,23 @@ def collect_pat_hill_thread(
     standings_start_time,
 ):
     """
-    Build the most complete official PAT HILL result thread available.
+    Build the most complete official PAT HILL result-card source set.
 
-    Collection is deliberately stronger than validation:
-    1. keep every matching post already found by standings discovery;
-    2. query X recent search directly for the conversation;
-    3. independently perform a deeper official-account timeline pass;
-    4. merge/dedupe all sources by post id and preserve every media map.
+    PAT HILL result cards are usually replies in the standings
+    conversation, but X can expose an authored reply/subtweet with a
+    different conversation_id. Therefore conversation_id is a strong
+    signal, not a hard boundary.
 
-    No result is accepted here. The existing result-card validator remains
-    the authority on whether the collected source is complete enough to
-    replace a week.
+    Collection layers:
+    1. matching posts already found by standings discovery;
+    2. X recent-search posts for the standings conversation;
+    3. a deeper official-account timeline pass;
+    4. official MEDIA posts in a narrow time window around the standings
+       root, even when X assigned a different conversation_id.
+
+    This function never decides that a week is valid. The existing strict
+    result-card extraction and printed-record validation remain the only
+    authority allowed to replace a week.
     """
 
     root_id = str(
@@ -684,6 +733,10 @@ def collect_pat_hill_thread(
     conversation_id = str(
         root_post.get("conversation_id")
         or root_id
+    )
+
+    root_created_at = parse_x_datetime(
+        root_post.get("created_at")
     )
 
     base_posts = [
@@ -772,6 +825,87 @@ def collect_pat_hill_thread(
             len(deep_thread_posts),
         )
 
+        # ----------------------------------------------------
+        # X conversation IDs are not a reliable hard boundary
+        # for every authored reply/subtweet. Result-card posts
+        # are image based, so collect nearby OFFICIAL media
+        # posts as candidate source material too.
+        # ----------------------------------------------------
+
+        adjacent_media_posts = []
+
+        if root_created_at is not None:
+            window_start = (
+                root_created_at
+                - timedelta(
+                    hours=
+                        PAT_HILL_ADJACENT_HOURS_BEFORE
+                )
+            )
+
+            window_end = (
+                root_created_at
+                + timedelta(
+                    hours=
+                        PAT_HILL_ADJACENT_HOURS_AFTER
+                )
+            )
+
+            for post in deep_posts:
+                if (
+                    str(
+                        post.get("author_id")
+                        or ""
+                    )
+                    != str(official_user_id)
+                ):
+                    continue
+
+                if not post_has_media(post):
+                    continue
+
+                post_created_at = (
+                    parse_x_datetime(
+                        post.get("created_at")
+                    )
+                )
+
+                if post_created_at is None:
+                    continue
+
+                if not (
+                    window_start
+                    <= post_created_at
+                    <= window_end
+                ):
+                    continue
+
+                adjacent_media_posts.append(
+                    post
+                )
+
+        collections.append(
+            (adjacent_media_posts, deep_media)
+        )
+
+        cross_conversation_count = sum(
+            1
+            for post in adjacent_media_posts
+            if str(
+                post.get("conversation_id")
+                or post.get("id")
+                or ""
+            )
+            != conversation_id
+        )
+
+        print(
+            "PAT HILL adjacent official media posts:",
+            len(adjacent_media_posts),
+            "| cross-conversation:",
+            cross_conversation_count,
+        )
+
     except Exception as exc:
         print(
             "PAT HILL deep timeline fallback failed:",
@@ -797,6 +931,21 @@ def collect_pat_hill_thread(
                     post.get("id")
                 ),
         )
+
+    print(
+        "PAT HILL merged candidate source posts:",
+        len(thread_posts),
+        "| images:",
+        sum(
+            len(
+                image_urls_for_post(
+                    post,
+                    media_map,
+                )
+            )
+            for post in thread_posts
+        ),
+    )
 
     return thread_posts, media_map
 
