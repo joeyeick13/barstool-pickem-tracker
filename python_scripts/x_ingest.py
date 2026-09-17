@@ -2161,12 +2161,8 @@ def stored_pick_from_ai(
             3,
     }
 
-    pick["id"] = stable_id(
-        repr(
-            canonical_pick_key(
-                pick
-            )
-        )
+    pick["id"] = deterministic_pick_id(
+        pick
     )
 
     return pick
@@ -2175,6 +2171,105 @@ def stored_pick_from_ai(
 # ============================================================
 # PICK QUALITY / PERMANENT CANONICAL DEDUPE
 # ============================================================
+
+def deterministic_pick_id(pick):
+    """
+    Build one stable wager ID from the same canonical wager identity
+    used by permanent deduplication.
+
+    The ID deliberately does not depend on mutable enrichment fields
+    such as ESPN event_id, status, result, final_score, or grading
+    timestamps. The same canonical wager therefore receives the same
+    ID on every run.
+
+    Official PAT HILL rows keep their existing official IDs because
+    those rows represent the authoritative finalized card.
+    """
+    return stable_id(
+        repr(
+            canonical_pick_key(
+                pick
+            )
+        )
+    )
+
+
+def ensure_pick_ids(picks):
+    """
+    Self-heal missing IDs on valid stored wagers and verify that no
+    two distinct canonical wagers share one stored ID.
+
+    Existing IDs are preserved. Only rows with a missing/blank ID are
+    assigned a deterministic ID.
+
+    This is intentionally generic: there is no week-, picker-, team-,
+    post-, selection-, or event-specific repair knowledge here.
+    """
+    repaired = 0
+    owners = {}
+
+    for index, pick in enumerate(
+        picks
+    ):
+        pick_id = clean_text(
+            pick.get("id")
+        )
+
+        if not pick_id:
+            pick_id = deterministic_pick_id(
+                pick
+            )
+
+            pick["id"] = pick_id
+            repaired += 1
+
+            print(
+                "MISSING PICK ID SELF-HEALED:",
+                pick.get("picker"),
+                "| Week",
+                pick.get("week"),
+                "|",
+                pick.get("selection"),
+                "| id:",
+                pick_id,
+            )
+
+        canonical_key = (
+            canonical_pick_key(
+                pick
+            )
+        )
+
+        prior = owners.get(
+            pick_id
+        )
+
+        if prior is None:
+            owners[pick_id] = (
+                index,
+                canonical_key,
+            )
+            continue
+
+        prior_index, prior_key = prior
+
+        if prior_key != canonical_key:
+            raise RuntimeError(
+                "Stored pick ID collision: "
+                f"id={pick_id} belongs to two "
+                "different canonical wagers "
+                f"(rows {prior_index + 1} "
+                f"and {index + 1})."
+            )
+
+    if repaired:
+        print(
+            "Missing wager IDs self-healed:",
+            repaired,
+        )
+
+    return picks
+
 
 def pick_quality(pick):
     score = 0
@@ -4637,7 +4732,22 @@ def ingest():
     )
 
     # --------------------------------------------------------
-    # 10. Save atomically at end of successful ingest run.
+    # 10. Permanent deterministic wager-ID integrity.
+    #
+    # Existing IDs are preserved. Any valid historical/recovered
+    # wager that lacks an ID receives the same deterministic ID it
+    # would receive if it were ingested today.
+    #
+    # ID collisions across different canonical wagers fail closed
+    # before data is saved.
+    # --------------------------------------------------------
+
+    existing = ensure_pick_ids(
+        existing
+    )
+
+    # --------------------------------------------------------
+    # 11. Save atomically at end of successful ingest run.
     # --------------------------------------------------------
 
     state[
