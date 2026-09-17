@@ -65,8 +65,8 @@ MAX_PARENT_DEPTH = 3
 INITIAL_BACKFILL_DAYS = 10
 INITIAL_BACKFILL_PAGES = 3
 
-STANDINGS_LOOKBACK_DAYS = 5
-STANDINGS_MAX_PAGES = 4
+STANDINGS_LOOKBACK_DAYS = 14
+STANDINGS_MAX_PAGES = 6
 
 PROCESSED_IDS_FLAG = (
     "processed_ids_initialized_v3"
@@ -314,14 +314,34 @@ def standings_target_week(
     root_post
 ):
     """
-    Tuesday standings settle the week that just finished.
+    Resolve the completed week represented by a PAT HILL post.
 
-    Example:
-        Tuesday during Week 2 -> Week 1 results.
+    Prefer the explicit "Week N records" label printed in the
+    standings post. Fall back to the posting date only when that
+    explicit marker is absent.
     """
 
+    text = str(
+        root_post.get("text")
+        or ""
+    )
+
+    explicit = re.search(
+        r"\bweek\s*#?\s*(\d{1,2})\s+records?\b",
+        text,
+        flags=re.I,
+    )
+
+    if explicit:
+        try:
+            return int(
+                explicit.group(1)
+            )
+        except Exception:
+            pass
+
     current_week = infer_week(
-        root_post.get("text"),
+        text,
         root_post.get("created_at"),
     )
 
@@ -785,14 +805,58 @@ def is_standings_context(
     )
 
 
-def should_scan_standings():
+def completed_week_now():
+    """Return the latest week that should have official results."""
+
     now_pt = datetime.now(
         PACIFIC
     )
 
+    current_week = infer_week_from_date(
+        now_pt.isoformat()
+    )
+
+    if not current_week:
+        return 0
+
+    return max(
+        0,
+        int(current_week) - 1,
+    )
+
+
+def should_scan_standings(state):
+    """
+    Scan on every Tuesday, and on any later run while official
+    reconciliation is behind the latest completed week.
+
+    This makes PAT HILL discovery independent of the normal X cursor
+    and self-heals a missed Monday/Tuesday standings post without a
+    manual state reset.
+    """
+
+    now_pt = datetime.now(
+        PACIFIC
+    )
+
+    try:
+        last_official = int(
+            state.get(
+                "last_official_reconciled_week"
+            )
+            or 0
+        )
+    except Exception:
+        last_official = 0
+
+    expected_completed = (
+        completed_week_now()
+    )
+
     return (
-        now_pt.weekday()
-        == 1
+        now_pt.weekday() == 1
+        or last_official
+        < expected_completed
     )
 
 
@@ -800,8 +864,51 @@ def should_scan_standings():
 # PRINTED STANDINGS PARSER
 # ============================================================
 
-def parse_printed_standings(text):
-    output = {}
+def parse_printed_standings(
+    text,
+    target_week=None,
+):
+    """
+    Parse the WEEKLY records from a PAT HILL standings post.
+
+    PAT HILL posts can contain season standings first and a separate
+    "Week N records" section later. The weekly section is the only
+    valid reconciliation target for replacing one week's card.
+    """
+
+    source = str(
+        text or ""
+    )
+
+    weekly_text = source
+
+    if target_week is not None:
+        section = re.search(
+            (
+                rf"\bweek\s*#?\s*{int(target_week)}"
+                rf"\s+records?\s*:?\s*(.*)$"
+            ),
+            source,
+            flags=re.I | re.S,
+        )
+
+        if section:
+            weekly_text = (
+                section.group(1)
+            )
+        else:
+            # Fail closed when the post contains a weekly-records
+            # section, but not for the target week we intend to
+            # replace. This prevents season standings from being
+            # mistaken for one week's record.
+            any_week_section = re.search(
+                r"\bweek\s*#?\s*\d{1,2}\s+records?\b",
+                source,
+                flags=re.I,
+            )
+
+            if any_week_section:
+                return {}
 
     patterns = {
         "Rico Bosco": [
@@ -818,9 +925,8 @@ def parse_printed_standings(text):
         ],
     }
 
-    lowered = str(
-        text or ""
-    ).lower()
+    lowered = weekly_text.lower()
+    output = {}
 
     for picker, picker_patterns in (
         patterns.items()
@@ -836,17 +942,16 @@ def parse_printed_standings(text):
                 continue
 
             output[picker] = {
-                "wins":
-                    int(match.group(1)),
-
-                "losses":
-                    int(match.group(2)),
-
-                "pushes":
-                    int(
-                        match.group(3)
-                        or 0
-                    ),
+                "wins": int(
+                    match.group(1)
+                ),
+                "losses": int(
+                    match.group(2)
+                ),
+                "pushes": int(
+                    match.group(3)
+                    or 0
+                ),
             }
 
             break
@@ -4065,7 +4170,7 @@ def reconcile_pat_hill_standings(
             post_numeric_sort(
                 post.get("id")
             ),
-        reverse=True,
+        reverse=False,
     )
 
     processed = set(
@@ -4154,7 +4259,8 @@ def reconcile_pat_hill_standings(
 
         printed_standings = (
             parse_printed_standings(
-                root_post.get("text")
+                root_post.get("text"),
+                target_week=target_week,
             )
         )
 
@@ -4286,7 +4392,7 @@ def reconcile_pat_hill_standings(
 
             print(
                 "Thread will be retried on "
-                "the next Tuesday run."
+                "the next eligible pipeline run."
             )
 
             continue
@@ -4387,9 +4493,22 @@ def reconcile_pat_hill_standings(
             key=post_numeric_sort,
         )[-100:]
 
+        try:
+            prior_official_week = int(
+                state.get(
+                    "last_official_reconciled_week"
+                )
+                or 0
+            )
+        except Exception:
+            prior_official_week = 0
+
         state[
             "last_official_reconciled_week"
-        ] = int(target_week)
+        ] = max(
+            prior_official_week,
+            int(target_week),
+        )
 
         state[
             "last_official_result_post_id"
@@ -4705,10 +4824,12 @@ def ingest():
             ] = newest_id
 
     # --------------------------------------------------------
-    # 8. Tuesday official result reconciliation.
+    # 8. Official result reconciliation + missed-week self-healing.
     # --------------------------------------------------------
 
-    if should_scan_standings():
+    if should_scan_standings(
+        state
+    ):
         existing = (
             reconcile_pat_hill_standings(
                 existing,
@@ -4719,8 +4840,8 @@ def ingest():
 
     else:
         print(
-            "Not Tuesday Pacific — "
-            "skipping PAT HILL reconciliation scan."
+            "PAT HILL reconciliation is current — "
+            "no standings scan needed on this run."
         )
 
     # --------------------------------------------------------
