@@ -13,6 +13,7 @@ from html import unescape
 #   - text normalization
 #   - college-football team aliases
 #   - ESPN naming variants
+#   - ESPN display names with mascots
 #   - matchup parsing
 #   - market normalization
 #   - selected-team identity
@@ -72,30 +73,12 @@ def safe_float(value):
 
     try:
         return float(value)
-
     except Exception:
         return None
 
 
 # ============================================================
 # TEAM NAME NORMALIZATION
-# ============================================================
-#
-# ESPN commonly shortens:
-#
-#   State     -> St
-#   Northern  -> N
-#   Southern  -> S
-#   Eastern   -> E
-#   Western   -> W
-#   Central   -> C
-#
-# We normalize those transformations generically rather than
-# adding a new one-off alias every week.
-#
-# "St" is expanded to "state" only when it appears as the final
-# token of a school name. This avoids treating every occurrence
-# of "St" as "State".
 # ============================================================
 
 DIRECTIONAL_WORDS = {
@@ -119,15 +102,12 @@ def normalized_team_text(value):
         return ""
 
     if (
-        tokens[0]
-        in DIRECTIONAL_WORDS
+        tokens[0] in DIRECTIONAL_WORDS
         and len(tokens) >= 2
     ):
-        tokens[0] = (
-            DIRECTIONAL_WORDS[
-                tokens[0]
-            ]
-        )
+        tokens[0] = DIRECTIONAL_WORDS[
+            tokens[0]
+        ]
 
     if (
         len(tokens) >= 2
@@ -144,12 +124,8 @@ def team_name_variants(value):
 
     This does NOT guess between unrelated schools.
     """
-
     base = norm(value)
-
-    normalized = normalized_team_text(
-        value
-    )
+    normalized = normalized_team_text(value)
 
     variants = {
         base,
@@ -160,8 +136,7 @@ def team_name_variants(value):
 
     if tokens:
         if (
-            tokens[0]
-            in {
+            tokens[0] in {
                 "northern",
                 "southern",
                 "eastern",
@@ -191,8 +166,7 @@ def team_name_variants(value):
 
         if (
             len(tokens) >= 2
-            and tokens[-1]
-            == "state"
+            and tokens[-1] == "state"
         ):
             variants.add(
                 " ".join(
@@ -213,28 +187,11 @@ def team_name_variants(value):
 # ============================================================
 # TEAM ALIASES
 # ============================================================
-#
-# Stable canonical names.
-#
-# Includes common:
-#   - Barstool abbreviations
-#   - ESPN abbreviations
-#   - FBS names
-#   - recurring FCS opponents
-#
-# Generic ESPN shortening is handled separately above.
-# ============================================================
 
 ALIASES = {
-    "air force": {
-        "air force", "afa",
-    },
-    "akron": {
-        "akron", "akr",
-    },
-    "alabama": {
-        "alabama", "bama", "ala",
-    },
+    "air force": {"air force", "afa"},
+    "akron": {"akron", "akr"},
+    "alabama": {"alabama", "bama", "ala"},
     "appalachian state": {
         "appalachian state",
         "appalachian st",
@@ -252,36 +209,29 @@ ALIASES = {
         "arizona st",
         "asu",
     },
-    "arkansas": {
-        "arkansas", "ark",
-    },
+    "arkansas": {"arkansas", "ark"},
     "arkansas state": {
         "arkansas state",
         "arkansas st",
         "ark st",
         "arst",
     },
-    "army": {
-        "army",
-    },
-    "auburn": {
-        "auburn", "aub",
-    },
+    "army": {"army"},
+    "auburn": {"auburn", "aub"},
     "ball state": {
         "ball state",
         "ball st",
         "ball",
     },
-    "baylor": {
-        "baylor", "bay",
-    },
+    "baylor": {"baylor", "bay"},
     "boise state": {
         "boise state",
         "boise st",
         "boise",
     },
     "boston college": {
-        "boston college", "bc",
+        "boston college",
+        "bc",
     },
     "bowling green": {
         "bowling green",
@@ -290,14 +240,17 @@ ALIASES = {
         "bgsu",
     },
     "buffalo": {
-        "buffalo", "buff", "ub",
+        "buffalo",
+        "buff",
+        "ub",
     },
     "byu": {
         "byu",
         "brigham young",
     },
     "california": {
-        "california", "cal",
+        "california",
+        "cal",
     },
     "central michigan": {
         "central michigan",
@@ -305,7 +258,8 @@ ALIASES = {
         "cmu",
     },
     "charlotte": {
-        "charlotte", "char",
+        "charlotte",
+        "char",
     },
     "cincinnati": {
         "cincinnati",
@@ -313,7 +267,8 @@ ALIASES = {
         "cin",
     },
     "clemson": {
-        "clemson", "clem",
+        "clemson",
+        "clem",
     },
     "coastal carolina": {
         "coastal carolina",
@@ -321,7 +276,9 @@ ALIASES = {
         "ccu",
     },
     "colorado": {
-        "colorado", "colo", "cu",
+        "colorado",
+        "colo",
+        "cu",
     },
     "colorado state": {
         "colorado state",
@@ -336,13 +293,13 @@ ALIASES = {
         "conn",
     },
     "delaware": {
-        "delaware", "del",
+        "delaware",
+        "del",
     },
-    "duke": {
-        "duke",
-    },
+    "duke": {"duke"},
     "east carolina": {
-        "east carolina", "ecu",
+        "east carolina",
+        "ecu",
     },
     "eastern illinois": {
         "eastern illinois",
@@ -361,10 +318,12 @@ ALIASES = {
         "florida intl",
     },
     "florida": {
-        "florida", "uf",
+        "florida",
+        "uf",
     },
     "florida atlantic": {
-        "florida atlantic", "fau",
+        "florida atlantic",
+        "fau",
     },
     "florida state": {
         "florida state",
@@ -377,7 +336,8 @@ ALIASES = {
         "fresno",
     },
     "georgia": {
-        "georgia", "uga",
+        "georgia",
+        "uga",
     },
     "georgia southern": {
         "georgia southern",
@@ -408,17 +368,19 @@ ALIASES = {
         "haw",
     },
     "houston": {
-        "houston", "hou",
+        "houston",
+        "hou",
     },
     "illinois": {
-        "illinois", "ill",
+        "illinois",
+        "ill",
     },
     "indiana": {
-        "indiana", "ind", "iu",
+        "indiana",
+        "ind",
+        "iu",
     },
-    "iowa": {
-        "iowa",
-    },
+    "iowa": {"iowa"},
     "iowa state": {
         "iowa state",
         "iowa st",
@@ -432,10 +394,12 @@ ALIASES = {
         "jville",
     },
     "james madison": {
-        "james madison", "jmu",
+        "james madison",
+        "jmu",
     },
     "kansas": {
-        "kansas", "ku",
+        "kansas",
+        "ku",
     },
     "kansas state": {
         "kansas state",
@@ -456,16 +420,20 @@ ALIASES = {
         "kent",
     },
     "kentucky": {
-        "kentucky", "uk",
+        "kentucky",
+        "uk",
     },
     "lafayette": {
-        "lafayette", "laf",
+        "lafayette",
+        "laf",
     },
     "liberty": {
-        "liberty", "lib",
+        "liberty",
+        "lib",
     },
     "liu": {
-        "liu", "long island",
+        "liu",
+        "long island",
     },
     "louisiana": {
         "louisiana",
@@ -479,7 +447,8 @@ ALIASES = {
         "latech",
     },
     "louisville": {
-        "louisville", "ul",
+        "louisville",
+        "ul",
     },
     "lsu": {
         "lsu",
@@ -487,13 +456,16 @@ ALIASES = {
         "louisiana st",
     },
     "marshall": {
-        "marshall", "marsh",
+        "marshall",
+        "marsh",
     },
     "maryland": {
-        "maryland", "md",
+        "maryland",
+        "md",
     },
     "memphis": {
-        "memphis", "mem",
+        "memphis",
+        "mem",
     },
     "miami": {
         "miami",
@@ -507,7 +479,8 @@ ALIASES = {
         "m-oh",
     },
     "michigan": {
-        "michigan", "mich",
+        "michigan",
+        "mich",
     },
     "michigan state": {
         "michigan state",
@@ -521,7 +494,8 @@ ALIASES = {
         "mtsu",
     },
     "minnesota": {
-        "minnesota", "minn",
+        "minnesota",
+        "minn",
     },
     "mississippi state": {
         "mississippi state",
@@ -542,9 +516,7 @@ ALIASES = {
         "mo st",
         "most",
     },
-    "navy": {
-        "navy",
-    },
+    "navy": {"navy"},
     "nc state": {
         "nc state",
         "nc st",
@@ -553,13 +525,16 @@ ALIASES = {
         "north carolina st",
     },
     "nebraska": {
-        "nebraska", "neb",
+        "nebraska",
+        "neb",
     },
     "nevada": {
-        "nevada", "nev",
+        "nevada",
+        "nev",
     },
     "new mexico": {
-        "new mexico", "unm",
+        "new mexico",
+        "unm",
     },
     "new mexico state": {
         "new mexico state",
@@ -572,10 +547,12 @@ ALIASES = {
         "norfolk",
     },
     "north carolina": {
-        "north carolina", "unc",
+        "north carolina",
+        "unc",
     },
     "north texas": {
-        "north texas", "unt",
+        "north texas",
+        "unt",
     },
     "northern illinois": {
         "northern illinois",
@@ -584,20 +561,21 @@ ALIASES = {
         "niu",
     },
     "northwestern": {
-        "northwestern", "nw",
+        "northwestern",
+        "nw",
     },
     "notre dame": {
-        "notre dame", "nd",
+        "notre dame",
+        "nd",
     },
-    "ohio": {
-        "ohio",
-    },
+    "ohio": {"ohio"},
     "ohio state": {
         "ohio state",
         "ohio st",
     },
     "oklahoma": {
-        "oklahoma", "ou",
+        "oklahoma",
+        "ou",
     },
     "oklahoma state": {
         "oklahoma state",
@@ -606,13 +584,16 @@ ALIASES = {
         "ok st",
     },
     "old dominion": {
-        "old dominion", "odu",
+        "old dominion",
+        "odu",
     },
     "ole miss": {
-        "ole miss", "mississippi",
+        "ole miss",
+        "mississippi",
     },
     "oregon": {
-        "oregon", "ore",
+        "oregon",
+        "ore",
     },
     "oregon state": {
         "oregon state",
@@ -621,7 +602,8 @@ ALIASES = {
         "ore st",
     },
     "pittsburgh": {
-        "pittsburgh", "pitt",
+        "pittsburgh",
+        "pitt",
     },
     "prairie view": {
         "prairie view",
@@ -630,11 +612,10 @@ ALIASES = {
         "pvamu",
     },
     "purdue": {
-        "purdue", "pur",
+        "purdue",
+        "pur",
     },
-    "rice": {
-        "rice",
-    },
+    "rice": {"rice"},
     "rutgers": {
         "rutgers",
         "rutg",
@@ -663,7 +644,8 @@ ALIASES = {
         "sjsu",
     },
     "south alabama": {
-        "south alabama", "usa",
+        "south alabama",
+        "usa",
     },
     "south carolina": {
         "south carolina",
@@ -672,7 +654,8 @@ ALIASES = {
         "scar",
     },
     "south florida": {
-        "south florida", "usf",
+        "south florida",
+        "usf",
     },
     "southern miss": {
         "southern miss",
@@ -684,23 +667,28 @@ ALIASES = {
         "southern methodist",
     },
     "stanford": {
-        "stanford", "stan",
+        "stanford",
+        "stan",
     },
     "syracuse": {
-        "syracuse", "cuse",
+        "syracuse",
+        "cuse",
     },
     "tcu": {
         "tcu",
         "texas christian",
     },
     "temple": {
-        "temple", "tem",
+        "temple",
+        "tem",
     },
     "tennessee": {
-        "tennessee", "tenn",
+        "tennessee",
+        "tenn",
     },
     "texas": {
-        "texas", "tex",
+        "texas",
+        "tex",
     },
     "texas a&m": {
         "texas a&m",
@@ -724,17 +712,12 @@ ALIASES = {
         "ttech",
     },
     "toledo": {
-        "toledo", "tol",
+        "toledo",
+        "tol",
     },
-    "troy": {
-        "troy",
-    },
-    "tulane": {
-        "tulane",
-    },
-    "tulsa": {
-        "tulsa",
-    },
+    "troy": {"troy"},
+    "tulane": {"tulane"},
+    "tulsa": {"tulsa"},
     "uab": {
         "uab",
         "alabama birmingham",
@@ -743,24 +726,18 @@ ALIASES = {
         "ucf",
         "central florida",
     },
-    "ucla": {
-        "ucla",
-    },
+    "ucla": {"ucla"},
     "umass": {
         "umass",
         "massachusetts",
     },
-    "unlv": {
-        "unlv",
-    },
+    "unlv": {"unlv"},
     "usc": {
         "usc",
         "southern california",
         "southern cal",
     },
-    "utah": {
-        "utah",
-    },
+    "utah": {"utah"},
     "utah state": {
         "utah state",
         "utah st",
@@ -780,10 +757,12 @@ ALIASES = {
         "texas san antonio",
     },
     "vanderbilt": {
-        "vanderbilt", "vandy",
+        "vanderbilt",
+        "vandy",
     },
     "virginia": {
-        "virginia", "uva",
+        "virginia",
+        "uva",
     },
     "virginia tech": {
         "virginia tech",
@@ -794,10 +773,13 @@ ALIASES = {
         "vt and ch",
     },
     "wake forest": {
-        "wake forest", "wake",
+        "wake forest",
+        "wake",
     },
     "washington": {
-        "washington", "wash", "uw",
+        "washington",
+        "wash",
+        "uw",
     },
     "washington state": {
         "washington state",
@@ -807,10 +789,12 @@ ALIASES = {
         "wsu",
     },
     "west virginia": {
-        "west virginia", "wvu",
+        "west virginia",
+        "wvu",
     },
     "western kentucky": {
-        "western kentucky", "wku",
+        "western kentucky",
+        "wku",
     },
     "western michigan": {
         "western michigan",
@@ -824,7 +808,8 @@ ALIASES = {
         "wis",
     },
     "wyoming": {
-        "wyoming", "wyo",
+        "wyoming",
+        "wyo",
     },
 }
 
@@ -845,9 +830,7 @@ AMBIGUOUS_ALIASES = {
 def _build_alias_index():
     index = {}
 
-    for canonical, aliases in (
-        ALIASES.items()
-    ):
+    for canonical, aliases in ALIASES.items():
         values = {
             canonical,
             *aliases,
@@ -857,9 +840,7 @@ def _build_alias_index():
 
         for value in values:
             expanded.update(
-                team_name_variants(
-                    value
-                )
+                team_name_variants(value)
             )
 
         for value in expanded:
@@ -868,27 +849,19 @@ def _build_alias_index():
             if not key:
                 continue
 
-            existing = index.get(
-                key
-            )
+            existing = index.get(key)
 
             if (
                 existing
                 and existing != canonical
             ):
-                # Never silently allow two
-                # schools to own one alias.
+                # Never silently allow two schools to own one alias.
                 index[key] = None
-
             else:
                 index[key] = canonical
 
-    for value in (
-        AMBIGUOUS_ALIASES
-    ):
-        index[
-            norm(value)
-        ] = None
+    for value in AMBIGUOUS_ALIASES:
+        index[norm(value)] = None
 
     return index
 
@@ -900,46 +873,140 @@ ALIAS_INDEX = _build_alias_index()
 # TEAM IDENTITY
 # ============================================================
 
+def _canonical_from_known_prefix(value):
+    """
+    Resolve ESPN display names that append a mascot to a school.
+
+    Examples:
+        Arizona State Sun Devils -> arizona state
+        Army Black Knights       -> army
+        Oregon Ducks             -> oregon
+        Clemson Tigers           -> clemson
+
+    Permanent safety rules:
+
+      1. Only a known alias can establish the school identity.
+      2. The longest matching alias wins.
+      3. If equally specific aliases point to different schools,
+         resolution fails closed.
+      4. Explicitly ambiguous aliases such as OSU never qualify.
+      5. No mascot dictionary is required.
+      6. No week, event, or matchup-specific knowledge is used.
+    """
+    normalized = normalized_team_text(value)
+
+    if not normalized:
+        return None
+
+    matches = []
+
+    for alias, canonical in ALIAS_INDEX.items():
+        if not alias or not canonical:
+            continue
+
+        if norm(alias) in {
+            norm(item)
+            for item in AMBIGUOUS_ALIASES
+        }:
+            continue
+
+        alias_normalized = normalized_team_text(alias)
+
+        if not alias_normalized:
+            continue
+
+        if normalized.startswith(
+            alias_normalized + " "
+        ):
+            matches.append(
+                (
+                    len(
+                        alias_normalized.split()
+                    ),
+                    len(alias_normalized),
+                    canonical,
+                )
+            )
+
+    if not matches:
+        return None
+
+    # Prefer the most specific school name.
+    #
+    # Example:
+    #   "Miami Ohio RedHawks"
+    #
+    # can begin with both "Miami" and "Miami Ohio".
+    # "Miami Ohio" must win.
+    best_token_count = max(
+        item[0]
+        for item in matches
+    )
+
+    token_best = [
+        item
+        for item in matches
+        if item[0] == best_token_count
+    ]
+
+    best_length = max(
+        item[1]
+        for item in token_best
+    )
+
+    finalists = {
+        item[2]
+        for item in token_best
+        if item[1] == best_length
+    }
+
+    if len(finalists) != 1:
+        return None
+
+    return next(
+        iter(finalists)
+    )
+
+
 def canonical_team(value):
     """
     Return a stable canonical team identity.
 
+    Resolution order:
+
+      1. exact known alias
+      2. generic ESPN school-name prefix + appended mascot
+      3. normalized unknown name
+
     Explicitly ambiguous aliases return None.
 
-    Unknown names remain normalized so ESPN exact-name matching
-    can still work without guessing.
+    The ESPN prefix fallback is generic and permanent. It does not
+    contain weekly teams, mascot mappings, event IDs, or matchup
+    corrections.
     """
-
     normalized = norm(value)
 
     if not normalized:
         return None
 
-    if normalized in {
+    ambiguous = {
         norm(item)
-        for item
-        in AMBIGUOUS_ALIASES
-    }:
+        for item in AMBIGUOUS_ALIASES
+    }
+
+    if normalized in ambiguous:
         return None
 
-    candidates = (
-        team_name_variants(
-            normalized
-        )
+    candidates = team_name_variants(
+        normalized
     )
 
     found = {
-        ALIAS_INDEX[
-            candidate
-        ]
-        for candidate
-        in candidates
+        ALIAS_INDEX[candidate]
+        for candidate in candidates
         if (
-            candidate
-            in ALIAS_INDEX
-            and ALIAS_INDEX[
-                candidate
-            ]
+            candidate in ALIAS_INDEX
+            and ALIAS_INDEX[candidate]
         )
     }
 
@@ -950,6 +1017,21 @@ def canonical_team(value):
 
     if len(found) > 1:
         return None
+
+    # ESPN's displayName commonly appends a mascot:
+    #
+    #   Oregon Ducks
+    #   Clemson Tigers
+    #   Arizona State Sun Devils
+    #
+    # Match the longest KNOWN school prefix instead of maintaining
+    # a brittle mascot list.
+    prefixed = _canonical_from_known_prefix(
+        normalized
+    )
+
+    if prefixed:
+        return prefixed
 
     return normalized_team_text(
         normalized
@@ -964,8 +1046,7 @@ def alias_group(value):
 
     if normalized in {
         norm(item)
-        for item
-        in AMBIGUOUS_ALIASES
+        for item in AMBIGUOUS_ALIASES
     }:
         return {
             normalized
@@ -998,9 +1079,7 @@ def alias_group(value):
 
     for item in values:
         expanded.update(
-            team_name_variants(
-                item
-            )
+            team_name_variants(item)
         )
 
     return {
@@ -1015,8 +1094,7 @@ def is_ambiguous_hint(value):
         norm(value)
         in {
             norm(item)
-            for item
-            in AMBIGUOUS_ALIASES
+            for item in AMBIGUOUS_ALIASES
         }
     )
 
@@ -1048,8 +1126,7 @@ def teams_equivalent(
     if (
         first_team
         and second_team
-        and first_team
-        == second_team
+        and first_team == second_team
     ):
         return True
 
@@ -1067,10 +1144,7 @@ def split_matchup(value):
     """
     Convert common matchup formats into exactly two team hints.
     """
-
-    text = clean_text(
-        value
-    )
+    text = clean_text(value)
 
     if not text:
         return []
@@ -1104,7 +1178,6 @@ def canonical_matchup(
     """
     Matchup identity is order-independent.
     """
-
     first_team = canonical_team(
         first
     )
@@ -1222,11 +1295,10 @@ def best_matchup_hints(
     """
     Strongest matchup source first:
 
-    1. explicit matchup
-    2. team + opponent
-    3. matchup embedded in selection
+      1. explicit matchup
+      2. team + opponent
+      3. matchup embedded in selection
     """
-
     matchup = split_matchup(
         pick.get(
             "matchup"
@@ -1546,7 +1618,6 @@ def spread_line_from_selection(
     """
     Visible selection controls the sign of a spread.
     """
-
     selection = clean_text(
         pick.get(
             "selection"
@@ -1567,7 +1638,6 @@ def spread_line_from_selection(
     # Ignore trailing American odds:
     #
     # Oregon -22.5 (-110)
-
     text = re.sub(
         r"\(\s*[+-]\s*"
         r"\d+(?:\.\d+)?\s*\)"
@@ -1603,7 +1673,6 @@ def spread_line_from_selection(
                 match.group(2)
             )
         )
-
     except Exception:
         return None
 
@@ -1618,10 +1687,8 @@ def effective_line(
     )
 
     if market == "SPREAD":
-        visible = (
-            spread_line_from_selection(
-                pick
-            )
+        visible = spread_line_from_selection(
+            pick
         )
 
         if visible is not None:
@@ -1669,7 +1736,6 @@ def canonical_pick_key(
     Game identity is included whenever available for ALL markets,
     including spreads.
     """
-
     picker = norm(
         pick.get(
             "picker"
@@ -1683,7 +1749,6 @@ def canonical_pick_key(
             )
             or 0
         )
-
     except Exception:
         week = 0
 
@@ -1715,7 +1780,6 @@ def canonical_pick_key(
         game_key = (
             f"{game[0]}__{game[1]}"
         )
-
     else:
         game_key = ""
 
@@ -1846,7 +1910,6 @@ def validate_pick_identity(
 
     Card-level completeness remains x_ingest.py's responsibility.
     """
-
     errors = []
 
     picker = clean_text(
@@ -1871,7 +1934,6 @@ def validate_pick_identity(
             errors.append(
                 "invalid week"
             )
-
     except Exception:
         errors.append(
             "invalid week"
