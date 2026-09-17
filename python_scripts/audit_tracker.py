@@ -6,14 +6,20 @@ from common import PICKS_FILE, STATE_FILE, load_json
 
 from football_identity import (
     SUPPORTED_MARKETS,
+    alias_group,
     base_market,
     best_matchup_hints,
     canonical_game_identity,
     canonical_pick_key,
+    canonical_team,
+    clean_text,
+    is_ambiguous_hint,
     normalize_bet_type,
+    norm,
     safe_float,
     side_identity,
     spread_line_from_selection,
+    split_matchup,
     total_direction,
 )
 
@@ -33,6 +39,14 @@ FINAL_RESULTS = {
 CFB_SPORTS = {
     "CFB",
     "NCAAF",
+}
+
+AMBIGUOUS_CONTEXT_GROUPS = {
+    "osu": {
+        "ohio state",
+        "oklahoma state",
+        "oregon state",
+    },
 }
 
 
@@ -102,6 +116,277 @@ def row_label(pick):
         f" | Week {pick_week(pick)}"
         f" | {selection_text(pick) or 'Unknown wager'}"
     )
+
+
+# ============================================================
+# SHARED MATCHUP / ALIAS HELPERS
+# ============================================================
+
+def contextual_candidates(value):
+    return (
+        AMBIGUOUS_CONTEXT_GROUPS.get(
+            norm(value),
+            set(),
+        )
+        or set()
+    )
+
+
+def identity_aliases(value):
+    """
+    Build a normalized alias set for a team identity.
+
+    This intentionally mirrors the shared resolver's identity
+    behavior without performing another ESPN network request.
+    """
+
+    value = clean_text(value)
+
+    if not value:
+        return set()
+
+    aliases = set(
+        alias_group(value)
+        or []
+    )
+
+    normalized = norm(value)
+
+    if normalized:
+        aliases.add(normalized)
+
+    canonical = canonical_team(value)
+
+    if canonical:
+        canonical_normalized = norm(
+            canonical
+        )
+
+        if canonical_normalized:
+            aliases.add(
+                canonical_normalized
+            )
+
+        aliases.update(
+            alias_group(
+                canonical
+            )
+            or []
+        )
+
+    return {
+        norm(alias)
+        for alias in aliases
+        if norm(alias)
+    }
+
+
+def identity_matches(
+    first,
+    second,
+    *,
+    allow_contextual_ambiguous=False,
+):
+    """
+    Compare two team identities using the same alias philosophy
+    as espn_resolver.py.
+
+    Bare ambiguous aliases such as OSU are unsafe by themselves.
+    They are allowed only when evaluating a two-team matchup,
+    where the second team supplies context.
+    """
+
+    first = clean_text(first)
+    second = clean_text(second)
+
+    if not first or not second:
+        return False
+
+    first_norm = norm(first)
+    second_norm = norm(second)
+
+    if first_norm == second_norm:
+        return True
+
+    first_ambiguous = is_ambiguous_hint(
+        first
+    )
+
+    second_ambiguous = is_ambiguous_hint(
+        second
+    )
+
+    if first_ambiguous:
+        if not allow_contextual_ambiguous:
+            return False
+
+        candidates = contextual_candidates(
+            first
+        )
+
+        second_aliases = identity_aliases(
+            second
+        )
+
+        for candidate in candidates:
+            if (
+                identity_aliases(candidate)
+                & second_aliases
+            ):
+                return True
+
+        return False
+
+    if second_ambiguous:
+        if not allow_contextual_ambiguous:
+            return False
+
+        candidates = contextual_candidates(
+            second
+        )
+
+        first_aliases = identity_aliases(
+            first
+        )
+
+        for candidate in candidates:
+            if (
+                identity_aliases(candidate)
+                & first_aliases
+            ):
+                return True
+
+        return False
+
+    return bool(
+        identity_aliases(first)
+        & identity_aliases(second)
+    )
+
+
+def pair_matches_pair(
+    first_pair,
+    second_pair,
+):
+    """
+    Compare two unordered football matchups.
+
+    Contextual ambiguous aliases are allowed because both sides
+    of the matchup are available.
+
+    Example:
+        OSU / TEX
+        Ohio State / Texas
+
+    correctly resolves as the same game.
+    """
+
+    if (
+        not first_pair
+        or not second_pair
+        or len(first_pair) != 2
+        or len(second_pair) != 2
+    ):
+        return False
+
+    a, b = first_pair
+    x, y = second_pair
+
+    direct = (
+        identity_matches(
+            a,
+            x,
+            allow_contextual_ambiguous=True,
+        )
+        and identity_matches(
+            b,
+            y,
+            allow_contextual_ambiguous=True,
+        )
+    )
+
+    if direct:
+        return True
+
+    reverse = (
+        identity_matches(
+            a,
+            y,
+            allow_contextual_ambiguous=True,
+        )
+        and identity_matches(
+            b,
+            x,
+            allow_contextual_ambiguous=True,
+        )
+    )
+
+    return reverse
+
+
+def pick_matchup_hints(pick):
+    """
+    Return the best available two-team identity for the wager.
+    """
+
+    explicit = split_matchup(
+        pick.get("matchup")
+    )
+
+    if len(explicit) == 2:
+        return explicit
+
+    team = clean_text(
+        pick.get("team")
+    )
+
+    opponent = clean_text(
+        pick.get("opponent")
+    )
+
+    if team and opponent:
+        return (
+            team,
+            opponent,
+        )
+
+    hints = best_matchup_hints(
+        pick
+    )
+
+    if len(hints) == 2:
+        return tuple(hints)
+
+    return tuple()
+
+
+def authoritative_event_hints(pick):
+    """
+    schedule_enrich.py refreshes event_matchup directly from the
+    locked ESPN event immediately before this audit runs.
+
+    Therefore event_matchup is our authoritative matchup text for
+    validating the stored event_id without making another full
+    ESPN scoreboard pass.
+    """
+
+    matchup = clean_text(
+        pick.get(
+            "event_matchup"
+        )
+    )
+
+    if not matchup:
+        return tuple()
+
+    hints = split_matchup(
+        matchup
+    )
+
+    if len(hints) == 2:
+        return hints
+
+    return tuple()
 
 
 # ============================================================
@@ -324,18 +609,11 @@ def audit_market_integrity(
                     ),
                 )
 
-            game = canonical_game_identity(
+            hints = pick_matchup_hints(
                 pick
             )
 
-            hints = best_matchup_hints(
-                pick
-            )
-
-            if (
-                not game
-                and len(hints) != 2
-            ):
+            if len(hints) != 2:
                 audit.error(
                     "TOTAL_NO_MATCHUP",
                     (
@@ -541,8 +819,6 @@ def audit_event_locks(
             pick
         )
 
-        # Provisional CFB wagers should eventually have a
-        # deterministic ESPN event lock.
         if not event_id:
             audit.error(
                 "MISSING_EVENT_LOCK",
@@ -594,20 +870,137 @@ def audit_event_locks(
 
 
 # ============================================================
-# EVENT-ID CONSISTENCY
+# AUTHORITATIVE ESPN EVENT MATCHUP VALIDATION
 # ============================================================
 
-def audit_event_consistency(
+def audit_event_matchups(
     picks,
     audit,
 ):
     """
-    Detect impossible use of the same ESPN event ID.
+    Validate every provisional locked wager against the ESPN
+    matchup metadata refreshed by schedule_enrich.py.
 
-    Multiple wagers on one game are expected.
+    This is deliberately different from comparing stored wager
+    rows to one another.
 
-    What is NOT expected is one ESPN event ID being associated
-    with multiple contradictory canonical game identities.
+    event_matchup comes from the actual locked ESPN event.
+    The wager matchup comes from the Barstool extraction.
+
+    A mismatch between those two is a genuine integrity problem.
+
+    Contextual aliases such as:
+        OSU vs TEX
+        Ohio State vs Texas
+
+    are treated as equivalent when the second team constrains
+    the ambiguous alias.
+    """
+
+    for pick in picks:
+        if not is_cfb(pick):
+            continue
+
+        if is_official(pick):
+            continue
+
+        event_id = str(
+            pick.get("event_id")
+            or ""
+        ).strip()
+
+        if not event_id:
+            continue
+
+        event_matchup = clean_text(
+            pick.get(
+                "event_matchup"
+            )
+        )
+
+        if not event_matchup:
+            audit.error(
+                "EVENT_METADATA_MISSING",
+                (
+                    f"{row_label(pick)} "
+                    f"| event={event_id} "
+                    "has no refreshed ESPN "
+                    "event_matchup metadata."
+                ),
+            )
+            continue
+
+        event_hints = (
+            authoritative_event_hints(
+                pick
+            )
+        )
+
+        if len(event_hints) != 2:
+            audit.error(
+                "EVENT_MATCHUP_UNREADABLE",
+                (
+                    f"{row_label(pick)} "
+                    f"| event={event_id} "
+                    f"| ESPN matchup="
+                    f"{event_matchup!r}"
+                ),
+            )
+            continue
+
+        wager_hints = (
+            pick_matchup_hints(
+                pick
+            )
+        )
+
+        if len(wager_hints) != 2:
+            audit.warning(
+                "WAGER_MATCHUP_UNAVAILABLE",
+                (
+                    f"{row_label(pick)} "
+                    f"| event={event_id} "
+                    f"| ESPN={event_matchup} "
+                    "| wager does not contain "
+                    "a complete two-team identity "
+                    "for independent verification."
+                ),
+            )
+            continue
+
+        if not pair_matches_pair(
+            wager_hints,
+            event_hints,
+        ):
+            audit.error(
+                "ESPN_EVENT_MISMATCH",
+                (
+                    f"{row_label(pick)} "
+                    f"| event={event_id} "
+                    f"| wager matchup="
+                    f"{wager_hints[0]} vs "
+                    f"{wager_hints[1]} "
+                    f"| ESPN matchup="
+                    f"{event_hints[0]} vs "
+                    f"{event_hints[1]}"
+                ),
+            )
+
+
+# ============================================================
+# SAME EVENT-ID METADATA CONSISTENCY
+# ============================================================
+
+def audit_event_metadata_consistency(
+    picks,
+    audit,
+):
+    """
+    Every row sharing an ESPN event_id should have the same
+    authoritative ESPN matchup metadata after schedule refresh.
+
+    This catches stale/corrupted event metadata without assuming
+    the wager text itself is authoritative.
     """
 
     by_event = defaultdict(list)
@@ -624,77 +1017,76 @@ def audit_event_consistency(
         if not event_id:
             continue
 
-        by_event[
-            event_id
-        ].append(
+        by_event[event_id].append(
             pick
         )
 
     for event_id, rows in (
         by_event.items()
     ):
-        identities = defaultdict(list)
+        event_pairs = []
 
         for pick in rows:
-            game = (
-                canonical_game_identity(
+            hints = (
+                authoritative_event_hints(
                     pick
                 )
             )
 
-            if not game:
-                hints = (
-                    best_matchup_hints(
-                        pick
-                    )
-                )
-
-                if len(hints) == 2:
-                    game = tuple(
-                        sorted(hints)
-                    )
-
-            if not game:
+            if len(hints) != 2:
                 continue
 
-            identities[
-                repr(game)
-            ].append(
-                pick
+            event_pairs.append(
+                (
+                    hints,
+                    pick,
+                )
             )
 
-        if len(
-            identities
-        ) <= 1:
+        if len(event_pairs) <= 1:
             continue
 
-        detail = []
+        reference_hints = (
+            event_pairs[0][0]
+        )
 
-        for identity, identity_rows in (
-            identities.items()
+        conflicts = []
+
+        for hints, pick in (
+            event_pairs[1:]
         ):
-            examples = ", ".join(
+            if not pair_matches_pair(
+                reference_hints,
+                hints,
+            ):
+                conflicts.append(
+                    (
+                        hints,
+                        pick,
+                    )
+                )
+
+        if conflicts:
+            details = [
                 (
                     f"{picker_name(pick)} "
-                    f"{selection_text(pick)}"
+                    f"{selection_text(pick)} "
+                    f"=> {hints[0]} vs "
+                    f"{hints[1]}"
                 )
-                for pick
-                in identity_rows[:3]
-            )
+                for hints, pick
+                in conflicts
+            ]
 
-            detail.append(
-                f"{identity}: {examples}"
+            audit.error(
+                "EVENT_METADATA_CONFLICT",
+                (
+                    f"ESPN event {event_id} "
+                    "has inconsistent refreshed "
+                    "event_matchup metadata: "
+                    + " || ".join(details)
+                ),
             )
-
-        audit.error(
-            "EVENT_MATCHUP_CONFLICT",
-            (
-                f"ESPN event {event_id} is "
-                "attached to contradictory "
-                "game identities: "
-                + " || ".join(detail)
-            ),
-        )
 
 
 # ============================================================
@@ -784,8 +1176,6 @@ def audit_official_rows(
                 ),
             )
 
-    # All rows for one official week/picker should come from
-    # exactly one authoritative result thread.
     for (
         week,
         picker,
@@ -899,11 +1289,12 @@ def audit_ingest_validation(
                 ),
             )
 
-        # Historical rows predate validation version 3.
-        # They are allowed, but new rows should be stamped.
-        if pick.get(
-            "ingest_validation_version"
-        ) == 3:
+        if (
+            pick.get(
+                "ingest_validation_version"
+            )
+            == 3
+        ):
             if not pick.get(
                 "ingest_validated"
             ):
@@ -1103,7 +1494,7 @@ def audit_week_counts(
 
 
 # ============================================================
-# KNOWN REGRESSION CLASSES
+# GENERIC REGRESSION CLASSES
 # ============================================================
 
 def audit_regression_classes(
@@ -1111,20 +1502,12 @@ def audit_regression_classes(
     audit,
 ):
     """
-    These are generic regression tests derived from failures
-    we have already experienced.
+    Generic regression tests derived from historical failure
+    classes.
 
-    There are NO Week-3 event IDs or Week-specific matchup
-    patches here.
+    There are intentionally NO Week-specific event IDs,
+    matchup patches, or weekly correction tables here.
     """
-
-    # --------------------------------------------------------
-    # 1. Same picker/week/total line may legitimately occur
-    #    on different games.
-    #
-    #    Make sure canonical identity actually distinguishes
-    #    those games.
-    # --------------------------------------------------------
 
     total_groups = defaultdict(
         list
@@ -1164,33 +1547,45 @@ def audit_regression_classes(
         if len(rows) <= 1:
             continue
 
-        games = set()
-        canonical_keys = set()
+        distinct_games = []
 
         for pick in rows:
-            game = (
-                canonical_game_identity(
+            hints = (
+                pick_matchup_hints(
                     pick
                 )
             )
 
-            if game:
-                games.add(
-                    repr(game)
+            if len(hints) != 2:
+                continue
+
+            if not any(
+                pair_matches_pair(
+                    hints,
+                    existing,
+                )
+                for existing
+                in distinct_games
+            ):
+                distinct_games.append(
+                    hints
                 )
 
-            canonical_keys.add(
-                repr(
-                    canonical_pick_key(
-                        pick
-                    )
+        if len(distinct_games) <= 1:
+            continue
+
+        canonical_keys = {
+            repr(
+                canonical_pick_key(
+                    pick
                 )
             )
+            for pick in rows
+        }
 
         if (
-            len(games) > 1
-            and len(canonical_keys)
-            < len(games)
+            len(canonical_keys)
+            < len(distinct_games)
         ):
             audit.error(
                 "TOTAL_GAME_IDENTITY_COLLISION",
@@ -1201,11 +1596,6 @@ def audit_regression_classes(
                     "canonical identities."
                 ),
             )
-
-    # --------------------------------------------------------
-    # 2. Spread identity must include game context whenever
-    #    matchup context exists.
-    # --------------------------------------------------------
 
     spread_groups = defaultdict(
         list
@@ -1245,17 +1635,32 @@ def audit_regression_classes(
         if len(rows) <= 1:
             continue
 
-        games = {
-            repr(
-                canonical_game_identity(
+        distinct_games = []
+
+        for pick in rows:
+            hints = (
+                pick_matchup_hints(
                     pick
                 )
             )
-            for pick in rows
-            if canonical_game_identity(
-                pick
-            )
-        }
+
+            if len(hints) != 2:
+                continue
+
+            if not any(
+                pair_matches_pair(
+                    hints,
+                    existing,
+                )
+                for existing
+                in distinct_games
+            ):
+                distinct_games.append(
+                    hints
+                )
+
+        if len(distinct_games) <= 1:
+            continue
 
         canonical_keys = {
             repr(
@@ -1267,9 +1672,8 @@ def audit_regression_classes(
         }
 
         if (
-            len(games) > 1
-            and len(canonical_keys)
-            < len(games)
+            len(canonical_keys)
+            < len(distinct_games)
         ):
             audit.error(
                 "SPREAD_GAME_IDENTITY_COLLISION",
@@ -1505,7 +1909,12 @@ def run_audit():
         audit,
     )
 
-    audit_event_consistency(
+    audit_event_matchups(
+        picks,
+        audit,
+    )
+
+    audit_event_metadata_consistency(
         picks,
         audit,
     )
