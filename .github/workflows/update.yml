@@ -3,113 +3,68 @@ name: Pickem Tracker
 on:
   workflow_dispatch:
 
+  # ==========================================================
+  # PACIFIC-TIME SCHEDULE
+  #
+  # GitHub Actions now supports timezone-aware schedules.
+  # No UTC conversion or PDT/PST safety gate is required.
+  #
+  # We run at :07 instead of :00 because GitHub documents
+  # higher scheduled-workflow load at the start of the hour.
+  #
+  # Monday:
+  #   6:07 AM, 10:07 PM
+  #
+  # Tuesday:
+  #   10:07 AM, 12:07 PM, 3:07 PM, 8:07 PM
+  #
+  # Wednesday:
+  #   10:07 PM
+  #
+  # Thursday:
+  #   4:07 PM, 7:07 PM, 11:07 PM
+  #
+  # Friday:
+  #   4:07 PM, 6:07 PM, 8:07 PM, 11:07 PM
+  #
+  # Saturday:
+  #   Every hour at :07
+  #
+  # Sunday:
+  #   2:07 AM, 10:07 AM, 2:07 PM, 5:07 PM
+  #
+  # America/Los_Angeles automatically handles PDT/PST.
+  # ==========================================================
+
   schedule:
-    # ========================================================
-    # TARGET PACIFIC SCHEDULE
-    #
-    # Monday:
-    #   6 AM, 10 PM
-    #
-    # Tuesday:
-    #   10 AM, 12 PM, 3 PM, 8 PM
-    #
-    # Wednesday:
-    #   10 PM
-    #
-    # Thursday:
-    #   4 PM, 7 PM, 11 PM
-    #
-    # Friday:
-    #   4 PM, 6 PM, 8 PM, 11 PM
-    #
-    # Saturday:
-    #   EVERY HOUR
-    #
-    # Sunday:
-    #   2 AM, 10 AM, 2 PM, 5 PM
-    #
-    # GitHub cron is UTC.
-    #
-    # We intentionally schedule BOTH possible UTC hours for
-    # each Pacific target time so this continues to work
-    # through PDT/PST changes.
-    #
-    # The Pacific-time gate below determines whether the
-    # current run is actually one of our requested times.
-    # ========================================================
 
-    # --------------------------------------------------------
-    # Monday
-    # 6 AM PT  -> 13/14 UTC Monday
-    # 10 PM PT -> 05/06 UTC Tuesday
-    # --------------------------------------------------------
-    - cron: "0 13,14 * * 1"
-    - cron: "0 5,6 * * 2"
+    # Monday — 6 AM, 10 PM PT
+    - cron: "7 6,22 * * 1"
+      timezone: "America/Los_Angeles"
 
-    # --------------------------------------------------------
-    # Tuesday
-    # 10 AM PT -> 17/18 UTC Tuesday
-    # 12 PM PT -> 19/20 UTC Tuesday
-    # 3 PM PT  -> 22/23 UTC Tuesday
-    # 8 PM PT  -> 03/04 UTC Wednesday
-    # --------------------------------------------------------
-    - cron: "0 17,18,19,20,22,23 * * 2"
-    - cron: "0 3,4 * * 3"
+    # Tuesday — 10 AM, 12 PM, 3 PM, 8 PM PT
+    - cron: "7 10,12,15,20 * * 2"
+      timezone: "America/Los_Angeles"
 
-    # --------------------------------------------------------
-    # Wednesday
-    # 10 PM PT -> 05/06 UTC Thursday
-    # --------------------------------------------------------
-    - cron: "0 5,6 * * 4"
+    # Wednesday — 10 PM PT
+    - cron: "7 22 * * 3"
+      timezone: "America/Los_Angeles"
 
-    # --------------------------------------------------------
-    # Thursday
-    # 4 PM PT  -> 23 UTC Thursday / 00 UTC Friday
-    # 7 PM PT  -> 02/03 UTC Friday
-    # 11 PM PT -> 06/07 UTC Friday
-    # --------------------------------------------------------
-    - cron: "0 23 * * 4"
-    - cron: "0 0,2,3,6,7 * * 5"
+    # Thursday — 4 PM, 7 PM, 11 PM PT
+    - cron: "7 16,19,23 * * 4"
+      timezone: "America/Los_Angeles"
 
-    # --------------------------------------------------------
-    # Friday
-    # 4 PM PT  -> 23 UTC Friday / 00 UTC Saturday
-    # 6 PM PT  -> 01/02 UTC Saturday
-    # 8 PM PT  -> 03/04 UTC Saturday
-    # 11 PM PT -> 06/07 UTC Saturday
-    # --------------------------------------------------------
-    - cron: "0 23 * * 5"
-    - cron: "0 0,1,2,3,4,6,7 * * 6"
+    # Friday — 4 PM, 6 PM, 8 PM, 11 PM PT
+    - cron: "7 16,18,20,23 * * 5"
+      timezone: "America/Los_Angeles"
 
-    # --------------------------------------------------------
-    # Saturday
-    #
-    # Every UTC hour Friday/Saturday/Sunday is NOT required.
-    # To guarantee every PACIFIC Saturday hour across both
-    # PDT and PST, cover the UTC span that can map to Saturday:
-    #
-    # Saturday 00:00 PT through Saturday 23:00 PT.
-    #
-    # PDT = UTC-7
-    # PST = UTC-8
-    #
-    # Friday UTC hours below cover late-Friday UTC candidates
-    # only where needed by the Pacific gate.
-    # Saturday UTC: every hour
-    # Sunday UTC: early hours needed for Saturday evening.
-    # --------------------------------------------------------
-    - cron: "0 * * * 6"
-    - cron: "0 0,1,2,3,4,5,6,7 * * 0"
+    # Saturday — EVERY HOUR PT
+    - cron: "7 * * * 6"
+      timezone: "America/Los_Angeles"
 
-    # --------------------------------------------------------
-    # Sunday
-    # 2 AM PT  -> 09/10 UTC Sunday
-    # 10 AM PT -> 17/18 UTC Sunday
-    # 2 PM PT  -> 21/22 UTC Sunday
-    # 5 PM PT  -> 00/01 UTC Monday
-    # --------------------------------------------------------
-    - cron: "0 9,10,17,18,21,22 * * 0"
-    - cron: "0 0,1 * * 1"
+    # Sunday — 2 AM, 10 AM, 2 PM, 5 PM PT
+    - cron: "7 2,10,14,17 * * 0"
+      timezone: "America/Los_Angeles"
 
 
 permissions:
@@ -119,6 +74,7 @@ permissions:
 
 
 jobs:
+
   update:
     runs-on: ubuntu-latest
 
@@ -129,135 +85,49 @@ jobs:
     steps:
 
       # ======================================================
-      # PACIFIC-TIME SAFETY GATE
-      #
-      # GitHub cron runs in UTC. This gate verifies that the
-      # actual current Pacific day/hour is one of the exact
-      # requested tracker times.
-      #
-      # Manual workflow_dispatch runs ALWAYS bypass this gate.
-      # ======================================================
-
-      - name: Check Pacific schedule
-        id: schedule_check
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            echo "Manual run requested — running FULL tracker."
-            exit 0
-          fi
-
-          DAY=$(TZ=America/Los_Angeles date +%u)
-          HOUR=$(TZ=America/Los_Angeles date +%-H)
-
-          echo "Pacific day=$DAY hour=$HOUR"
-
-          RUN=false
-
-          case "$DAY" in
-
-            1)
-              # Monday
-              case "$HOUR" in
-                6|22)
-                  RUN=true
-                  ;;
-              esac
-              ;;
-
-            2)
-              # Tuesday
-              case "$HOUR" in
-                10|12|15|20)
-                  RUN=true
-                  ;;
-              esac
-              ;;
-
-            3)
-              # Wednesday
-              case "$HOUR" in
-                22)
-                  RUN=true
-                  ;;
-              esac
-              ;;
-
-            4)
-              # Thursday
-              case "$HOUR" in
-                16|19|23)
-                  RUN=true
-                  ;;
-              esac
-              ;;
-
-            5)
-              # Friday
-              case "$HOUR" in
-                16|18|20|23)
-                  RUN=true
-                  ;;
-              esac
-              ;;
-
-            6)
-              # Saturday — EVERY HOUR
-              RUN=true
-              ;;
-
-            7)
-              # Sunday
-              case "$HOUR" in
-                2|10|14|17)
-                  RUN=true
-                  ;;
-              esac
-              ;;
-
-          esac
-
-          echo "run=$RUN" >> "$GITHUB_OUTPUT"
-
-          if [ "$RUN" = "true" ]; then
-            echo "Scheduled Pacific run — running FULL tracker."
-          else
-            echo "UTC/DST guard run only — skipping tracker."
-          fi
-
-
-      # ======================================================
-      # FULL TRACKER
+      # CHECKOUT
       # ======================================================
 
       - name: Checkout repository
-        if: steps.schedule_check.outputs.run == 'true'
         uses: actions/checkout@v4
 
 
+      # ======================================================
+      # PYTHON
+      # ======================================================
+
       - name: Set up Python
-        if: steps.schedule_check.outputs.run == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
 
       - name: Install dependencies
-        if: steps.schedule_check.outputs.run == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
 
+      # ======================================================
+      # RUN FULL TRACKER
+      # ======================================================
+
       - name: Run tracker
-        if: steps.schedule_check.outputs.run == 'true'
         env:
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           X_USERNAME: barstoolpickem
           OPENAI_MODEL: gpt-5.6-luna
         run: |
+          echo "=========================================="
+          echo "RUNNING FULL PICK EM TRACKER"
+          echo "=========================================="
+          echo "UTC time:"
+          date
+          echo "Pacific time:"
+          TZ=America/Los_Angeles date
+          echo "=========================================="
+
           python python_scripts/run_all.py
 
 
@@ -266,7 +136,6 @@ jobs:
       # ======================================================
 
       - name: Commit updated tracker data
-        if: steps.schedule_check.outputs.run == 'true'
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
@@ -287,18 +156,15 @@ jobs:
       # ======================================================
 
       - name: Configure GitHub Pages
-        if: steps.schedule_check.outputs.run == 'true'
         uses: actions/configure-pages@v5
 
 
       - name: Upload GitHub Pages artifact
-        if: steps.schedule_check.outputs.run == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: .
 
 
       - name: Deploy to GitHub Pages
-        if: steps.schedule_check.outputs.run == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
