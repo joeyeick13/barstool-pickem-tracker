@@ -7,6 +7,11 @@ from common import (
     save_json,
 )
 
+from football_identity import (
+    split_matchup,
+    teams_equivalent,
+)
+
 
 # ============================================================
 # VERIFIED DATA CORRECTIONS
@@ -837,14 +842,12 @@ def week3_candidates(
         if not matchup_matches_rule(pick, rule):
             continue
 
-        stored_team = normalized(pick.get("team"))
-        selection = normalized(pick.get("selection"))
+        stored_team = text(pick.get("team"))
+        selection_team = text(pick.get("selection")).rsplit(" ", 1)[0]
 
         team_matches = (
-            stored_team == expected_team
-            or selection == expected_team
-            or selection.startswith(expected_team + " +")
-            or selection.startswith(expected_team + " -")
+            teams_equivalent(stored_team, rule.get("team"))
+            or teams_equivalent(selection_team, rule.get("team"))
         )
 
         if team_matches:
@@ -859,42 +862,46 @@ def matchup_matches_rule(
     pick,
     rule,
 ):
-    stored = normalized(
-        pick.get("matchup")
-    )
+    """Compare source-card matchups by football team identity, not spelling.
 
-    expected = normalized(
-        rule.get("matchup")
-    )
+    X/vision extraction frequently emits abbreviations such as ASU, UF,
+    VTech, MARY, Minny, Wake, and BC while the manually verified source card
+    uses full school names.  Those are formatting differences, not different
+    games.  Resolve each side through the shared football identity layer and
+    require both teams to agree.  Home/away wording is intentionally not used
+    as a rejection signal because source graphics may use `vs` while ESPN
+    represents the same game as `@`.
+    """
 
-    if not stored:
+    stored = text(pick.get("matchup"))
+    expected = text(rule.get("matchup"))
+
+    if not stored or not expected:
         return False
 
-    if stored == expected:
+    if normalized(stored) == normalized(expected):
         return True
 
-    # The exact formatting may differ, but if every meaningful
-    # word from the expected matchup exists in the stored matchup,
-    # treat it as the same source-card wager.
-    expected_words = {
-        word
-        for word in expected.split()
-        if word not in {
-            "at",
-            "vs",
-        }
-    }
+    stored_pair = split_matchup(stored)
+    expected_pair = split_matchup(expected)
 
-    stored_words = set(
-        stored.split()
+    if not stored_pair or not expected_pair:
+        return False
+
+    stored_a, stored_b = stored_pair
+    expected_a, expected_b = expected_pair
+
+    direct = (
+        teams_equivalent(stored_a, expected_a)
+        and teams_equivalent(stored_b, expected_b)
     )
 
-    return bool(
-        expected_words
-        and expected_words.issubset(
-            stored_words
-        )
+    reverse = (
+        teams_equivalent(stored_a, expected_b)
+        and teams_equivalent(stored_b, expected_a)
     )
+
+    return bool(direct or reverse)
 
 
 def choose_week3_row(
