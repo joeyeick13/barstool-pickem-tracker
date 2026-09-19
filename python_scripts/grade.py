@@ -1700,7 +1700,7 @@ def grade_open():
     review_unsupported = 0
     period_unavailable = 0
     preserved = 0
-    fallback_locked = 0
+    fallback_locked = 0  # retained for summary compatibility; grader never locks
 
     pending_event_ids = set()
 
@@ -1842,100 +1842,25 @@ def grade_open():
 
         else:
 
-            resolution = (
-                resolve_event_detailed(
-                    pick,
-                    events,
-                )
-            )
+            # Grading is downstream of schedule_enrich.py and must never create
+            # a new event lock.  If the pre-game resolver refused to lock this
+            # wager (for example because source matchup metadata conflicts),
+            # preserve it OPEN for audit/retry instead of silently overriding
+            # that conflict during grading.
+            clear_grade(pick)
+            mark_open(pick)
+            pick["grading_error"] = "NO_PRE_GAME_EVENT_LOCK"
 
-            event = resolution.get(
-                "event"
-            )
-
-            if event is None:
-
-                clear_grade(pick)
-                mark_open(pick)
-
-                reason = (
-                    resolution.get("reason")
-                    or
-                    "NO_CONFIDENT_EVENT_MATCH"
-                )
-
-                pick[
-                    "grading_error"
-                ] = reason
-
-                unmatched += 1
-
-                print(
-                    "NO SHARED ESPN MATCH:",
-                    picker_name(pick),
-                    "|",
-                    pick_label(pick),
-                    "| reason:",
-                    reason,
-                )
-
-                continue
-
-            event_value = str(
-                event.get("id")
-                or ""
-            )
-
-            if not event_value:
-
-                clear_grade(pick)
-
-                mark_review(
-                    pick,
-                    "Resolved ESPN event has no ID.",
-                )
-
-                review_unsupported += 1
-                continue
-
-            pick[
-                "event_id"
-            ] = event_value
-
-            pick[
-                "game_match_status"
-            ] = "MATCHED"
-
-            pick[
-                "game_match_source"
-            ] = "ESPN"
-
-            pick[
-                "game_match_method"
-            ] = (
-                resolution.get("method")
-                or "SHARED_RESOLVER"
-            )
-
-            pick[
-                "game_match_confidence"
-            ] = (
-                resolution.get("confidence")
-                or "SHARED_RESOLVER"
-            )
-
-            fallback_locked += 1
+            unmatched += 1
 
             print(
-                "SHARED RESOLVER FALLBACK LOCK:",
+                "NO PRE-GAME EVENT LOCK - PRESERVING:",
                 picker_name(pick),
                 "|",
                 pick_label(pick),
-                "| method:",
-                resolution.get("method"),
-                "| event:",
-                event_value,
             )
+
+            continue
 
         # ----------------------------------------------------
         # Refresh harmless ESPN metadata.
