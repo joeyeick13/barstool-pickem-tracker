@@ -405,6 +405,7 @@ ALIASES = {
         "kansas state",
         "kansas st",
         "k state",
+        "k-state",
         "kstate",
         "ksu",
     },
