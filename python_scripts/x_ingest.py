@@ -72,7 +72,7 @@ PAT_HILL_ADJACENT_HOURS_BEFORE = 6
 PAT_HILL_ADJACENT_HOURS_AFTER = 18
 
 PROCESSED_IDS_FLAG = (
-    "processed_ids_initialized_v5"
+    "processed_ids_initialized_v6"
 )
 
 OFFICIAL_RESULT_STATE_KEY = (
@@ -83,7 +83,7 @@ MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 5
+CURRENT_INGEST_VALIDATION_VERSION = 6
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -182,6 +182,43 @@ def safe_bool(value):
             return False
 
     return bool(value)
+
+
+def source_post_text(post):
+    """Return the fullest X text available for a post.
+
+    X long-form posts can expose a shortened legacy `text` field while the
+    complete body lives in `note_tweet.text`.  Ingestion must never parse the
+    shorter representation when a longer official representation is present.
+    """
+
+    post = post or {}
+
+    legacy = source_post_text(post).strip()
+
+    note = post.get("note_tweet") or {}
+    note_text = str(
+        note.get("text")
+        if isinstance(note, dict)
+        else ""
+    ).strip()
+
+    if len(note_text) > len(legacy):
+        return note_text
+
+    return legacy
+
+
+def normalize_source_post(post):
+    if not isinstance(post, dict):
+        return post
+
+    full_text = source_post_text(post)
+
+    if full_text:
+        post["text"] = full_text
+
+    return post
 
 
 def normalize_picker_safe(value):
@@ -334,7 +371,7 @@ def standings_target_week(
     """
 
     text = str(
-        root_post.get("text")
+        source_post_text(root_post)
         or ""
     )
 
@@ -434,6 +471,7 @@ def fetch_user_posts(
             "created_at,"
             "attachments,"
             "text,"
+            "note_tweet,"
             "referenced_tweets,"
             "conversation_id,"
             "in_reply_to_user_id"
@@ -486,7 +524,7 @@ def fetch_user_posts(
             ):
                 continue
 
-            posts.append(post)
+            posts.append(normalize_source_post(post))
 
         for media in (
             payload
@@ -554,6 +592,7 @@ def fetch_recent_official_conversation(
             "created_at,"
             "attachments,"
             "text,"
+            "note_tweet,"
             "referenced_tweets,"
             "conversation_id,"
             "in_reply_to_user_id"
@@ -601,7 +640,7 @@ def fetch_recent_official_conversation(
             ):
                 continue
 
-            posts.append(post)
+            posts.append(normalize_source_post(post))
 
         for media in (
             payload
@@ -968,6 +1007,7 @@ def fetch_post_by_id(post_id):
                 "created_at,"
                 "attachments,"
                 "text,"
+                "note_tweet,"
                 "referenced_tweets,"
                 "conversation_id,"
                 "in_reply_to_user_id"
@@ -985,7 +1025,9 @@ def fetch_post_by_id(post_id):
         },
     )
 
-    post = payload.get("data")
+    post = normalize_source_post(
+        payload.get("data")
+    )
 
     media_map = {}
 
@@ -1685,6 +1727,113 @@ def normalize_extracted_market(pick):
 # NORMAL POST OPENAI EXTRACTION
 # ============================================================
 
+def preflight_normal_source(
+    *,
+    text,
+    image_urls,
+    post_url,
+    picker_hint,
+):
+    """Independently inventory the source before structured extraction.
+
+    This is deliberately a separate model request.  It gives the final
+    extraction a second reading of dense cards and long text posts so a
+    self-consistent omission cannot silently pass validation.
+    """
+
+    from openai import OpenAI
+
+    client = OpenAI()
+
+    prompt = f"""
+You are performing an INDEPENDENT completeness inventory of one verified
+@barstoolpickem source post.
+
+SOURCE: {post_url}
+PICKER HINT: {picker_hint or 'Unknown'}
+FULL SOURCE TEXT:
+{text or 'NONE'}
+
+There are {len(image_urls)} attached source images. Inspect every image.
+
+Count EVERY individual new NCAA football wager physically present in this
+source. Do not infer wagers from schedules or prior knowledge. Do not count
+matchup headings, records, scores, or decorative text.
+
+For every wager, transcribe a short exact wager label preserving the visible
+signed spread or total. If a matchup is explicitly attached to that wager,
+transcribe it; otherwise use null. Never invent an opponent or matchup.
+
+Return JSON only:
+{{
+  "complete": true,
+  "wager_count": 0,
+  "wagers": [
+    {{"selection": "exact wager", "matchup": null}}
+  ],
+  "images_read": {len(image_urls)}
+}}
+
+Set complete=false if any supplied image or any part of the source cannot be
+read confidently enough to inventory every wager.
+""".strip()
+
+    content = [
+        {"type": "input_text", "text": prompt}
+    ]
+
+    for image_url in image_urls:
+        content.append(
+            {
+                "type": "input_image",
+                "image_url": image_url,
+            }
+        )
+
+    response = client.responses.create(
+        model=OPENAI_MODEL,
+        input=[{"role": "user", "content": content}],
+    )
+
+    payload = parse_json_response(response.output_text)
+
+    if not safe_bool(payload.get("complete")):
+        raise ValueError(
+            "Independent source inventory marked extraction incomplete"
+        )
+
+    try:
+        count = int(payload.get("wager_count"))
+    except Exception as exc:
+        raise ValueError(
+            "Independent source inventory returned invalid wager_count"
+        ) from exc
+
+    wagers = payload.get("wagers")
+
+    if not isinstance(wagers, list) or len(wagers) != count:
+        raise ValueError(
+            "Independent source inventory count does not match its rows"
+        )
+
+    try:
+        images_read = int(payload.get("images_read") or 0)
+    except Exception as exc:
+        raise ValueError(
+            "Independent source inventory returned invalid images_read"
+        ) from exc
+
+    if images_read != len(image_urls):
+        raise ValueError(
+            "Independent source inventory did not read every image"
+        )
+
+    return {
+        "wager_count": count,
+        "wagers": wagers,
+    }
+
+
 def parse_post_with_ai(
     *,
     text,
@@ -1695,6 +1844,7 @@ def parse_post_with_ai(
     picker_hint,
     reply_hint,
     parent_text,
+    preflight_inventory,
 ):
     """
     Extract one official source post.
@@ -1745,6 +1895,13 @@ IS OFFICIAL REPLY:
 
 NUMBER OF SOURCE IMAGES SUPPLIED:
 {supplied_image_count}
+
+INDEPENDENT SOURCE INVENTORY (separate first read):
+{json.dumps(preflight_inventory, ensure_ascii=False)}
+
+The inventory is evidence, not authority. Re-read the original source yourself.
+If your extraction disagrees with its wager count or rows, set complete=false
+rather than silently dropping or inventing a wager.
 
 ============================================================
 SOURCE BOUNDARY
@@ -2277,6 +2434,7 @@ def validate_normal_post_payload(
     image_urls,
     default_week,
     picker_hint,
+    preflight_inventory,
 ):
     """
     Transaction boundary.
@@ -2544,6 +2702,22 @@ def validate_normal_post_payload(
                 f"but {len(normalized)} wagers "
                 "were extracted"
             )
+
+    # --------------------------------------------------------
+    # Independent inventory reconciliation.
+    # --------------------------------------------------------
+
+    independent_count = int(
+        (preflight_inventory or {}).get("wager_count")
+        or 0
+    )
+
+    if independent_count != len(normalized):
+        raise ValueError(
+            "Independent source inventory reconciliation failed: "
+            f"inventory reports {independent_count}, "
+            f"structured extraction returned {len(normalized)}"
+        )
 
     # --------------------------------------------------------
     # Internal canonical duplicate validation.
@@ -3097,7 +3271,7 @@ def fetch_retry_posts(
         ):
             continue
 
-        posts.append(post)
+        posts.append(normalize_source_post(post))
 
         media_map.update(media)
 
@@ -3229,7 +3403,7 @@ def process_normal_posts(
         )
 
         text = str(
-            post.get("text")
+            source_post_text(post)
             or ""
         )
 
@@ -3343,6 +3517,20 @@ def process_normal_posts(
         # ----------------------------------------------------
 
         try:
+            preflight_inventory = preflight_normal_source(
+                text=text,
+                image_urls=image_urls,
+                post_url=post_url,
+                picker_hint=picker_hint,
+            )
+
+            print(
+                "INDEPENDENT SOURCE INVENTORY:",
+                post_id,
+                "| wagers:",
+                preflight_inventory.get("wager_count"),
+            )
+
             payload = parse_post_with_ai(
                 text=text,
                 image_urls=image_urls,
@@ -3354,6 +3542,7 @@ def process_normal_posts(
                 picker_hint=picker_hint,
                 reply_hint=reply_hint,
                 parent_text=parent_text,
+                preflight_inventory=preflight_inventory,
             )
 
         except Exception as exc:
@@ -3388,6 +3577,7 @@ def process_normal_posts(
                     image_urls=image_urls,
                     default_week=week,
                     picker_hint=picker_hint,
+                    preflight_inventory=preflight_inventory,
                 )
             )
 
@@ -3744,7 +3934,7 @@ def parse_official_result_cards(
         )
 
     thread_text = "\n\n".join(
-        str(post.get("text") or "")
+        source_post_text(post)
         for post in thread_posts
     )
 
@@ -3914,7 +4104,7 @@ No markdown. No commentary. JSON only.
     # --------------------------------------------------------
 
     expected_records = parse_printed_standings(
-        str(root_post.get("text") or ""),
+        str(source_post_text(root_post) or ""),
         target_week,
     )
 
@@ -5257,7 +5447,7 @@ def reconcile_pat_hill_standings(
 
         printed_standings = (
             parse_printed_standings(
-                root_post.get("text"),
+                source_post_text(root_post),
                 target_week=target_week,
             )
         )
