@@ -1388,7 +1388,7 @@ def refresh_event_metadata(
 
     if matchup:
         pick[
-            "game_matchup"
+            "event_matchup"
         ] = matchup
 
 
