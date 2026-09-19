@@ -107,6 +107,10 @@ def clear_schedule_match(pick):
 
     for key in (
         "event_id",
+        "competition_id",
+        "event_matchup",
+        "event_status",
+        "event_resolution_method",
         "game_time",
         "game_matchup",
         "game_match_status",
@@ -789,26 +793,66 @@ def week3_candidates(
     picker,
     rule,
 ):
-    aliases = rule_aliases(
-        rule
-    )
+    """Find the verified source-card row without guessing across games.
 
-    return [
+    Exact selection text remains the first choice.  For a verified SPREAD
+    rule only, if OCR/vision damaged the numeric line (for example +20 read
+    as +2.0), allow a fallback only when both the selected team identity and
+    the verified matchup agree.  This lets the correction layer repair a
+    line transcription error without matching an unrelated wager.
+    """
+
+    aliases = rule_aliases(rule)
+
+    base = [
         pick
         for pick in picks
         if (
             not is_official(pick)
             and pick_week(pick) == 3
-            and picker_is(
-                pick,
-                picker,
-            )
-            and normalized(
-                pick.get("selection")
-            )
-            in aliases
+            and picker_is(pick, picker)
         )
     ]
+
+    exact = [
+        pick
+        for pick in base
+        if normalized(pick.get("selection")) in aliases
+    ]
+
+    if exact:
+        return exact
+
+    if normalized(rule.get("bet_type")) != "spread":
+        return []
+
+    expected_team = normalized(rule.get("team"))
+
+    if not expected_team:
+        return []
+
+    fallback = []
+
+    for pick in base:
+        if not matchup_matches_rule(pick, rule):
+            continue
+
+        stored_team = normalized(pick.get("team"))
+        selection = normalized(pick.get("selection"))
+
+        team_matches = (
+            stored_team == expected_team
+            or selection == expected_team
+            or selection.startswith(expected_team + " +")
+            or selection.startswith(expected_team + " -")
+        )
+
+        if team_matches:
+            fallback.append(pick)
+
+    # Fail closed on ambiguity.  A verified correction may repair one unique
+    # source row, never choose between multiple possible wagers.
+    return fallback if len(fallback) == 1 else []
 
 
 def matchup_matches_rule(
@@ -1333,8 +1377,7 @@ def audit_week2_big_cat(
         pick
         for pick in picks
         if (
-            not is_official(pick)
-            and pick_week(pick) == 2
+            pick_week(pick) == 2
             and picker_is(
                 pick,
                 "Big Cat",
