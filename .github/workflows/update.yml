@@ -59,7 +59,7 @@ on:
       timezone: "America/Los_Angeles"
 
     # Saturday — EVERY HOUR PT
-    - cron: "7 * * * 6"
+    - cron: "37 * * * 6"
       timezone: "America/Los_Angeles"
 
     # Sunday — 2 AM, 10 AM, 2 PM, 5 PM PT
