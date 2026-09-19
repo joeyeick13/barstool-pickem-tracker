@@ -285,6 +285,10 @@ def verified_override_for_pick(pick):
 def clear_stale_schedule_fields(pick):
     for key in (
         "event_id",
+        "competition_id",
+        "event_matchup",
+        "event_status",
+        "event_resolution_method",
         "game_matchup",
         "game_time",
         "game_match_status",
@@ -304,6 +308,11 @@ def needs_total_context(pick):
         return False
 
     if normalize_market(pick.get("bet_type")) not in TOTAL_MARKETS:
+        return False
+
+    # A row already verified by the source-card correction layer is
+    # authoritative.  Never let a later vision enrichment rewrite it.
+    if pick.get("verified_correction"):
         return False
 
     # Exact manually verified rows are allowed to repair stale metadata.
@@ -331,6 +340,21 @@ def enrich_total_matchups():
 
     print("Totals needing source-card verification:", len(candidates))
 
+    # Same picker + same total can legitimately appear more than once in one
+    # source card (for example two different Under 53.5 games).  A request
+    # containing only picker/selection cannot safely identify which occurrence
+    # belongs to which stored row.  Detect those groups up front and fail
+    # closed instead of allowing vision to swap one game's matchup onto another.
+    occurrence_counts = defaultdict(int)
+
+    for candidate in candidates:
+        occurrence_key = (
+            str(candidate.get("source_post_id") or "").strip(),
+            normalize_selection(candidate.get("picker")),
+            normalize_selection(candidate.get("selection")),
+        )
+        occurrence_counts[occurrence_key] += 1
+
     post_cache = {}
     corrected = 0
     verified_unchanged = 0
@@ -342,7 +366,25 @@ def enrich_total_matchups():
         selection = clean_text(pick.get("selection"))
         existing_matchup = clean_text(pick.get("matchup"))
 
+        occurrence_key = (
+            post_id,
+            normalize_selection(picker),
+            normalize_selection(selection),
+        )
+
         override = verified_override_for_pick(pick)
+
+        if not override and occurrence_counts[occurrence_key] > 1:
+            print(
+                "TOTAL CONTEXT AMBIGUOUS - PRESERVING:",
+                picker,
+                "|",
+                selection,
+                "| occurrences in source:",
+                occurrence_counts[occurrence_key],
+            )
+            unresolved += 1
+            continue
         if override:
             if normalize_selection(existing_matchup) != normalize_selection(override):
                 print(
@@ -468,14 +510,9 @@ def enrich_total_matchups():
             pick["matchup_source"] = "BARSTOOL_CARD_IMAGE"
             pick["matchup_source_verified_at"] = now_iso()
 
-            # Clear stale schedule-review metadata so schedule_enrich.py gets
-            # a clean chance to lock the corrected matchup to ESPN.
-            pick.pop("game_matchup", None)
-            pick.pop("game_time", None)
-            pick.pop("game_match_status", None)
-            pick.pop("game_match_source", None)
-            pick.pop("game_match_confidence", None)
-            pick.pop("game_match_review_reason", None)
+            # Clear every derived event/schedule field so the shared resolver
+            # gets a clean chance to lock the corrected source matchup.
+            clear_stale_schedule_fields(pick)
 
             corrected += 1
 
