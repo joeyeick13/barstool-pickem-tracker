@@ -72,7 +72,7 @@ PAT_HILL_ADJACENT_HOURS_BEFORE = 6
 PAT_HILL_ADJACENT_HOURS_AFTER = 18
 
 PROCESSED_IDS_FLAG = (
-    "processed_ids_initialized_v3"
+    "processed_ids_initialized_v4"
 )
 
 OFFICIAL_RESULT_STATE_KEY = (
@@ -1643,6 +1643,31 @@ def normalize_extracted_market(pick):
             pick[
                 "line"
             ] = visible_line
+        else:
+            structured_line = safe_float(
+                pick.get("line")
+            )
+
+            selected_team = clean_text(
+                pick.get("team")
+            )
+
+            if not selected_team:
+                selected_team = clean_text(
+                    pick.get("side")
+                )
+
+            if (
+                structured_line is not None
+                and selected_team
+                and selection
+                and clean_text(selection).lower()
+                == selected_team.lower()
+            ):
+                pick["selection"] = (
+                    f"{clean_text(selection)} "
+                    f"{structured_line:+g}"
+                )
 
     return pick
 
@@ -1791,6 +1816,8 @@ Preserve:
 For spreads, the sign shown in the source is critical:
 - Team -3 means line=-3
 - Team +3 means line=3
+- selection MUST include the selected team AND exact signed spread.
+  Never return selection="Team" with the spread only in the line field.
 
 For totals:
 - side must be OVER or UNDER
@@ -2701,7 +2728,7 @@ def stored_pick_from_ai(
             True,
 
         "ingest_validation_version":
-            3,
+            4,
     }
 
     pick["id"] = deterministic_pick_id(
@@ -3149,11 +3176,41 @@ def process_normal_posts(
         ):
             continue
 
+        prior_rows_for_post = [
+            pick
+            for pick in existing
+            if str(
+                pick.get("source_post_id")
+                or ""
+            ) == post_id
+            and not pick.get(
+                "official_reconciled"
+            )
+        ]
+
+        needs_validation_upgrade = any(
+            int(
+                pick.get(
+                    "ingest_validation_version"
+                )
+                or 0
+            ) < 4
+            for pick in prior_rows_for_post
+        )
+
         if (
             post_id in processed_ids
             and post_id not in failed_ids
+            and not needs_validation_upgrade
         ):
             continue
+
+        if needs_validation_upgrade:
+            print(
+                "REVALIDATING PRIOR SOURCE POST:",
+                post_id,
+                "| old validation generation detected",
+            )
 
         image_urls = (
             image_urls_for_post(
@@ -3375,6 +3432,53 @@ def process_normal_posts(
         extracted_picks = (
             validated["picks"]
         )
+
+        # ----------------------------------------------------
+        # VALIDATION-GENERATION UPGRADE
+        # ----------------------------------------------------
+
+        if needs_validation_upgrade:
+            old_source_rows = [
+                pick
+                for pick in existing
+                if str(
+                    pick.get("source_post_id")
+                    or ""
+                ) == post_id
+                and not pick.get(
+                    "official_reconciled"
+                )
+            ]
+
+            old_source_keys = {
+                canonical_pick_key(pick)
+                for pick in old_source_rows
+            }
+
+            existing = [
+                pick
+                for pick in existing
+                if not (
+                    str(
+                        pick.get("source_post_id")
+                        or ""
+                    ) == post_id
+                    and not pick.get(
+                        "official_reconciled"
+                    )
+                )
+            ]
+
+            seen_wagers.difference_update(
+                old_source_keys
+            )
+
+            print(
+                "REBUILDING VALIDATED SOURCE POST:",
+                post_id,
+                "| prior provisional rows:",
+                len(old_source_rows),
+            )
 
         # ----------------------------------------------------
         # PHASE 3: BUILD THE TRANSACTION IN MEMORY
@@ -5762,7 +5866,7 @@ def ingest():
 
     state[
         "ingest_validation_version"
-    ] = 3
+    ] = 4
 
     save_json(
         PICKS_FILE,
