@@ -462,6 +462,7 @@ ALIASES = {
     },
     "maryland": {
         "maryland",
+        "mary",
         "md",
     },
     "memphis": {
@@ -497,6 +498,7 @@ ALIASES = {
     "minnesota": {
         "minnesota",
         "minn",
+        "minny",
     },
     "mississippi state": {
         "mississippi state",
