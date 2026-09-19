@@ -72,7 +72,7 @@ PAT_HILL_ADJACENT_HOURS_BEFORE = 6
 PAT_HILL_ADJACENT_HOURS_AFTER = 18
 
 PROCESSED_IDS_FLAG = (
-    "processed_ids_initialized_v4"
+    "processed_ids_initialized_v5"
 )
 
 OFFICIAL_RESULT_STATE_KEY = (
@@ -81,6 +81,15 @@ OFFICIAL_RESULT_STATE_KEY = (
 
 MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
+
+# Increment only when normal-post extraction/validation semantics change.
+CURRENT_INGEST_VALIDATION_VERSION = 5
+
+# Always rescan a bounded recent window from the official account.
+# Processed IDs make this cheap/idempotent, while the overlap prevents
+# cursor/state bugs from permanently hiding a source post.
+RECENT_SAFETY_BACKFILL_DAYS = 10
+RECENT_SAFETY_BACKFILL_PAGES = 4
 
 
 # ============================================================
@@ -2728,7 +2737,7 @@ def stored_pick_from_ai(
             True,
 
         "ingest_validation_version":
-            4,
+            CURRENT_INGEST_VALIDATION_VERSION,
     }
 
     pick["id"] = deterministic_pick_id(
@@ -3194,7 +3203,7 @@ def process_normal_posts(
                     "ingest_validation_version"
                 )
                 or 0
-            ) < 4
+            ) < CURRENT_INGEST_VALIDATION_VERSION
             for pick in prior_rows_for_post
         )
 
@@ -5727,7 +5736,38 @@ def ingest():
         )
 
     # --------------------------------------------------------
-    # 5. Combine retries + new posts.
+    # 5. Permanent recent-source safety backfill.
+    #
+    # The since_id cursor is an optimization, never the sole source of
+    # truth. Every run also scans a bounded recent official-account
+    # window. Already validated posts are skipped by processed_post_ids,
+    # so this is idempotent. If a prior code/state bug advanced the cursor
+    # too far, the source post is still rediscovered here.
+    #
+    # This also supplies the original post + ALL media expansions when a
+    # validation-generation upgrade needs to rebuild an existing source
+    # post. No manual post IDs, picker-specific repairs, or week-specific
+    # exceptions are required.
+    # --------------------------------------------------------
+
+    safety_posts, safety_media = (
+        fetch_user_posts(
+            official_user_id,
+            start_time=(
+                datetime.now(timezone.utc)
+                - timedelta(days=RECENT_SAFETY_BACKFILL_DAYS)
+            ),
+            max_pages=RECENT_SAFETY_BACKFILL_PAGES,
+        )
+    )
+
+    print(
+        "Recent safety-backfill posts:",
+        len(safety_posts),
+    )
+
+    # --------------------------------------------------------
+    # 6. Combine retries + cursor posts + safety backfill.
     # --------------------------------------------------------
 
     post_map = {}
@@ -5735,6 +5775,7 @@ def ingest():
     for post in (
         retry_posts
         + timeline_posts
+        + safety_posts
     ):
         post_id = str(
             post.get("id")
@@ -5758,8 +5799,12 @@ def ingest():
         timeline_media
     )
 
+    combined_media.update(
+        safety_media
+    )
+
     # --------------------------------------------------------
-    # 6. Transactional normal-pick ingestion.
+    # 7. Transactional normal-pick ingestion.
     # --------------------------------------------------------
 
     (
@@ -5774,7 +5819,7 @@ def ingest():
     )
 
     # --------------------------------------------------------
-    # 7. Advance timeline cursor.
+    # 8. Advance timeline cursor.
     #
     # This is safe even when a candidate failed validation,
     # because failed_post_ids is an independent durable retry
@@ -5813,7 +5858,7 @@ def ingest():
             ] = newest_id
 
     # --------------------------------------------------------
-    # 8. Official result reconciliation + missed-week self-healing.
+    # 9. Official result reconciliation + missed-week self-healing.
     # --------------------------------------------------------
 
     if should_scan_standings(
@@ -5834,7 +5879,7 @@ def ingest():
         )
 
     # --------------------------------------------------------
-    # 9. Permanent canonical dedupe.
+    # 10. Permanent canonical dedupe.
     # --------------------------------------------------------
 
     existing = dedupe_picks(
@@ -5842,7 +5887,7 @@ def ingest():
     )
 
     # --------------------------------------------------------
-    # 10. Permanent deterministic wager-ID integrity.
+    # 11. Permanent deterministic wager-ID integrity.
     #
     # Existing IDs are preserved. Any valid historical/recovered
     # wager that lacks an ID receives the same deterministic ID it
@@ -5857,7 +5902,7 @@ def ingest():
     )
 
     # --------------------------------------------------------
-    # 11. Save atomically at end of successful ingest run.
+    # 12. Save atomically at end of successful ingest run.
     # --------------------------------------------------------
 
     state[
@@ -5866,7 +5911,7 @@ def ingest():
 
     state[
         "ingest_validation_version"
-    ] = 4
+    ] = CURRENT_INGEST_VALIDATION_VERSION
 
     save_json(
         PICKS_FILE,
