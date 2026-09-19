@@ -194,7 +194,7 @@ def source_post_text(post):
 
     post = post or {}
 
-    legacy = source_post_text(post).strip()
+    legacy = str(post.get("text") or "").strip()
 
     note = post.get("note_tweet") or {}
     note_text = str(
