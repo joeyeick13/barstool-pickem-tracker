@@ -674,9 +674,13 @@ function isTotalMarket(pick){
   return type==="TOTAL" || type==="FIRST_QUARTER_TOTAL" || type==="FIRST_HALF_TOTAL";
 }
 
-function totalMatchup(pick){
-  if(!isTotalMarket(pick)) return "";
-  return String(pick.matchup||pick.game_matchup||"").trim();
+function displayMatchup(pick){
+  return String(
+    pick.event_matchup||
+    pick.matchup||
+    pick.game_matchup||
+    ""
+  ).trim();
 }
 
 function pickMeta(pick){
@@ -738,7 +742,7 @@ function renderCardBody(){
       body=rows.map(pick=>`
         <div class="pick">
           <div>
-            ${totalMatchup(pick)?`<div class="matchup">${totalMatchup(pick)}</div>`:""}
+            ${displayMatchup(pick)?`<div class="matchup">${displayMatchup(pick)}</div>`:""}
             <div class="sel">${pick.selection||""}</div>
             <div class="meta">${pickMeta(pick)}</div>
           </div>
