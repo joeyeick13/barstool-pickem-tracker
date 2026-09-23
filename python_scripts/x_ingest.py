@@ -31,6 +31,13 @@ from football_identity import (
     side_identity,
     spread_line_from_selection,
     total_direction,
+    split_matchup,
+    teams_equivalent,
+)
+
+from espn_resolver import (
+    build_complete_week_slate,
+    event_matchup_text,
 )
 
 
@@ -4535,16 +4542,127 @@ No markdown. No commentary.
             )
             verified = parse_json_response(verify_response.output_text)
 
+            verified_selection = clean_text(verified.get("selection"))
+            verified_line = safe_float(verified.get("line"))
+            verified_matchup = clean_text(verified.get("matchup"))
+            verified_type = normalize_bet_type(verified.get("bet_type"))
+
+            # ------------------------------------------------
+            # ESPN IDENTITY-ONLY FALLBACK FOR SHORTHAND TOTALS
+            # ------------------------------------------------
+            # PAT HILL remains authoritative for the wager, line, and result.
+            # ESPN may supply ONLY the missing two-team game identity, and only
+            # when the shorthand team maps to exactly one game on the complete
+            # target-week slate.  Zero or multiple matches still fail closed.
+            # This is intentionally generic: no team, week, or line is hardcoded.
+            if missing_total_matchup and (
+                not safe_bool(verified.get("verified"))
+                or not has_complete_matchup(verified_matchup)
+            ):
+                source_selection = clean_text(final_pick.get("selection"))
+                source_matchup = clean_text(final_pick.get("matchup"))
+                source_team = clean_text(final_pick.get("team"))
+
+                shorthand_candidates = []
+                for candidate in (source_team, source_matchup, source_selection):
+                    candidate = clean_text(candidate)
+                    if not candidate:
+                        continue
+                    # Remove a trailing total expression such as u46.5,
+                    # under 46.5, o60.5, or over 60.5.
+                    candidate = re.sub(
+                        r"\s+(?:over|under|o|u)\s*[-+]?\d+(?:\.\d+)?\s*$",
+                        "",
+                        candidate,
+                        flags=re.IGNORECASE,
+                    ).strip(" -/@")
+                    if candidate and not has_complete_matchup(candidate):
+                        shorthand_candidates.append(candidate)
+
+                # De-duplicate while preserving strongest/source order.
+                shorthand_candidates = list(dict.fromkeys(shorthand_candidates))
+
+                existing_week_picks = [
+                    pick for pick in (load_json(PICKS_FILE, []) or [])
+                    if pick_week(pick) == int(target_week)
+                    and str(pick.get("sport") or "CFB").upper() == "CFB"
+                ]
+
+                season_year = None
+                created_at = str(root_post.get("created_at") or "")
+                match = re.match(r"(\d{4})-", created_at)
+                if match:
+                    season_year = int(match.group(1))
+                if season_year is None:
+                    season_year = datetime.now(PACIFIC).year
+
+                try:
+                    espn_events = build_complete_week_slate(
+                        existing_week_picks,
+                        season_year,
+                        int(target_week),
+                    )
+                except Exception as exc:
+                    espn_events = []
+                    print(
+                        "PAT HILL ESPN identity fallback unavailable:",
+                        picker, "|", source_selection, "|", exc,
+                    )
+
+                event_matches = []
+                for event in espn_events:
+                    matchup_text = clean_text(event_matchup_text(event))
+                    sides = split_matchup(matchup_text)
+                    if not sides or len(sides) != 2:
+                        continue
+                    left, right = sides
+                    if any(
+                        teams_equivalent(candidate, left)
+                        or teams_equivalent(candidate, right)
+                        for candidate in shorthand_candidates
+                    ):
+                        event_matches.append((event, matchup_text))
+
+                # Deduplicate the same ESPN event if the slate contains
+                # repeated views of it.
+                unique_matches = {}
+                for event, matchup_text in event_matches:
+                    event_id = str(event.get("id") or matchup_text)
+                    unique_matches[event_id] = (event, matchup_text)
+
+                if len(unique_matches) == 1:
+                    _, resolved_matchup = next(iter(unique_matches.values()))
+                    verified = {
+                        "verified": True,
+                        "selection": source_selection,
+                        "matchup": resolved_matchup,
+                        "team": final_pick.get("team"),
+                        "opponent": final_pick.get("opponent"),
+                        "bet_type": final_pick.get("bet_type"),
+                        "side": final_pick.get("side"),
+                        "line": final_pick.get("line"),
+                    }
+                    verified_selection = source_selection
+                    verified_line = safe_float(final_pick.get("line"))
+                    verified_matchup = resolved_matchup
+                    verified_type = normalize_bet_type(final_pick.get("bet_type"))
+                    print(
+                        "PAT HILL ESPN identity-only repair:",
+                        picker, "|", source_selection, "|", resolved_matchup,
+                    )
+                else:
+                    print(
+                        "PAT HILL ESPN identity-only repair unresolved:",
+                        picker, "|", source_selection,
+                        "| candidates:", shorthand_candidates,
+                        "| unique games:", len(unique_matches),
+                    )
+
             if not safe_bool(verified.get("verified")):
                 raise ValueError(
                     f"PAT HILL targeted verification failed: {picker} | "
                     f"{final_pick.get('selection')}"
                 )
-
-            verified_selection = clean_text(verified.get("selection"))
-            verified_line = safe_float(verified.get("line"))
-            verified_matchup = clean_text(verified.get("matchup"))
-            verified_type = normalize_bet_type(verified.get("bet_type"))
 
             if not verified_selection:
                 raise ValueError(f"PAT HILL targeted verification returned empty selection: {picker}")
@@ -4552,7 +4670,7 @@ No markdown. No commentary.
                 raise ValueError(f"PAT HILL targeted spread verification has no line: {picker}")
             if missing_total_matchup and not has_complete_matchup(verified_matchup):
                 raise ValueError(
-                    f"PAT HILL total matchup could not be verified from source images: "
+                    f"PAT HILL total matchup could not be verified from source images/unique ESPN identity: "
                     f"{picker} | {final_pick.get('selection')}"
                 )
 
