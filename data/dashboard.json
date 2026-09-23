@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-23T17:46:47.995999+00:00",
+  "updated_at": "2026-09-23T18:53:53.004124+00:00",
   "cappers": [
     {
       "picker": "Big Cat",
@@ -76,13 +76,13 @@
     {
       "picker": "Stool Presidente",
       "sport": "CFB",
-      "matchup": "Miami @ Wake",
-      "team": "Wake",
+      "matchup": "Miami @ Wake Forest",
+      "team": "Wake Forest",
       "opponent": "Miami",
       "bet_type": "SPREAD",
-      "selection": "Wake +10",
+      "selection": "Wake Forest +20",
       "side": "Wake",
-      "line": 10.0,
+      "line": 20.0,
       "odds": null,
       "units": 1.0,
       "mortal_lock": false,
