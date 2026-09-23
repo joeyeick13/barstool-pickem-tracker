@@ -4315,10 +4315,10 @@ CRITICAL RULES
 
 8. Do not use historical tracker data.
 
-9. Read the printed record on each complete picker card when shown.
+9. `printed_record` means the WEEKLY record represented by the wager rows on that picker card, NOT a cumulative/season record from the standings tweet. If a weekly record is visibly printed on the card, transcribe it. Otherwise calculate it only from the visible WIN/LOSS/PUSH markers on that complete card.
 
 10. Your extracted individual WIN/LOSS/PUSH results for each picker MUST exactly
-    add up to that picker's printed record.
+    add up to that picker's WEEKLY card record.
 
 11. The page transcripts are aids, not authority. Resolve any disagreement by
     re-reading the original images. If a transcript contains
@@ -4417,200 +4417,15 @@ No markdown. No commentary. JSON only.
         )
 
     # --------------------------------------------------------
-    # STRICT DETERMINISTIC FALLBACK FROM PAGE-LOCAL READS
+    # FAIL-CLOSED FINAL-PASS REQUIREMENT
     # --------------------------------------------------------
-    # The final reconciliation model can be overly conservative and return
-    # complete=false even when every page-local read is complete and the
-    # evidence reconciles exactly to the official printed standings. In that
-    # narrow case, construct the payload directly from the independently read
-    # pages instead of asking the model to make a second completeness judgment.
-    #
-    # This is NOT a relaxed validation path. It is available only when:
-    #   * every RESULT_CARD page has a uniquely established picker;
-    #   * every row is readable and has a WIN/LOSS/PUSH result;
-    #   * every row has a non-empty selection;
-    #   * each picker's row count exactly equals the official W+L+P total; and
-    #   * the row-level result counts exactly equal the official printed record.
-    # validate_official_results() still runs afterward and independently checks
-    # the same official records before any week can be replaced.
-    # --------------------------------------------------------
-
+    # Root standings may be cumulative, so never synthesize a weekly payload
+    # from those root totals. The final vision pass must be complete.
     if not safe_bool(payload.get("complete")):
-        fallback_picks = {
-            picker: []
-            for picker in TRACKED_PICKERS
-        }
-        fallback_safe = (
-            len(expected_row_totals) == len(TRACKED_PICKERS)
+        print(
+            "PAT HILL final reconciliation incomplete; "
+            "no cumulative-standings fallback attempted."
         )
-        fallback_reason = None
-
-        for page_payload in page_reads:
-            role = str(
-                page_payload.get("image_role") or ""
-            ).upper()
-            rows = page_payload.get("rows") or []
-
-            if role != "RESULT_CARD":
-                continue
-
-            picker = normalize_picker(
-                page_payload.get("picker")
-            )
-
-            if picker not in TRACKED_PICKERS:
-                fallback_safe = False
-                fallback_reason = (
-                    "unassigned RESULT_CARD page"
-                )
-                break
-
-            for row in rows:
-                if not safe_bool(row.get("readable")):
-                    fallback_safe = False
-                    fallback_reason = (
-                        f"unreadable row for {picker}"
-                    )
-                    break
-
-                selection = str(
-                    row.get("selection") or ""
-                ).strip()
-                result = str(
-                    row.get("result") or ""
-                ).upper().strip()
-
-                if not selection:
-                    fallback_safe = False
-                    fallback_reason = (
-                        f"missing selection for {picker}"
-                    )
-                    break
-
-                if result not in {
-                    "WIN",
-                    "LOSS",
-                    "PUSH",
-                }:
-                    fallback_safe = False
-                    fallback_reason = (
-                        f"missing result for {picker}"
-                    )
-                    break
-
-                fallback_picks[picker].append(
-                    {
-                        "selection": selection,
-                        "matchup": row.get("matchup"),
-                        "team": row.get("team"),
-                        "opponent": row.get("opponent"),
-                        "bet_type": row.get("bet_type") or "OTHER",
-                        "side": row.get("side"),
-                        "line": row.get("line"),
-                        "result": result,
-                        "added_pick": safe_bool(
-                            row.get("added_pick")
-                        ),
-                    }
-                )
-
-            if not fallback_safe:
-                break
-
-        if fallback_safe:
-            for picker in TRACKED_PICKERS:
-                expected = expected_records.get(picker)
-                picks = fallback_picks[picker]
-
-                if expected is None:
-                    fallback_safe = False
-                    fallback_reason = (
-                        f"missing printed record for {picker}"
-                    )
-                    break
-
-                expected_total = (
-                    int(expected.get("wins") or 0)
-                    + int(expected.get("losses") or 0)
-                    + int(expected.get("pushes") or 0)
-                )
-
-                actual_record = {
-                    "wins": sum(
-                        1 for pick in picks
-                        if pick.get("result") == "WIN"
-                    ),
-                    "losses": sum(
-                        1 for pick in picks
-                        if pick.get("result") == "LOSS"
-                    ),
-                    "pushes": sum(
-                        1 for pick in picks
-                        if pick.get("result") == "PUSH"
-                    ),
-                }
-
-                expected_record = {
-                    "wins": int(expected.get("wins") or 0),
-                    "losses": int(expected.get("losses") or 0),
-                    "pushes": int(expected.get("pushes") or 0),
-                }
-
-                if len(picks) != expected_total:
-                    fallback_safe = False
-                    fallback_reason = (
-                        f"row total mismatch for {picker}: "
-                        f"{len(picks)}/{expected_total}"
-                    )
-                    break
-
-                if actual_record != expected_record:
-                    fallback_safe = False
-                    fallback_reason = (
-                        f"result total mismatch for {picker}: "
-                        f"{actual_record}/{expected_record}"
-                    )
-                    break
-
-        if fallback_safe:
-            payload = {
-                "complete": True,
-                "week": int(target_week),
-                "images_read": len(image_urls),
-                "pickers": [
-                    {
-                        "picker": picker,
-                        "printed_record": {
-                            "wins": int(
-                                expected_records[picker].get("wins")
-                                or 0
-                            ),
-                            "losses": int(
-                                expected_records[picker].get("losses")
-                                or 0
-                            ),
-                            "pushes": int(
-                                expected_records[picker].get("pushes")
-                                or 0
-                            ),
-                        },
-                        "picks": fallback_picks[picker],
-                    }
-                    for picker in TRACKED_PICKERS
-                ],
-            }
-            print(
-                "PAT HILL strict deterministic page fallback accepted:",
-                " | ".join(
-                    f"{picker}={len(fallback_picks[picker])}"
-                    for picker in TRACKED_PICKERS
-                ),
-            )
-        else:
-            print(
-                "PAT HILL deterministic page fallback rejected:",
-                fallback_reason or "strict conditions not satisfied",
-            )
 
     return payload
 
@@ -4808,82 +4623,75 @@ def validate_official_results(
             ] += 1
 
         # ----------------------------------------------------
+        # ----------------------------------------------------
         # CARD INTERNAL VALIDATION
         # ----------------------------------------------------
+        # The row-level result markers are the weekly source of truth. A
+        # printed record is enforced only when its decision count equals the
+        # number of rows on this weekly card. If it is larger, it is a
+        # cumulative/season record and must not be compared to Week N rows.
+        row_wins = result_counts["WIN"]
+        row_losses = result_counts["LOSS"]
+        row_pushes = result_counts["PUSH"]
+        row_total = len(normalized_picks)
+        printed_total = wins + losses + pushes
 
-        if (
-            result_counts["WIN"]
-            != wins
-        ):
-            raise ValueError(
-                f"{picker} image validation failed: "
-                f"expected {wins} wins, extracted "
-                f"{result_counts['WIN']}"
-            )
-
-        if (
-            result_counts["LOSS"]
-            != losses
-        ):
-            raise ValueError(
-                f"{picker} image validation failed: "
-                f"expected {losses} losses, extracted "
-                f"{result_counts['LOSS']}"
-            )
-
-        if (
-            result_counts["PUSH"]
-            != pushes
-        ):
-            raise ValueError(
-                f"{picker} image validation failed: "
-                f"expected {pushes} pushes, extracted "
-                f"{result_counts['PUSH']}"
-            )
-
-        if len(
-            normalized_picks
-        ) != (
-            wins
-            + losses
-            + pushes
-        ):
-            raise ValueError(
-                f"{picker} official count mismatch"
-            )
-
-        # ----------------------------------------------------
-        # ROOT PRINTED STANDINGS VALIDATION
-        # ----------------------------------------------------
-
-        if picker in printed_standings:
-            tweet_record = (
-                printed_standings[
-                    picker
-                ]
-            )
-
-            expected_tuple = (
-                tweet_record["wins"],
-                tweet_record["losses"],
-                tweet_record["pushes"],
-            )
-
-            image_tuple = (
-                wins,
-                losses,
-                pushes,
-            )
-
-            if (
-                expected_tuple
-                != image_tuple
-            ):
+        if printed_total == row_total:
+            if (wins, losses, pushes) != (row_wins, row_losses, row_pushes):
                 raise ValueError(
-                    f"{picker} standings-text "
-                    "record does not match card: "
-                    f"{expected_tuple} vs "
-                    f"{image_tuple}"
+                    f"{picker} weekly card record does not match row results: "
+                    f"{wins}-{losses}-{pushes} vs "
+                    f"{row_wins}-{row_losses}-{row_pushes}"
+                )
+        else:
+            print(
+                "PAT HILL card printed record appears cumulative/contextual:",
+                picker,
+                "| printed:",
+                f"{wins}-{losses}-{pushes}",
+                "| weekly rows:",
+                f"{row_wins}-{row_losses}-{row_pushes}",
+                "| row count:",
+                row_total,
+            )
+
+        # Store the WEEKLY record derived from the individual verified rows.
+        wins = row_wins
+        losses = row_losses
+        pushes = row_pushes
+
+        # ----------------------------------------------------
+        # ROOT STANDINGS CORROBORATION
+        # ----------------------------------------------------
+        # Root text can contain cumulative/season standings. Compare it to
+        # the weekly card only when both describe the same number of wagers.
+        if picker in printed_standings:
+            tweet_record = printed_standings[picker]
+            expected_tuple = (
+                int(tweet_record.get("wins") or 0),
+                int(tweet_record.get("losses") or 0),
+                int(tweet_record.get("pushes") or 0),
+            )
+            image_tuple = (wins, losses, pushes)
+            expected_total = sum(expected_tuple)
+            image_total = len(normalized_picks)
+
+            if expected_total == image_total:
+                if expected_tuple != image_tuple:
+                    raise ValueError(
+                        f"{picker} weekly standings-text record "
+                        f"does not match card: {expected_tuple} vs {image_tuple}"
+                    )
+            else:
+                print(
+                    "PAT HILL cumulative/context standings detected:",
+                    picker,
+                    "| root:",
+                    f"{expected_tuple[0]}-{expected_tuple[1]}-{expected_tuple[2]}",
+                    "| weekly card:",
+                    f"{image_tuple[0]}-{image_tuple[1]}-{image_tuple[2]}",
+                    "| weekly rows:",
+                    image_total,
                 )
 
         validated[picker] = {
@@ -5328,42 +5136,27 @@ def official_week_is_healthy(
             expected_total,
         )
 
-        if (
-            wins != expected_wins
-            or losses
-            != expected_losses
-            or pushes
-            != expected_pushes
-        ):
+        # Root standings can be cumulative. Enforce them only when their
+        # decision count equals this stored weekly card's row count.
+        if expected_total == len(rows):
+            if (
+                wins != expected_wins
+                or losses != expected_losses
+                or pushes != expected_pushes
+            ):
+                print(
+                    "OFFICIAL VALIDATION FAILED:",
+                    picker,
+                    "| weekly record mismatch",
+                )
+                healthy = False
+        else:
             print(
-                "OFFICIAL VALIDATION FAILED:",
+                "OFFICIAL VALIDATION NOTE:",
                 picker,
-                "| record mismatch",
+                "| root standings appear cumulative/contextual; "
+                "stored weekly card retained",
             )
-
-            healthy = False
-
-        if len(rows) != expected_total:
-            print(
-                "OFFICIAL VALIDATION FAILED:",
-                picker,
-                "| expected",
-                expected_total,
-                "official rows but found",
-                len(rows),
-            )
-
-            healthy = False
-
-    if healthy:
-        print(
-            "STORED OFFICIAL WEEK IS HEALTHY"
-        )
-
-    else:
-        print(
-            "STORED OFFICIAL WEEK FAILED VALIDATION"
-        )
 
     return healthy
 
