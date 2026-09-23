@@ -4462,6 +4462,45 @@ No markdown. No commentary. JSON only.
         lowered = value.lower()
         return any(token in lowered for token in (" @ ", " vs ", " v. ", " versus "))
 
+    # Existing pregame/source rows are an independent identity source.
+    # If a PAT HILL result card has the same picker + market + selected team/game
+    # but a different spread number, preserve the previously verified source line.
+    # PAT HILL remains authoritative for WIN/LOSS/PUSH; this only protects wager identity.
+    existing_week_rows = [
+        pick for pick in (load_json(PICKS_FILE, []) or [])
+        if pick_week(pick) == int(target_week)
+        and str(pick.get("sport") or "CFB").upper() == "CFB"
+    ]
+
+    def pick_team_anchor(pick):
+        team = clean_text((pick or {}).get("team"))
+        if team:
+            return team
+        selection = clean_text((pick or {}).get("selection"))
+        if not selection:
+            return ""
+        return re.sub(
+            r"\s+[-+]\d+(?:\.\d+)?\s*$",
+            "",
+            selection,
+        ).strip()
+
+    def same_game_identity(left_pick, right_pick):
+        left_matchup = clean_text((left_pick or {}).get("matchup"))
+        right_matchup = clean_text((right_pick or {}).get("matchup"))
+        left_sides = split_matchup(left_matchup) if left_matchup else None
+        right_sides = split_matchup(right_matchup) if right_matchup else None
+        if left_sides and right_sides and len(left_sides) == 2 and len(right_sides) == 2:
+            la, lb = left_sides
+            ra, rb = right_sides
+            if (teams_equivalent(la, ra) and teams_equivalent(lb, rb)) or (
+                teams_equivalent(la, rb) and teams_equivalent(lb, ra)
+            ):
+                return True
+        left_team = pick_team_anchor(left_pick)
+        right_team = pick_team_anchor(right_pick)
+        return bool(left_team and right_team and teams_equivalent(left_team, right_team))
+
     final_by_picker = {}
     for picker_payload in payload.get("pickers") or []:
         picker = normalize_picker(picker_payload.get("picker"))
@@ -4496,6 +4535,51 @@ No markdown. No commentary. JSON only.
                 local_line = safe_float(local_pick.get("line"))
                 if final_line is not None and local_line is not None:
                     spread_line_disagreement = abs(final_line - local_line) > 0.001
+
+            # Cross-check result-card spreads against the already verified pregame/source
+            # row before the provisional week is replaced by official PAT HILL rows.
+            # A unique same-picker/same-market/same-game candidate is strong evidence of
+            # the original wager line and prevents result-card OCR (for example +20 -> +10)
+            # from silently changing the bet after the game.
+            source_spread_pick = None
+            source_spread_disagreement = False
+            if base == "SPREAD":
+                candidates = []
+                for existing in existing_week_rows:
+                    if normalize_picker(existing.get("picker")) != picker:
+                        continue
+                    if normalize_bet_type(existing.get("bet_type")) != bet_type:
+                        continue
+                    if not same_game_identity(final_pick, existing):
+                        continue
+                    candidates.append(existing)
+
+                if len(candidates) == 1:
+                    candidate = candidates[0]
+                    final_line = safe_float(final_pick.get("line"))
+                    source_line = safe_float(candidate.get("line"))
+                    if final_line is not None and source_line is not None and abs(final_line - source_line) > 0.001:
+                        source_spread_pick = candidate
+                        source_spread_disagreement = True
+
+            if source_spread_disagreement:
+                old_selection = final_pick.get("selection")
+                old_line = safe_float(final_pick.get("line"))
+                final_pick["selection"] = clean_text(source_spread_pick.get("selection")) or final_pick.get("selection")
+                final_pick["line"] = safe_float(source_spread_pick.get("line"))
+                final_pick["team"] = source_spread_pick.get("team") or final_pick.get("team")
+                final_pick["opponent"] = source_spread_pick.get("opponent") or final_pick.get("opponent")
+                final_pick["matchup"] = source_spread_pick.get("matchup") or final_pick.get("matchup")
+                print(
+                    "PAT HILL pregame spread identity preserved:",
+                    picker, "|", old_selection, "| line:", old_line,
+                    "->", final_pick.get("selection"), "| line:", final_pick.get("line"),
+                    "| matchup:", final_pick.get("matchup"),
+                )
+                # The original source establishes the wager identity. The result card
+                # still supplies the official result, so no image re-read is required
+                # solely for this already-resolved spread discrepancy.
+                spread_line_disagreement = False
 
             if not (missing_total_matchup or spread_line_disagreement):
                 continue
