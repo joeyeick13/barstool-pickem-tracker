@@ -3499,6 +3499,24 @@ def process_normal_posts(
             ),
         )
 
+        # Once a week has been officially reconciled from the PAT HILL
+        # result cards, normal timeline ingestion must never add a new
+        # provisional row back into that closed week. Late/retried source
+        # posts are already represented by the authoritative official card.
+        last_official_week = int(state.get("last_official_reconciled_week") or 0)
+        if week is not None and int(week) <= last_official_week:
+            print(
+                "NORMAL INGEST SKIPPING CLOSED OFFICIAL WEEK POST:",
+                post_id,
+                "| week:",
+                week,
+                "| last official reconciled week:",
+                last_official_week,
+            )
+            processed_ids.add(post_id)
+            failed_ids.discard(post_id)
+            continue
+
         post_url = (
             "https://x.com/"
             f"{USERNAME}/status/"
@@ -5057,6 +5075,64 @@ def validate_official_results(
 # BUILD FINAL OFFICIAL WEEK ROWS
 # ============================================================
 
+def apply_verified_historical_official_overrides(picks):
+    """
+    Apply narrowly scoped, source-verified historical corrections after
+    official reconciliation. These are not grading guesses and are not a
+    general fallback: they repair a known transcription error in an
+    authoritative result-card row while preserving the official result.
+
+    The Week 3 Stool Presidente source wager was independently verified as
+    Wake Forest +20 vs Miami. PAT HILL result-card OCR can read the compressed
+    card text as Wake +10. Keep the verified pregame wager identity (+20) and
+    leave WIN/LOSS/PUSH untouched.
+    """
+    corrected = 0
+    for pick in picks or []:
+        if not pick.get("official_reconciled"):
+            continue
+        if pick_week(pick) != 3:
+            continue
+        if normalize_picker(pick.get("picker")) != "Stool Presidente":
+            continue
+        if base_market(normalize_bet_type(pick.get("bet_type"))) != "SPREAD":
+            continue
+
+        team_anchor = pick_team = clean_text(pick.get("team"))
+        selection = clean_text(pick.get("selection"))
+        matchup = clean_text(pick.get("matchup"))
+        wake_identity = (
+            (team_anchor and teams_equivalent(team_anchor, "Wake Forest"))
+            or bool(re.search(r"\bwake(?:\s+forest)?\b", selection, re.I))
+            or bool(re.search(r"\bwake(?:\s+forest)?\b", matchup, re.I))
+        )
+        if not wake_identity:
+            continue
+
+        current_line = safe_float(pick.get("line"))
+        if current_line is not None and abs(current_line - 20.0) <= 0.001:
+            continue
+
+        old_selection = selection
+        old_line = current_line
+        pick["selection"] = "Wake Forest +20"
+        pick["line"] = 20.0
+        pick["team"] = "Wake Forest"
+        pick["opponent"] = "Miami"
+        pick["matchup"] = "Miami @ Wake Forest"
+        corrected += 1
+        print(
+            "VERIFIED HISTORICAL OFFICIAL IDENTITY REPAIR:",
+            "Stool Presidente | Week 3 |",
+            old_selection,
+            "| line:",
+            old_line,
+            "-> Wake Forest +20 | matchup: Miami @ Wake Forest",
+        )
+
+    return picks, corrected
+
+
 def build_official_week_rows(
     *,
     validated,
@@ -6257,7 +6333,20 @@ def ingest():
         )
 
     # --------------------------------------------------------
-    # 10. Permanent canonical dedupe.
+    # 10. Source-verified historical official identity repairs.
+    # --------------------------------------------------------
+
+    existing, historical_official_repairs = (
+        apply_verified_historical_official_overrides(existing)
+    )
+    if historical_official_repairs:
+        print(
+            "Verified historical official identity repairs:",
+            historical_official_repairs,
+        )
+
+    # --------------------------------------------------------
+    # 11. Permanent canonical dedupe.
     # --------------------------------------------------------
 
     existing = dedupe_picks(
@@ -6265,7 +6354,7 @@ def ingest():
     )
 
     # --------------------------------------------------------
-    # 11. Permanent deterministic wager-ID integrity.
+    # 12. Permanent deterministic wager-ID integrity.
     #
     # Existing IDs are preserved. Any valid historical/recovered
     # wager that lacks an ID receives the same deterministic ID it
