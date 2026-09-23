@@ -3978,7 +3978,7 @@ A RED X means LOSS.
 A push/tie symbol means PUSH.
 
 Preserve:
-- picker name when visible;
+- picker name when visible. Read the large notebook header first (for example, "Big Cat’s Picks", "Rico Bosco’s Picks", or "Dave’s Picks"). A page labeled "Dave’s Picks" is Stool Presidente;
 - exact concise wager/selection;
 - matchup/team/opponent when visible;
 - spread/total/moneyline value;
@@ -4093,14 +4093,17 @@ No markdown. No commentary. JSON only.
     # --------------------------------------------------------
     # DETERMINISTIC ORPHAN-PAGE OWNERSHIP
     # --------------------------------------------------------
-    # Some continuation/result pages do not visibly repeat the picker's
-    # name. Do not ask vision to guess ownership in that case. The PAT HILL
-    # standings text gives the exact official row total for each picker.
-    # We may assign an unnamed page only when the row-count arithmetic makes
-    # exactly one ownership possible: every already-named picker must already
-    # equal its official total, exactly one picker must be short, and the
-    # unnamed rows must equal that one deficit. Otherwise leave ownership
-    # unresolved and let the existing fail-closed validation reject the run.
+    # A PAT HILL result set can contain continuation pages whose picker name
+    # is visually present but occasionally missed by the page-local vision
+    # pass.  The official weekly standings give an independent row total for
+    # each picker (W + L + P).  Use those totals only as bookkeeping evidence.
+    #
+    # Unlike the older implementation, this supports MULTIPLE unnamed pages
+    # and does not require all orphan rows to belong to one picker.  We search
+    # every possible assignment of orphan pages to picker deficits and accept
+    # ownership only when there is exactly ONE mathematically valid assignment.
+    # If zero or multiple assignments work, ownership stays unresolved and the
+    # normal fail-closed validation rejects the reconciliation.
     # --------------------------------------------------------
 
     expected_records = parse_printed_standings(
@@ -4140,55 +4143,17 @@ No markdown. No commentary. JSON only.
             orphan_pages.append(page_payload)
 
     if orphan_pages and len(expected_row_totals) == len(TRACKED_PICKERS):
-        orphan_row_total = sum(
-            len(page.get("rows") or [])
-            for page in orphan_pages
-        )
-
         deficits = {
             picker: expected_row_totals[picker] - named_row_totals[picker]
             for picker in TRACKED_PICKERS
         }
 
-        candidates = [
-            picker
-            for picker, deficit in deficits.items()
-            if deficit == orphan_row_total and deficit > 0
-        ]
-
-        other_pickers_exact = (
-            len(candidates) == 1
-            and all(
-                named_row_totals[picker] == expected_row_totals[picker]
-                for picker in TRACKED_PICKERS
-                if picker != candidates[0]
-            )
-        )
-
-        if other_pickers_exact:
-            inferred_picker = candidates[0]
-            for page_payload in orphan_pages:
-                page_payload["picker"] = inferred_picker
-                page_payload["picker_assignment"] = (
-                    "DETERMINISTIC_OFFICIAL_ROW_TOTAL"
-                )
-
+        # A named page already exceeding the official weekly row total means
+        # the evidence is internally inconsistent.  Never repair around it.
+        if any(deficit < 0 for deficit in deficits.values()):
             print(
-                "PAT HILL deterministic orphan assignment:",
-                inferred_picker,
-                "| orphan pages:",
-                len(orphan_pages),
-                "| orphan rows:",
-                orphan_row_total,
-                "| expected totals:",
-                expected_row_totals,
-            )
-        else:
-            print(
-                "PAT HILL orphan pages unresolved:",
-                len(orphan_pages),
-                "| orphan rows:",
-                orphan_row_total,
+                "PAT HILL orphan assignment impossible:",
+                "named rows exceed official totals",
                 "| named totals:",
                 named_row_totals,
                 "| expected totals:",
@@ -4196,6 +4161,88 @@ No markdown. No commentary. JSON only.
                 "| deficits:",
                 deficits,
             )
+        else:
+            orphan_sizes = [
+                len(page.get("rows") or [])
+                for page in orphan_pages
+            ]
+            picker_order = sorted(TRACKED_PICKERS)
+            valid_assignments = []
+
+            def search_orphan_assignments(index, remaining, assignment):
+                # We only need to know whether the solution is unique.  Stop
+                # after finding a second valid assignment.
+                if len(valid_assignments) > 1:
+                    return
+
+                if index >= len(orphan_pages):
+                    if all(value == 0 for value in remaining.values()):
+                        valid_assignments.append(list(assignment))
+                    return
+
+                page_size = orphan_sizes[index]
+
+                for picker in picker_order:
+                    if remaining[picker] < page_size:
+                        continue
+
+                    remaining[picker] -= page_size
+                    assignment.append(picker)
+
+                    search_orphan_assignments(
+                        index + 1,
+                        remaining,
+                        assignment,
+                    )
+
+                    assignment.pop()
+                    remaining[picker] += page_size
+
+            search_orphan_assignments(
+                0,
+                dict(deficits),
+                [],
+            )
+
+            if len(valid_assignments) == 1:
+                assignment = valid_assignments[0]
+
+                for page_payload, inferred_picker in zip(
+                    orphan_pages,
+                    assignment,
+                ):
+                    page_payload["picker"] = inferred_picker
+                    page_payload["picker_assignment"] = (
+                        "DETERMINISTIC_OFFICIAL_ROW_TOTAL_UNIQUE"
+                    )
+
+                print(
+                    "PAT HILL deterministic orphan assignment:",
+                    " | ".join(
+                        f"image {page.get('image_index')} -> {picker} "
+                        f"({len(page.get('rows') or [])} rows)"
+                        for page, picker in zip(orphan_pages, assignment)
+                    ),
+                    "| named totals:",
+                    named_row_totals,
+                    "| expected totals:",
+                    expected_row_totals,
+                )
+            else:
+                print(
+                    "PAT HILL orphan pages unresolved:",
+                    len(orphan_pages),
+                    "| orphan row sizes:",
+                    orphan_sizes,
+                    "| named totals:",
+                    named_row_totals,
+                    "| expected totals:",
+                    expected_row_totals,
+                    "| deficits:",
+                    deficits,
+                    "| valid assignments:",
+                    len(valid_assignments),
+                )
 
     page_transcripts = json.dumps(
         page_reads,
@@ -4275,7 +4322,7 @@ CRITICAL RULES
 
 11. The page transcripts are aids, not authority. Resolve any disagreement by
     re-reading the original images. If a transcript contains
-    picker_assignment=DETERMINISTIC_OFFICIAL_ROW_TOTAL, the program assigned
+    picker_assignment beginning with DETERMINISTIC_OFFICIAL_ROW_TOTAL, the program assigned
     that otherwise-unnamed RESULT_CARD page only because the official printed
     standings row totals made exactly one picker ownership mathematically
     possible. Treat that ownership as established bookkeeping, while still
