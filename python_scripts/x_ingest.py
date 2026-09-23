@@ -3985,6 +3985,8 @@ Preserve:
 - 1Q, 1H and team-total distinctions;
 - whether a wager appears in an Adds section;
 - printed record when visible.
+- For every game total, read the complete matchup context (both teams), not just a shorthand such as "JMU" or "Boise".
+- For every spread, zoom/read the exact signed number carefully; +20 must never become +10.
 
 Do not infer rows from another page.
 Do not invent cropped or unreadable text.
@@ -4304,7 +4306,7 @@ CRITICAL RULES
 3. Do not duplicate a wager simply because the same row appears in overlapping
    screenshots or because it appears in both a page transcript and an image.
 
-4. Preserve the actual wager line.
+4. Preserve the actual wager line exactly. Re-check every spread digit against the image; for example +20 and +10 are different wagers. For every game total, preserve the complete two-team matchup context from the card rather than only a one-team shorthand.
 
 5. Preserve 1Q, 1H and team-total distinctions.
 
@@ -4426,6 +4428,150 @@ No markdown. No commentary. JSON only.
             "PAT HILL final reconciliation incomplete; "
             "no cumulative-standings fallback attempted."
         )
+        return payload
+
+    # --------------------------------------------------------
+    # PASS 3 — TARGETED ROW VERIFICATION / CONTEXT REPAIR
+    # --------------------------------------------------------
+    # The full-card pass can occasionally misread one spread digit (for
+    # example +20 as +10) or preserve a shorthand total such as JMU u46.5
+    # without the opponent.  Compare the final card to the independent
+    # page-local transcription.  Re-read the ORIGINAL images only when a
+    # numeric spread disagrees or a total is missing complete game identity.
+    # Never guess and never use schedule/history data in this repair pass.
+
+    local_rows_by_picker = {picker: [] for picker in TRACKED_PICKERS}
+    for page_payload in page_reads:
+        if str(page_payload.get("image_role") or "").upper() != "RESULT_CARD":
+            continue
+        picker = normalize_picker(page_payload.get("picker"))
+        if picker in TRACKED_PICKERS:
+            local_rows_by_picker[picker].extend(page_payload.get("rows") or [])
+
+    def has_complete_matchup(value):
+        value = clean_text(value)
+        if not value:
+            return False
+        lowered = value.lower()
+        return any(token in lowered for token in (" @ ", " vs ", " v. ", " versus "))
+
+    final_by_picker = {}
+    for picker_payload in payload.get("pickers") or []:
+        picker = normalize_picker(picker_payload.get("picker"))
+        if picker in TRACKED_PICKERS:
+            final_by_picker[picker] = picker_payload
+
+    for picker in sorted(TRACKED_PICKERS):
+        picker_payload = final_by_picker.get(picker)
+        if not picker_payload:
+            continue
+
+        final_picks = picker_payload.get("picks") or []
+        local_rows = local_rows_by_picker.get(picker) or []
+
+        # Index comparison is safe only when both independent passes found the
+        # same number of rows for this picker. Otherwise targeted verification
+        # still repairs missing total context, but does not assume row alignment.
+        aligned = len(final_picks) == len(local_rows)
+
+        for row_index, final_pick in enumerate(final_picks):
+            bet_type = normalize_bet_type(final_pick.get("bet_type"))
+            base = base_market(bet_type)
+            missing_total_matchup = (
+                base == "TOTAL"
+                and not has_complete_matchup(final_pick.get("matchup"))
+            )
+
+            local_pick = local_rows[row_index] if aligned else None
+            spread_line_disagreement = False
+            if base == "SPREAD" and local_pick:
+                final_line = safe_float(final_pick.get("line"))
+                local_line = safe_float(local_pick.get("line"))
+                if final_line is not None and local_line is not None:
+                    spread_line_disagreement = abs(final_line - local_line) > 0.001
+
+            if not (missing_total_matchup or spread_line_disagreement):
+                continue
+
+            verification_prompt = f"""
+You are verifying ONE wager row from official @barstoolpickem PAT HILL result-card images.
+
+TARGET WEEK: {target_week}
+PICKER: {picker}
+ROW NUMBER WITHIN THIS PICKER CARD: {row_index + 1} of {len(final_picks)}
+FINAL-PASS CANDIDATE: {json.dumps(final_pick, ensure_ascii=False)}
+PAGE-LOCAL CANDIDATE: {json.dumps(local_pick, ensure_ascii=False) if local_pick else 'null'}
+
+Re-read the supplied ORIGINAL images and return the exact wager shown for this row.
+Use only visible image evidence. Do not use schedules, historical tracker data, or guesses.
+
+CRITICAL:
+- Preserve the exact signed spread. Distinguish +20 from +10, -20 from -10, etc.
+- For a game TOTAL, return the complete matchup (both teams) whenever it is visible anywhere in the row/card context.
+- If both teams cannot be established from the images, set verified=false.
+- Keep 1Q, 1H and team-total distinctions exact.
+- Do not change the WIN/LOSS/PUSH result; this pass verifies wager identity only.
+
+Return JSON only:
+{{
+  "verified": true,
+  "selection": "exact concise wager",
+  "matchup": "Team A @ Team B or Team A vs Team B",
+  "team": "selected/team-total team or null",
+  "opponent": "opponent or null",
+  "bet_type": "SPREAD|TOTAL|MONEYLINE|TEAM_TOTAL|FIRST_QUARTER_SPREAD|FIRST_QUARTER_TOTAL|FIRST_QUARTER_MONEYLINE|FIRST_QUARTER_TEAM_TOTAL|FIRST_HALF_SPREAD|FIRST_HALF_TOTAL|FIRST_HALF_MONEYLINE|FIRST_HALF_TEAM_TOTAL|OTHER",
+  "side": "OVER|UNDER|team name|null",
+  "line": 0.0
+}}
+No markdown. No commentary.
+"""
+            verify_content = [{"type": "input_text", "text": verification_prompt}]
+            for image_url in image_urls:
+                verify_content.append({"type": "input_image", "image_url": image_url})
+
+            verify_response = client.responses.create(
+                model=OPENAI_MODEL,
+                input=[{"role": "user", "content": verify_content}],
+            )
+            verified = parse_json_response(verify_response.output_text)
+
+            if not safe_bool(verified.get("verified")):
+                raise ValueError(
+                    f"PAT HILL targeted verification failed: {picker} | "
+                    f"{final_pick.get('selection')}"
+                )
+
+            verified_selection = clean_text(verified.get("selection"))
+            verified_line = safe_float(verified.get("line"))
+            verified_matchup = clean_text(verified.get("matchup"))
+            verified_type = normalize_bet_type(verified.get("bet_type"))
+
+            if not verified_selection:
+                raise ValueError(f"PAT HILL targeted verification returned empty selection: {picker}")
+            if base == "SPREAD" and verified_line is None:
+                raise ValueError(f"PAT HILL targeted spread verification has no line: {picker}")
+            if missing_total_matchup and not has_complete_matchup(verified_matchup):
+                raise ValueError(
+                    f"PAT HILL total matchup could not be verified from source images: "
+                    f"{picker} | {final_pick.get('selection')}"
+                )
+
+            old_selection = final_pick.get("selection")
+            old_matchup = final_pick.get("matchup")
+            final_pick["selection"] = verified_selection
+            final_pick["matchup"] = verified_matchup or final_pick.get("matchup")
+            final_pick["team"] = verified.get("team") or final_pick.get("team")
+            final_pick["opponent"] = verified.get("opponent") or final_pick.get("opponent")
+            final_pick["bet_type"] = verified_type
+            final_pick["side"] = verified.get("side") or final_pick.get("side")
+            final_pick["line"] = verified_line
+
+            print(
+                "PAT HILL targeted row verified:",
+                picker,
+                "|", old_selection, "->", final_pick.get("selection"),
+                "| matchup:", old_matchup, "->", final_pick.get("matchup"),
+            )
 
     return payload
 
