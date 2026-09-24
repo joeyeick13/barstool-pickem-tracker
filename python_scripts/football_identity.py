@@ -541,6 +541,7 @@ ALIASES = {
     "new mexico": {
         "new mexico",
         "unm",
+        "new mex",
         "nm",
     },
     "new mexico state": {
