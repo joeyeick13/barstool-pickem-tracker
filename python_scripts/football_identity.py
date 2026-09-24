@@ -541,6 +541,7 @@ ALIASES = {
     },
     "new mexico": {
         "new mexico",
+        "new mex",
         "unm",
         "nm",
     },
@@ -548,6 +549,7 @@ ALIASES = {
         "new mexico state",
         "new mexico st",
         "nmsu",
+        "nmst",
     },
     "norfolk state": {
         "norfolk state",
