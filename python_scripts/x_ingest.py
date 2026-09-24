@@ -91,7 +91,7 @@ MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 6
+CURRENT_INGEST_VALIDATION_VERSION = 7
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -2576,6 +2576,105 @@ def normalize_ai_pick(
 
 
 # ============================================================
+# CONTEXT-ONLY SOURCE TEAM NORMALIZATION
+# ============================================================
+
+# These are source-card conventions that are safe only when the complete
+# matchup independently contains the mapped team. They are intentionally NOT
+# global football aliases. This prevents a short token such as UT from being
+# interpreted outside the source matchup that proves its meaning.
+SOURCE_CONTEXT_TEAM_ALIASES = {
+    "ut": "Tennessee",
+}
+
+
+def normalize_contextual_source_team(pick):
+    """
+    Correct a model-expanded spread team from the literal source token when a
+    context-only source abbreviation is independently confirmed by the full
+    matchup.
+
+    Example:
+        source_team_text = UT
+        source_matchup_text = Texas @ Tenn
+        -> Tennessee
+
+    Safety:
+      - SPREAD only;
+      - requires a literal source_team_text;
+      - requires a complete two-team source matchup;
+      - mapped team must match exactly one matchup side;
+      - line must already be numeric;
+      - never changes picker, week, line, odds, units, or result.
+    """
+    if base_market(normalize_bet_type(pick.get("bet_type"))) != "SPREAD":
+        return pick, False
+
+    literal_team = clean_text(pick.get("source_team_text"))
+    mapped_team = SOURCE_CONTEXT_TEAM_ALIASES.get(norm(literal_team))
+
+    if not mapped_team:
+        return pick, False
+
+    source_matchup = (
+        clean_text(pick.get("source_matchup_text"))
+        or clean_text(pick.get("matchup"))
+    )
+    sides = split_matchup(source_matchup) if source_matchup else []
+
+    if len(sides) != 2:
+        return pick, False
+
+    mapped_indexes = [
+        index
+        for index, side in enumerate(sides)
+        if teams_equivalent(mapped_team, side)
+    ]
+
+    if len(mapped_indexes) != 1:
+        return pick, False
+
+    line = safe_float(pick.get("line"))
+    if line is None:
+        return pick, False
+
+    old_selection = clean_text(pick.get("selection"))
+    old_team = clean_text(pick.get("team"))
+    old_side = clean_text(pick.get("side"))
+
+    pick.setdefault("pre_source_context_selection", old_selection or None)
+    pick.setdefault("pre_source_context_team", old_team or None)
+    pick.setdefault("pre_source_context_side", old_side or None)
+
+    pick["selection"] = f"{mapped_team} {line:+g}"
+    pick["team"] = mapped_team
+
+    if old_side and old_side.upper() not in {"OVER", "UNDER"}:
+        pick["side"] = mapped_team
+
+    # Keep the source matchup itself intact. Schedule enrichment owns canonical
+    # ESPN matchup/opponent metadata.
+    other_index = 1 - mapped_indexes[0]
+    pick["opponent"] = clean_text(sides[other_index]) or pick.get("opponent")
+    pick["source_context_team_normalized"] = True
+
+    print(
+        "INGEST SOURCE CONTEXT TEAM NORMALIZED:",
+        pick.get("picker"),
+        "| source token:",
+        literal_team,
+        "|",
+        old_selection,
+        "->",
+        pick.get("selection"),
+        "| source matchup:",
+        source_matchup,
+    )
+
+    return pick, True
+
+
+# ============================================================
 # STRUCTURAL PICK VALIDATION
 # ============================================================
 
@@ -3287,6 +3386,10 @@ def validate_normal_post_payload(
             raw_pick,
             default_week=default_week,
             picker_hint=picker_hint,
+        )
+
+        pick, _ = normalize_contextual_source_team(
+            pick
         )
 
         pick, _ = repair_spread_identity_from_espn_schedule(
