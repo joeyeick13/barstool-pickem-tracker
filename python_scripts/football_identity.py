@@ -350,6 +350,7 @@ ALIASES = {
         "ga state",
         "ga st",
         "gast",
+        "gsu",
     },
     "georgia tech": {
         "georgia tech",
@@ -541,7 +542,6 @@ ALIASES = {
     "new mexico": {
         "new mexico",
         "unm",
-        "new mex",
         "nm",
     },
     "new mexico state": {
