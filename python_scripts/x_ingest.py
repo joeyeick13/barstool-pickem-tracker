@@ -2733,7 +2733,31 @@ def repair_spread_identity_from_espn_schedule(
         resolved_norm,
     ).ratio()
 
-    if identity_similarity < 0.67:
+    # A short source abbreviation can be a one-character OCR error even when
+    # comparing it with the full ESPN team name produces a low similarity score.
+    # Example shape: GSU misread as ASU.  Build a conservative acronym from the
+    # ESPN counterpart and allow the repair only when the source token and that
+    # acronym have the same short length and differ by exactly one character.
+    #
+    # This remains safe because the OTHER matchup side already had to identify
+    # exactly one ESPN event above.  It does not allow arbitrary opponent-driven
+    # replacement such as SMU -> Missouri or MINN -> Indiana.
+    def _team_acronym(value):
+        words = re.findall(r"[A-Za-z0-9]+", clean_text(value))
+        ignored = {"the", "of", "and", "at"}
+        letters = [word[0] for word in words if word.lower() not in ignored]
+        return "".join(letters).lower()
+
+    selected_token = re.sub(r"[^a-z0-9]", "", selected_norm)
+    resolved_acronym = _team_acronym(resolved_selected)
+
+    one_char_acronym_ocr = (
+        2 <= len(selected_token) <= 5
+        and len(selected_token) == len(resolved_acronym)
+        and sum(a != b for a, b in zip(selected_token, resolved_acronym)) == 1
+    )
+
+    if identity_similarity < 0.67 and not one_char_acronym_ocr:
         print(
             "INGEST ESPN IDENTITY CONFLICT PRESERVED:",
             pick.get("picker"),
@@ -2745,9 +2769,25 @@ def repair_spread_identity_from_espn_schedule(
             resolved_selected,
             "| similarity:",
             f"{identity_similarity:.3f}",
+            "| ESPN acronym:",
+            resolved_acronym or "NONE",
             "| action: preserve selected wager; defer metadata repair",
         )
         return pick, False
+
+    if one_char_acronym_ocr and identity_similarity < 0.67:
+        print(
+            "INGEST ESPN ONE-CHAR ACRONYM OCR CONFIRMED:",
+            pick.get("picker"),
+            "| source team:",
+            selected,
+            "| ESPN team:",
+            resolved_selected,
+            "| ESPN acronym:",
+            resolved_acronym,
+            "| anchor:",
+            anchor,
+        )
 
     line = safe_float(pick.get("line"))
     if line is None:
