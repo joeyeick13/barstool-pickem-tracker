@@ -1741,18 +1741,64 @@ def preflight_normal_source(
     post_url,
     picker_hint,
 ):
-    """Independently inventory the source before structured extraction.
+    """
+    Independently inventory the source before structured extraction.
 
-    This is deliberately a separate model request.  It gives the final
+    This is deliberately a separate model request. It gives the final
     extraction a second reading of dense cards and long text posts so a
     self-consistent omission cannot silently pass validation.
+
+    Inventory responses are also required to be internally consistent.
+    If the model reports a wager_count that does not equal the number of
+    wager rows it returned, or otherwise returns a structurally invalid
+    inventory, retry the independent inventory from the original source.
+
+    Never repair the model's reported count locally and never accept a
+    partial inventory merely because it is close. All attempts must
+    independently satisfy the same fail-closed validation.
     """
 
     from openai import OpenAI
 
     client = OpenAI()
 
-    prompt = f"""
+    max_attempts = 3
+    last_error = None
+
+    for attempt in range(1, max_attempts + 1):
+
+        retry_instruction = ""
+
+        if attempt > 1:
+            retry_instruction = f"""
+IMPORTANT RETRY INSTRUCTION:
+
+A previous independent inventory attempt was rejected because its output
+was structurally inconsistent or incomplete.
+
+This is independent inventory attempt {attempt} of {max_attempts}.
+
+Re-read the ORIGINAL source material from scratch.
+
+Do NOT copy or repair the previous answer.
+
+Count the wagers again directly from the supplied source text and every
+supplied image.
+
+Before responding, verify all of the following:
+
+1. wager_count exactly equals the number of objects in wagers.
+2. images_read exactly equals {len(image_urls)}.
+3. Every supplied image was inspected.
+4. Every individual wager physically visible in the source appears
+   exactly once.
+5. Matchup headings, records, scores, decorative text, and other
+   non-wager material are not counted.
+6. If you cannot confidently produce a complete inventory, return
+   complete=false rather than guessing.
+""".strip()
+
+        prompt = f"""
 You are performing an INDEPENDENT completeness inventory of one verified
 @barstoolpickem source post.
 
@@ -1771,6 +1817,8 @@ For every wager, transcribe a short exact wager label preserving the visible
 signed spread or total. If a matchup is explicitly attached to that wager,
 transcribe it; otherwise use null. Never invent an opponent or matchup.
 
+{retry_instruction}
+
 Return JSON only:
 {{
   "complete": true,
@@ -1785,61 +1833,154 @@ Set complete=false if any supplied image or any part of the source cannot be
 read confidently enough to inventory every wager.
 """.strip()
 
-    content = [
-        {"type": "input_text", "text": prompt}
-    ]
-
-    for image_url in image_urls:
-        content.append(
+        content = [
             {
-                "type": "input_image",
-                "image_url": image_url,
+                "type": "input_text",
+                "text": prompt,
             }
-        )
+        ]
 
-    response = client.responses.create(
-        model=OPENAI_MODEL,
-        input=[{"role": "user", "content": content}],
+        for image_url in image_urls:
+            content.append(
+                {
+                    "type": "input_image",
+                    "image_url": image_url,
+                }
+            )
+
+        try:
+            response = client.responses.create(
+                model=OPENAI_MODEL,
+                input=[
+                    {
+                        "role": "user",
+                        "content": content,
+                    }
+                ],
+            )
+
+            payload = parse_json_response(
+                response.output_text
+            )
+
+            if not safe_bool(
+                payload.get("complete")
+            ):
+                raise ValueError(
+                    "Independent source inventory marked extraction incomplete"
+                )
+
+            try:
+                count = int(
+                    payload.get("wager_count")
+                )
+            except Exception as exc:
+                raise ValueError(
+                    "Independent source inventory returned invalid wager_count"
+                ) from exc
+
+            wagers = payload.get("wagers")
+
+            if not isinstance(wagers, list):
+                raise ValueError(
+                    "Independent source inventory wagers is not a list"
+                )
+
+            actual_row_count = len(wagers)
+
+            if actual_row_count != count:
+                raise ValueError(
+                    "Independent source inventory count does not match its rows "
+                    f"(reported {count}, rows {actual_row_count})"
+                )
+
+            try:
+                images_read = int(
+                    payload.get("images_read") or 0
+                )
+            except Exception as exc:
+                raise ValueError(
+                    "Independent source inventory returned invalid images_read"
+                ) from exc
+
+            if images_read != len(image_urls):
+                raise ValueError(
+                    "Independent source inventory did not read every image "
+                    f"(expected {len(image_urls)}, reported {images_read})"
+                )
+
+            normalized_wagers = []
+
+            for index, wager in enumerate(
+                wagers,
+                start=1,
+            ):
+                if not isinstance(wager, dict):
+                    raise ValueError(
+                        "Independent source inventory returned invalid wager "
+                        f"row {index}"
+                    )
+
+                selection = clean_text(
+                    wager.get("selection")
+                )
+
+                if not selection:
+                    raise ValueError(
+                        "Independent source inventory returned empty selection "
+                        f"for wager row {index}"
+                    )
+
+                matchup = clean_text(
+                    wager.get("matchup")
+                )
+
+                normalized_wagers.append(
+                    {
+                        "selection": selection,
+                        "matchup": matchup or None,
+                    }
+                )
+
+            result = {
+                "wager_count": count,
+                "wagers": normalized_wagers,
+            }
+
+            if attempt > 1:
+                print(
+                    "INDEPENDENT SOURCE INVENTORY RETRY SUCCEEDED:",
+                    post_url,
+                    "| attempt:",
+                    attempt,
+                    "| wagers:",
+                    count,
+                )
+
+            return result
+
+        except Exception as exc:
+            last_error = exc
+
+            if attempt >= max_attempts:
+                break
+
+            print(
+                "INDEPENDENT SOURCE INVENTORY RETRY:",
+                post_url,
+                "| attempt:",
+                attempt,
+                "failed |",
+                type(exc).__name__,
+                exc,
+            )
+
+    raise ValueError(
+        "Independent source inventory failed after "
+        f"{max_attempts} attempts: "
+        f"{type(last_error).__name__ if last_error else 'UnknownError'} "
+        f"{last_error or 'unknown inventory failure'}"
     )
-
-    payload = parse_json_response(response.output_text)
-
-    if not safe_bool(payload.get("complete")):
-        raise ValueError(
-            "Independent source inventory marked extraction incomplete"
-        )
-
-    try:
-        count = int(payload.get("wager_count"))
-    except Exception as exc:
-        raise ValueError(
-            "Independent source inventory returned invalid wager_count"
-        ) from exc
-
-    wagers = payload.get("wagers")
-
-    if not isinstance(wagers, list) or len(wagers) != count:
-        raise ValueError(
-            "Independent source inventory count does not match its rows"
-        )
-
-    try:
-        images_read = int(payload.get("images_read") or 0)
-    except Exception as exc:
-        raise ValueError(
-            "Independent source inventory returned invalid images_read"
-        ) from exc
-
-    if images_read != len(image_urls):
-        raise ValueError(
-            "Independent source inventory did not read every image"
-        )
-
-    return {
-        "wager_count": count,
-        "wagers": wagers,
-    }
-
 
 def parse_post_with_ai(
     *,
