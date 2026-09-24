@@ -47,6 +47,23 @@ AMBIGUOUS_CONTEXT_GROUPS = {
         "oklahoma state",
         "oregon state",
     },
+    # Context-only source-card abbreviations. These are deliberately
+    # NOT global aliases; they are only accepted while comparing a
+    # complete two-team matchup.
+    "ut": {
+        "tennessee",
+    },
+    "tu": {
+        "temple",
+        "tulane",
+        "tulsa",
+    },
+    "um": {
+        "michigan",
+        "miami",
+        "mississippi",
+        "montana",
+    },
 }
 
 
@@ -208,12 +225,14 @@ def identity_matches(
     if first_norm == second_norm:
         return True
 
-    first_ambiguous = is_ambiguous_hint(
-        first
+    first_ambiguous = (
+        is_ambiguous_hint(first)
+        or bool(contextual_candidates(first))
     )
 
-    second_ambiguous = is_ambiguous_hint(
-        second
+    second_ambiguous = (
+        is_ambiguous_hint(second)
+        or bool(contextual_candidates(second))
     )
 
     if first_ambiguous:
