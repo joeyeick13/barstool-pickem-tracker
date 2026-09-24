@@ -352,25 +352,26 @@ AMBIGUOUS_CONTEXT_GROUPS = {
         "oklahoma state",
         "oregon state",
     },
-
-    # Context-only aliases.
-    #
-    # These abbreviations must NEVER identify a school by
-    # themselves. They may only validate a team after the ESPN
-    # resolver has already narrowed the wager to a specific event.
+    # Source-card abbreviations that are unsafe as global aliases.
+    # Keep them local to event validation. UT is intentionally
+    # Tennessee here because Barstool's Week 4 source uses UT for
+    # Tennessee while spelling Texas as Texas/Tex.
+    "ut": {
+        "tennessee",
+    },
+    "tu": {
+        "temple",
+        "tulane",
+        "tulsa",
+    },
     "um": {
         "michigan",
         "miami",
         "mississippi",
         "montana",
     },
-
-    "tu": {
-        "temple",
-        "tulane",
-        "tulsa",
-    },
 }
+
 
 def normalized_ambiguous_context(value):
     return (
@@ -421,17 +422,10 @@ def team_hint_matches_event_team(
     event_team,
 ):
     """
-    Compare one wager-side team hint with one ESPN team.
+    Shared alias identity first.
 
-    Resolution order:
-
-      1. shared football_identity equivalence
-      2. local context-only ambiguous identity
-
-    Context-only abbreviations such as UM and TU are never
-    sufficient to discover an event by themselves. They are only
-    used here to validate a team inside an ESPN event that has
-    already been identified by the resolver.
+    Ambiguous aliases are allowed only as contextual candidates
+    inside a complete two-team matchup.
     """
 
     if not hint or not event_team:
@@ -443,14 +437,9 @@ def team_hint_matches_event_team(
     ):
         return True
 
-    hint_key = (
-        normalized_ambiguous_context(
-            hint
-        )
-    )
-
     if (
-        hint_key
+        is_ambiguous_hint(hint)
+        or normalized_ambiguous_context(hint)
         in AMBIGUOUS_CONTEXT_GROUPS
     ):
         return contextual_ambiguous_match(
@@ -458,28 +447,11 @@ def team_hint_matches_event_team(
             event_team,
         )
 
-    event_key = (
-        normalized_ambiguous_context(
-            event_team
-        )
-    )
-
     if (
-        event_key
+        is_ambiguous_hint(event_team)
+        or normalized_ambiguous_context(event_team)
         in AMBIGUOUS_CONTEXT_GROUPS
     ):
-        return contextual_ambiguous_match(
-            event_team,
-            hint,
-        )
-
-    if is_ambiguous_hint(hint):
-        return contextual_ambiguous_match(
-            hint,
-            event_team,
-        )
-
-    if is_ambiguous_hint(event_team):
         return contextual_ambiguous_match(
             event_team,
             hint,
@@ -2244,31 +2216,8 @@ def enrich_schedule():
                 "UNIQUE"
             )
 
-               # ----------------------------------------------------
-        # DEFENSIVE VALIDATION OF NEW LOCK
         # ----------------------------------------------------
-        #
-        # A resolver result is still independently validated
-        # before an ESPN event ID is persisted.
-        #
-        # Trust hierarchy:
-        #
-        #   1. If wager matchup agrees with ESPN, continue.
-        #
-        #   2. If matchup disagrees but the wager's selected
-        #      team uniquely belongs to the resolved ESPN event,
-        #      the selected team independently anchors the event.
-        #      In that case stale matchup/opponent metadata may
-        #      be repaired from ESPN and revalidated.
-        #
-        #   3. If selected team contradicts the event, REVIEW.
-        #
-        #   4. If there is no independent selected-team anchor,
-        #      contradictory matchup metadata still fails closed.
-        #
-        # This is the same trust principle already used for
-        # existing ESPN locks. It does NOT allow a resolver result
-        # to bypass validation merely because an event was found.
+        # DEFENSIVE VALIDATION OF NEW LOCK
         # ----------------------------------------------------
 
         hints = wager_matchup_hints(
@@ -2282,377 +2231,100 @@ def enrich_schedule():
             )
         )
 
+        if compatibility is False:
+
+            # ------------------------------------------------
+            # A new resolution is NOT allowed to use the
+            # historical-metadata repair rule.
+            #
+            # The repair rule is only for a previously locked
+            # event that is independently anchored by the
+            # selected team.
+            #
+            # A brand-new contradictory resolution must fail
+            # closed.
+            # ------------------------------------------------
+
+            candidate_id = str(
+                event.get("id")
+                or ""
+            )
+
+            mark_review(
+                pick,
+                "NEW_EVENT_MATCHUP_CONFLICT",
+                method=
+                    "RESOLVER_RESULT_CONFLICT",
+                candidate_event_ids=[
+                    candidate_id
+                ] if candidate_id else [],
+            )
+
+            pick[
+                "event_id"
+            ] = None
+
+            pick[
+                "game_time"
+            ] = None
+
+            pick[
+                "game_matchup"
+            ] = None
+
+            review += 1
+
+            review_reasons[
+                "NEW_EVENT_MATCHUP_CONFLICT"
+            ] = (
+                review_reasons.get(
+                    "NEW_EVENT_MATCHUP_CONFLICT",
+                    0,
+                )
+                + 1
+            )
+
+            print(
+                "PREGAME RESOLVER CONFLICT:",
+                pick.get("picker"),
+                "|",
+                pick.get("selection"),
+            )
+
+            print(
+                "  wager matchup:",
+                (
+                    " vs ".join(
+                        hints
+                    )
+                    if len(hints) == 2
+                    else None
+                ),
+            )
+
+            print(
+                "  resolver event:",
+                event_matchup_text(
+                    event
+                ),
+            )
+
+            print(
+                "  action: REVIEW — event was NOT locked",
+            )
+
+            continue
+
+        # ----------------------------------------------------
+        # NEW LOCK SELECTED-TEAM DEFENSE
+        # ----------------------------------------------------
+
         anchor = (
             selected_team_event_matches(
                 pick,
                 event,
             )
         )
-
-        if compatibility is False:
-
-            # ------------------------------------------------
-            # SELECTED TEAM INDEPENDENTLY VALIDATES EVENT
-            # ------------------------------------------------
-
-            if (
-                anchor.get(
-                    "status"
-                )
-                == "UNIQUE_MATCH"
-            ):
-
-                repaired, details = (
-                    repair_matchup_from_locked_event(
-                        pick,
-                        event,
-                        anchor,
-                    )
-                )
-
-                if repaired:
-
-                    repaired_hints = (
-                        wager_matchup_hints(
-                            pick
-                        )
-                    )
-
-                    repaired_compatibility = (
-                        matchup_matches_event(
-                            repaired_hints,
-                            event,
-                        )
-                    )
-
-                    if (
-                        repaired_compatibility
-                        is True
-                    ):
-
-                        # The proposed resolver event has now
-                        # passed two independent checks:
-                        #
-                        #   selected team belongs uniquely to event
-                        #   repaired matchup agrees with event
-                        #
-                        # Continue to normal apply_match below.
-
-                        metadata_repairs += 1
-
-                        print(
-                            "PREGAME NEW EVENT METADATA REPAIRED:",
-                            pick.get("picker"),
-                            "|",
-                            pick.get("selection"),
-                            "| candidate event:",
-                            event.get("id"),
-                        )
-
-                        print(
-                            "  selected team:",
-                            anchor.get(
-                                "selected_team"
-                            ),
-                        )
-
-                        print(
-                            "  validated ESPN team:",
-                            anchor.get(
-                                "matched_team"
-                            ),
-                        )
-
-                        print(
-                            "  repaired matchup:",
-                            details.get(
-                                "matchup"
-                            ),
-                        )
-
-                        print(
-                            "  repaired opponent:",
-                            details.get(
-                                "opponent"
-                            ),
-                        )
-
-                        compatibility = True
-
-                    else:
-                        repair_failures += 1
-
-                        candidate_id = str(
-                            event.get("id")
-                            or ""
-                        )
-
-                        mark_review(
-                            pick,
-                            "NEW_EVENT_METADATA_REPAIR_POSTCHECK_FAILED",
-                            method=
-                                "RESOLVER_RESULT_REPAIR_POSTCHECK_FAILED",
-                            candidate_event_ids=[
-                                candidate_id
-                            ] if candidate_id else [],
-                        )
-
-                        pick[
-                            "event_id"
-                        ] = None
-
-                        pick[
-                            "game_time"
-                        ] = None
-
-                        pick[
-                            "game_matchup"
-                        ] = None
-
-                        review += 1
-
-                        review_reasons[
-                            "NEW_EVENT_METADATA_REPAIR_POSTCHECK_FAILED"
-                        ] = (
-                            review_reasons.get(
-                                "NEW_EVENT_METADATA_REPAIR_POSTCHECK_FAILED",
-                                0,
-                            )
-                            + 1
-                        )
-
-                        print(
-                            "PREGAME NEW EVENT REPAIR POSTCHECK FAILED:",
-                            pick.get("picker"),
-                            "|",
-                            pick.get("selection"),
-                        )
-
-                        print(
-                            "  resolver event:",
-                            event_matchup_text(
-                                event
-                            ),
-                        )
-
-                        continue
-
-                else:
-                    repair_failures += 1
-
-                    candidate_id = str(
-                        event.get("id")
-                        or ""
-                    )
-
-                    mark_review(
-                        pick,
-                        "NEW_EVENT_SAFE_METADATA_REPAIR_FAILED",
-                        method=
-                            "RESOLVER_RESULT_REPAIR_FAILED",
-                        candidate_event_ids=[
-                            candidate_id
-                        ] if candidate_id else [],
-                    )
-
-                    pick[
-                        "event_id"
-                    ] = None
-
-                    pick[
-                        "game_time"
-                    ] = None
-
-                    pick[
-                        "game_matchup"
-                    ] = None
-
-                    review += 1
-
-                    review_reasons[
-                        "NEW_EVENT_SAFE_METADATA_REPAIR_FAILED"
-                    ] = (
-                        review_reasons.get(
-                            "NEW_EVENT_SAFE_METADATA_REPAIR_FAILED",
-                            0,
-                        )
-                        + 1
-                    )
-
-                    print(
-                        "PREGAME NEW EVENT METADATA REPAIR FAILED:",
-                        pick.get("picker"),
-                        "|",
-                        pick.get("selection"),
-                        "| reason:",
-                        details,
-                    )
-
-                    continue
-
-            # ------------------------------------------------
-            # SELECTED TEAM CONTRADICTS RESOLVER EVENT
-            # ------------------------------------------------
-
-            elif (
-                anchor.get(
-                    "status"
-                )
-                == "NO_MATCH"
-            ):
-
-                candidate_id = str(
-                    event.get("id")
-                    or ""
-                )
-
-                mark_review(
-                    pick,
-                    "NEW_EVENT_SELECTED_TEAM_CONFLICT",
-                    method=
-                        "RESOLVER_SELECTED_TEAM_CONFLICT",
-                    candidate_event_ids=[
-                        candidate_id
-                    ] if candidate_id else [],
-                )
-
-                pick[
-                    "event_id"
-                ] = None
-
-                pick[
-                    "game_time"
-                ] = None
-
-                pick[
-                    "game_matchup"
-                ] = None
-
-                review += 1
-                selected_team_conflicts += 1
-
-                review_reasons[
-                    "NEW_EVENT_SELECTED_TEAM_CONFLICT"
-                ] = (
-                    review_reasons.get(
-                        "NEW_EVENT_SELECTED_TEAM_CONFLICT",
-                        0,
-                    )
-                    + 1
-                )
-
-                print(
-                    "PREGAME NEW EVENT SELECTED TEAM CONFLICT:",
-                    pick.get("picker"),
-                    "|",
-                    pick.get("selection"),
-                    "| selected team:",
-                    anchor.get(
-                        "selected_team"
-                    ),
-                    "| ESPN teams:",
-                    anchor.get(
-                        "event_teams"
-                    ),
-                )
-
-                print(
-                    "  action: REVIEW — resolver event "
-                    "was NOT locked",
-                )
-
-                continue
-
-            # ------------------------------------------------
-            # NO SAFE SELECTED-TEAM ANCHOR
-            # ------------------------------------------------
-
-            else:
-
-                candidate_id = str(
-                    event.get("id")
-                    or ""
-                )
-
-                mark_review(
-                    pick,
-                    "NEW_EVENT_MATCHUP_CONFLICT",
-                    method=
-                        "RESOLVER_RESULT_CONFLICT",
-                    candidate_event_ids=[
-                        candidate_id
-                    ] if candidate_id else [],
-                )
-
-                pick[
-                    "event_id"
-                ] = None
-
-                pick[
-                    "game_time"
-                ] = None
-
-                pick[
-                    "game_matchup"
-                ] = None
-
-                review += 1
-
-                review_reasons[
-                    "NEW_EVENT_MATCHUP_CONFLICT"
-                ] = (
-                    review_reasons.get(
-                        "NEW_EVENT_MATCHUP_CONFLICT",
-                        0,
-                    )
-                    + 1
-                )
-
-                print(
-                    "PREGAME RESOLVER CONFLICT:",
-                    pick.get("picker"),
-                    "|",
-                    pick.get("selection"),
-                )
-
-                print(
-                    "  wager matchup:",
-                    (
-                        " vs ".join(
-                            hints
-                        )
-                        if len(hints) == 2
-                        else None
-                    ),
-                )
-
-                print(
-                    "  resolver event:",
-                    event_matchup_text(
-                        event
-                    ),
-                )
-
-                print(
-                    "  selected-team anchor:",
-                    anchor.get(
-                        "status"
-                    ),
-                )
-
-                print(
-                    "  action: REVIEW — event was NOT locked",
-                )
-
-                continue
-
-        # ----------------------------------------------------
-        # NEW LOCK SELECTED-TEAM DEFENSE
-        # ----------------------------------------------------
-        #
-        # Even when matchup validation succeeded, a supported
-        # selected-team market must not contradict the event.
-        # ----------------------------------------------------
 
         if (
             anchor.get(
@@ -2689,7 +2361,6 @@ def enrich_schedule():
             ] = None
 
             review += 1
-            selected_team_conflicts += 1
 
             review_reasons[
                 "NEW_EVENT_SELECTED_TEAM_CONFLICT"
