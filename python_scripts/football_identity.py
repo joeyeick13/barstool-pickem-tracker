@@ -355,6 +355,7 @@ ALIASES = {
         "georgia tech",
         "ga tech",
         "gatech",
+        "gtech",
         "gt",
     },
     "grambling": {
@@ -392,6 +393,7 @@ ALIASES = {
         "jax state",
         "jax st",
         "jville",
+        "jsu",
     },
     "james madison": {
         "james madison",
@@ -510,6 +512,7 @@ ALIASES = {
     "missouri": {
         "missouri",
         "mizzou",
+        "mizz",
         "miz",
     },
     "missouri state": {
@@ -538,6 +541,7 @@ ALIASES = {
     "new mexico": {
         "new mexico",
         "unm",
+        "nm",
     },
     "new mexico state": {
         "new mexico state",
@@ -588,6 +592,7 @@ ALIASES = {
     },
     "old dominion": {
         "old dominion",
+        "old dom",
         "odu",
     },
     "ole miss": {
@@ -597,6 +602,7 @@ ALIASES = {
     "oregon": {
         "oregon",
         "ore",
+        "uo",
     },
     "oregon state": {
         "oregon state",
@@ -648,6 +654,8 @@ ALIASES = {
     },
     "south alabama": {
         "south alabama",
+        "s alabama",
+        "s bama",
         "usa",
     },
     "south carolina": {
