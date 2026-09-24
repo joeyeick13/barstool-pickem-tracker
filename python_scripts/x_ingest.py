@@ -2735,21 +2735,45 @@ def repair_spread_identity_from_espn_schedule(
 
     # A short source abbreviation can be a one-character OCR error even when
     # comparing it with the full ESPN team name produces a low similarity score.
-    # Example shape: GSU misread as ASU.  Build a conservative acronym from the
-    # ESPN counterpart and allow the repair only when the source token and that
+    # Example shape: GSU misread as ASU.  Use ESPN's actual team abbreviation for the
+    # resolved counterpart and allow the repair only when the source token and that
     # acronym have the same short length and differ by exactly one character.
     #
     # This remains safe because the OTHER matchup side already had to identify
     # exactly one ESPN event above.  It does not allow arbitrary opponent-driven
     # replacement such as SMU -> Missouri or MINN -> Indiana.
-    def _team_acronym(value):
-        words = re.findall(r"[A-Za-z0-9]+", clean_text(value))
-        ignored = {"the", "of", "and", "at"}
-        letters = [word[0] for word in words if word.lower() not in ignored]
-        return "".join(letters).lower()
+    def _resolved_espn_abbreviation(event, resolved_team):
+        competitions = event.get("competitions") or []
+        if not competitions:
+            return ""
+
+        competitors = competitions[0].get("competitors") or []
+        matches = []
+
+        for competitor in competitors:
+            team = competitor.get("team") or {}
+            identity_values = [
+                clean_text(team.get("displayName")),
+                clean_text(team.get("shortDisplayName")),
+                clean_text(team.get("location")),
+                clean_text(team.get("abbreviation")),
+            ]
+
+            if any(
+                value and teams_equivalent(resolved_team, value)
+                for value in identity_values
+            ):
+                abbreviation = clean_text(team.get("abbreviation"))
+                if abbreviation:
+                    matches.append(abbreviation)
+
+        if len(matches) != 1:
+            return ""
+
+        return re.sub(r"[^a-z0-9]", "", norm(matches[0]))
 
     selected_token = re.sub(r"[^a-z0-9]", "", selected_norm)
-    resolved_acronym = _team_acronym(resolved_selected)
+    resolved_acronym = _resolved_espn_abbreviation(event, resolved_selected)
 
     one_char_acronym_ocr = (
         2 <= len(selected_token) <= 5
