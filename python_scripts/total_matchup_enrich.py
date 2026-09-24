@@ -311,7 +311,7 @@ def needs_total_context(pick):
         return False
 
     # A row already verified by the source-card correction layer is
-    # authoritative.  Never let a later vision enrichment rewrite it.
+    # authoritative. Never let legacy vision enrichment rewrite it.
     if pick.get("verified_correction"):
         return False
 
@@ -319,8 +319,29 @@ def needs_total_context(pick):
     if verified_override_for_pick(pick):
         return True
 
-    # Once ESPN has locked the event, do not spend money re-reading the image.
+    existing_matchup = clean_text(pick.get("matchup"))
+    literal_source_matchup = clean_text(pick.get("source_matchup_text"))
+
+    # Modern ingestion stores the literal matchup transcribed in the same
+    # source-atomic extraction as the wager itself. That literal source field
+    # is stronger evidence than a later one-wager vision re-read. If it differs
+    # from the working matchup, run this step so we can restore it
+    # deterministically without asking a model to identify the wager again.
+    if matchup_has_two_teams(literal_source_matchup):
+        return (
+            normalize_selection(existing_matchup)
+            != normalize_selection(literal_source_matchup)
+        )
+
+    # Once ESPN has locked the event, never re-read the source image here.
     if pick.get("event_id"):
+        return False
+
+    # Legacy fallback is fill-only. A syntactically complete existing matchup
+    # is preserved exactly as stored; this step may not replace it from a fresh
+    # vision guess. Legacy vision is used only when matchup metadata is missing
+    # or malformed and there is an original source post to inspect.
+    if matchup_has_two_teams(existing_matchup):
         return False
 
     return bool(pick.get("source_post_id"))
@@ -374,17 +395,6 @@ def enrich_total_matchups():
 
         override = verified_override_for_pick(pick)
 
-        if not override and occurrence_counts[occurrence_key] > 1:
-            print(
-                "TOTAL CONTEXT AMBIGUOUS - PRESERVING:",
-                picker,
-                "|",
-                selection,
-                "| occurrences in source:",
-                occurrence_counts[occurrence_key],
-            )
-            unresolved += 1
-            continue
         if override:
             if normalize_selection(existing_matchup) != normalize_selection(override):
                 print(
@@ -413,6 +423,43 @@ def enrich_total_matchups():
 
             pick["matchup_source"] = "VERIFIED_BARSTOOL_CARD_OVERRIDE"
             pick["matchup_source_verified_at"] = now_iso()
+            continue
+
+        literal_source_matchup = clean_text(pick.get("source_matchup_text"))
+        if matchup_has_two_teams(literal_source_matchup):
+            if normalize_selection(existing_matchup) != normalize_selection(literal_source_matchup):
+                print(
+                    "TOTAL MATCHUP RESTORED FROM ATOMIC SOURCE:",
+                    picker,
+                    "|",
+                    selection,
+                    "| old:",
+                    existing_matchup or "NONE",
+                    "| source:",
+                    literal_source_matchup,
+                )
+                pick["matchup"] = literal_source_matchup
+                pick["matchup_source"] = "ATOMIC_INGEST_SOURCE_MATCHUP"
+                pick["matchup_source_verified_at"] = now_iso()
+                clear_stale_schedule_fields(pick)
+                corrected += 1
+            else:
+                verified_unchanged += 1
+            continue
+
+        # Only the legacy vision fallback needs duplicate-selection ambiguity
+        # protection. Atomic source_matchup_text above identifies each wager
+        # independently, even when two wagers share the same total number.
+        if occurrence_counts[occurrence_key] > 1:
+            print(
+                "TOTAL CONTEXT AMBIGUOUS - PRESERVING:",
+                picker,
+                "|",
+                selection,
+                "| occurrences in source:",
+                occurrence_counts[occurrence_key],
+            )
+            unresolved += 1
             continue
 
         try:
