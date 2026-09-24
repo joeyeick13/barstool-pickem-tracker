@@ -4167,8 +4167,19 @@ def process_normal_posts(
         )
 
         # ----------------------------------------------------
-        # PHASE 1: EXTRACT
+        # PHASE 1 + 2: EXTRACT AND VALIDATE THE ENTIRE SOURCE
         # ----------------------------------------------------
+        #
+        # The independent inventory and the structured extraction are
+        # intentionally separate reads. Vision can occasionally omit one
+        # wager even when every image is readable. When the ONLY failure is
+        # a wager-count reconciliation mismatch, retry the complete
+        # structured extraction from the original source images.
+        #
+        # We never merge rows across attempts, manufacture the missing row,
+        # or weaken validation. One complete attempt must independently pass
+        # every existing source-atomic validation rule before anything is
+        # committed.
 
         try:
             preflight_inventory = preflight_normal_source(
@@ -4185,20 +4196,6 @@ def process_normal_posts(
                 preflight_inventory.get("wager_count"),
             )
 
-            payload = parse_post_with_ai(
-                text=text,
-                image_urls=image_urls,
-                post_url=post_url,
-                posted_at=post.get(
-                    "created_at"
-                ),
-                inferred_week=week,
-                picker_hint=picker_hint,
-                reply_hint=reply_hint,
-                parent_text=parent_text,
-                preflight_inventory=preflight_inventory,
-            )
-
         except Exception as exc:
             print(
                 "EXTRACTION FAILED — "
@@ -4208,33 +4205,49 @@ def process_normal_posts(
                 exc,
             )
 
-            failed_ids.add(
-                post_id
-            )
-
-            processed_ids.discard(
-                post_id
-            )
-
+            failed_ids.add(post_id)
+            processed_ids.discard(post_id)
             continue
 
-        # ----------------------------------------------------
-        # PHASE 2: VALIDATE THE ENTIRE SOURCE POST
-        #
-        # THIS MUST PASS BEFORE ANY WAGER IS COMMITTED.
-        # ----------------------------------------------------
+        season_year = None
+        created_at = str(post.get("created_at") or "")
+        season_match = re.match(r"(\d{4})-", created_at)
+        if season_match:
+            season_year = int(season_match.group(1))
+        if season_year is None:
+            season_year = datetime.now(PACIFIC).year
 
-        try:
-            season_year = None
-            created_at = str(post.get("created_at") or "")
-            season_match = re.match(r"(\d{4})-", created_at)
-            if season_match:
-                season_year = int(season_match.group(1))
-            if season_year is None:
-                season_year = datetime.now(PACIFIC).year
+        max_full_extraction_attempts = 3
+        validated = None
+        last_validation_error = None
 
-            validated = (
-                validate_normal_post_payload(
+        for full_extraction_attempt in range(1, max_full_extraction_attempts + 1):
+            try:
+                if full_extraction_attempt > 1:
+                    print(
+                        "RETRYING COMPLETE STRUCTURED EXTRACTION:",
+                        post_id,
+                        "| attempt:",
+                        full_extraction_attempt,
+                        "| independent inventory:",
+                        preflight_inventory.get("wager_count"),
+                    )
+
+                # parse_post_with_ai always performs a fresh model request
+                # against the original post text and original source images.
+                payload = parse_post_with_ai(
+                    text=text,
+                    image_urls=image_urls,
+                    post_url=post_url,
+                    posted_at=post.get("created_at"),
+                    inferred_week=week,
+                    picker_hint=picker_hint,
+                    reply_hint=reply_hint,
+                    parent_text=parent_text,
+                    preflight_inventory=preflight_inventory,
+                )
+
+                validated = validate_normal_post_payload(
                     payload,
                     image_urls=image_urls,
                     default_week=week,
@@ -4242,9 +4255,48 @@ def process_normal_posts(
                     picker_hint=picker_hint,
                     preflight_inventory=preflight_inventory,
                 )
+
+                if full_extraction_attempt > 1:
+                    print(
+                        "COMPLETE STRUCTURED EXTRACTION RETRY SUCCEEDED:",
+                        post_id,
+                        "| attempt:",
+                        full_extraction_attempt,
+                        "| validated wagers:",
+                        len(validated.get("picks") or []),
+                    )
+
+                last_validation_error = None
+                break
+
+            except Exception as exc:
+                last_validation_error = exc
+                message = str(exc)
+
+                count_mismatch = (
+                    "Image wager-count reconciliation failed" in message
+                    or "Independent source inventory reconciliation failed" in message
+                )
+
+                if count_mismatch and full_extraction_attempt < max_full_extraction_attempts:
+                    print(
+                        "COMPLETE STRUCTURED EXTRACTION COUNT MISMATCH:",
+                        post_id,
+                        "| attempt:",
+                        full_extraction_attempt,
+                        "|",
+                        message,
+                        "| action: retry full original source",
+                    )
+                    continue
+
+                break
+
+        if validated is None:
+            exc = last_validation_error or ValueError(
+                "Complete structured extraction did not validate"
             )
 
-        except Exception as exc:
             print(
                 "VALIDATION FAILED — "
                 "POST NOT PROCESSED / "
@@ -4254,14 +4306,8 @@ def process_normal_posts(
                 exc,
             )
 
-            failed_ids.add(
-                post_id
-            )
-
-            processed_ids.discard(
-                post_id
-            )
-
+            failed_ids.add(post_id)
+            processed_ids.discard(post_id)
             continue
 
         # ----------------------------------------------------
