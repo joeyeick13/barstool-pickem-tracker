@@ -691,6 +691,17 @@ AMBIGUOUS_CONTEXT_GROUPS = {
         "oklahoma state",
         "oregon state",
     },
+    "tu": {
+        "temple",
+        "tulane",
+        "tulsa",
+    },
+    "um": {
+        "michigan",
+        "miami",
+        "mississippi",
+        "montana",
+    },
 }
 
 
@@ -746,10 +757,30 @@ def comp_matches_hint(
     if not hint:
         return False
 
+    hint_key = norm(
+        hint
+    )
+
+    # Resolver-local context-only aliases are intentionally not
+    # global football identities. They may participate only in
+    # constrained two-team matching.
+    if (
+        hint_key
+        in AMBIGUOUS_CONTEXT_GROUPS
+    ):
+        if not allow_contextual_ambiguous:
+            return False
+
+        return (
+            comp_matches_ambiguous_hint(
+                competitor,
+                hint,
+            )
+        )
+
     if is_ambiguous_hint(
         hint
     ):
-
         if not allow_contextual_ambiguous:
             return False
 
@@ -780,15 +811,21 @@ def event_contains_team(
     hint,
 ):
     """
-    Bare ambiguous aliases never qualify for one-team
-    resolution.
+    Bare ambiguous aliases never qualify for one-team resolution.
+
+    This includes both shared football_identity ambiguous aliases
+    and resolver-local context-only aliases such as TU and UM.
     """
 
+    if not hint:
+        return False
+
     if (
-        not hint
-        or is_ambiguous_hint(
+        is_ambiguous_hint(
             hint
         )
+        or norm(hint)
+        in AMBIGUOUS_CONTEXT_GROUPS
     ):
         return False
 
