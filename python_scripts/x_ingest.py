@@ -2275,19 +2275,156 @@ JSON only.
             }
         )
 
-    response = client.responses.create(
-        model=OPENAI_MODEL,
-        input=[
-            {
-                "role": "user",
-                "content": content,
-            }
-        ],
-    )
+    max_readability_attempts = 3
+    last_payload = None
 
-    return parse_json_response(
-        response.output_text
-    )
+    for extraction_attempt in range(1, max_readability_attempts + 1):
+        attempt_content = list(content)
+
+        if extraction_attempt > 1:
+            attempt_content = [
+                {
+                    "type": "input_text",
+                    "text": (
+                        prompt
+                        + "\n\nIMPORTANT READABILITY RETRY:\n"
+                        + "A previous full-source extraction reported one or more "
+                        + "source images as unreadable. Those images were independently "
+                        + "re-opened successfully. Re-read EVERY original image from "
+                        + "scratch, including the previously disputed image(s). Do not "
+                        + "copy the prior extraction. Return complete=true only if every "
+                        + "image is readable and every wager is extracted."
+                    ),
+                }
+            ]
+            for image_url in image_urls:
+                attempt_content.append(
+                    {
+                        "type": "input_image",
+                        "image_url": image_url,
+                    }
+                )
+
+        response = client.responses.create(
+            model=OPENAI_MODEL,
+            input=[
+                {
+                    "role": "user",
+                    "content": attempt_content,
+                }
+            ],
+        )
+
+        payload = parse_json_response(
+            response.output_text
+        )
+        last_payload = payload
+
+        checks = payload.get("image_checks")
+        unreadable_indexes = []
+
+        if isinstance(checks, list):
+            for check in checks:
+                if not isinstance(check, dict):
+                    continue
+                if safe_bool(check.get("readable")):
+                    continue
+                try:
+                    image_index = int(check.get("image_index"))
+                except Exception:
+                    continue
+                if 1 <= image_index <= supplied_image_count:
+                    unreadable_indexes.append(image_index)
+
+        # If the model did not explicitly flag an image as unreadable, return
+        # the payload unchanged and let the normal transaction validator apply
+        # every existing completeness/count rule.
+        if not unreadable_indexes:
+            return payload
+
+        if extraction_attempt >= max_readability_attempts:
+            return payload
+
+        # Re-open ONLY the disputed images. This probe does not create or amend
+        # picks. It merely determines whether the original image can actually be
+        # inspected. A successful probe causes a fresh full-source extraction;
+        # we never flip readable=true locally or commit a partial transcript.
+        for image_index in sorted(set(unreadable_indexes)):
+            probe_prompt = f"""
+You are performing a SOURCE IMAGE READABILITY CHECK for a verified
+@barstoolpickem pick-card source.
+
+IMAGE NUMBER: {image_index} of {supplied_image_count}
+SOURCE: {post_url}
+
+Inspect this one original image carefully. Determine only whether the image is
+readable well enough to identify every visible wager row and its literal wager
+text. Do not infer anything from schedules or prior knowledge.
+
+Return JSON only:
+{{
+  "image_index": {image_index},
+  "readable": true,
+  "visible_wager_count": 0
+}}
+
+Set readable=false if any wager row is too cropped, blurred, or obscured to be
+transcribed reliably.
+""".strip()
+
+            probe_response = client.responses.create(
+                model=OPENAI_MODEL,
+                input=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "input_text",
+                                "text": probe_prompt,
+                            },
+                            {
+                                "type": "input_image",
+                                "image_url": image_urls[image_index - 1],
+                            },
+                        ],
+                    }
+                ],
+            )
+
+            probe_payload = parse_json_response(
+                probe_response.output_text
+            )
+
+            if not safe_bool(probe_payload.get("readable")):
+                print(
+                    "SOURCE IMAGE READABILITY RETRY FAILED:",
+                    post_url,
+                    "| image:",
+                    image_index,
+                    "| attempt:",
+                    extraction_attempt,
+                )
+                return payload
+
+            print(
+                "SOURCE IMAGE READABILITY RETRY SUCCEEDED:",
+                post_url,
+                "| image:",
+                image_index,
+                "| attempt:",
+                extraction_attempt,
+                "| visible wagers:",
+                probe_payload.get("visible_wager_count"),
+            )
+
+        print(
+            "RETRYING FULL SOURCE EXTRACTION AFTER IMAGE READABILITY CHECK:",
+            post_url,
+            "| next attempt:",
+            extraction_attempt + 1,
+        )
+
+    return last_payload
 
 
 # ============================================================
