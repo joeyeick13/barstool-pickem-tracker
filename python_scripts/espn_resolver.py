@@ -702,6 +702,10 @@ AMBIGUOUS_CONTEXT_GROUPS = {
         "mississippi",
         "montana",
     },
+    "usc": {
+        "south carolina",
+        "usc",
+    },
 }
 
 
