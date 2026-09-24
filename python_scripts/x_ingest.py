@@ -2114,6 +2114,20 @@ For card-style images:
 - do not allow a total such as "Over 58.5" or "Under 53.5" to
   lose its matchup context
 
+CRITICAL LITERAL TRANSCRIPTION RULE:
+Before interpreting or expanding any school abbreviation, copy the visible text
+exactly as written on the source image. For every wager return:
+- source_selection_text: literal visible wager text (for example "GSU -10.5")
+- source_team_text: literal visible selected-team token (for example "GSU")
+- source_matchup_text: literal visible matchup text (for example "NIU @ GSU")
+
+Do NOT silently expand or autocorrect these source_* fields. If the image says
+GSU, source_team_text MUST be GSU -- never ASU, Arizona State, Georgia State,
+or another interpretation. The normalized team/matchup fields may expand the
+literal text separately. When handwriting is ambiguous, use the matchup and
+selection together to transcribe the repeated visible token consistently; do
+not use schedules or outside knowledge to alter source_* text.
+
 Preserve:
 - picker
 - matchup
@@ -2223,6 +2237,9 @@ Return JSON only:
       "picker": "Big Cat|Stool Presidente|Rico Bosco",
       "sport": "CFB",
       "matchup": "Team A @ Team B or null",
+      "source_selection_text": "literal wager text exactly as visible in image or null",
+      "source_team_text": "literal selected-team token exactly as visible in image or null",
+      "source_matchup_text": "literal matchup text exactly as visible in image or null",
       "team": "selected/team-total team or null",
       "opponent": "opponent or null",
       "bet_type": "SPREAD|TOTAL|MONEYLINE|TEAM_TOTAL|FIRST_QUARTER_SPREAD|FIRST_QUARTER_TOTAL|FIRST_QUARTER_MONEYLINE|FIRST_QUARTER_TEAM_TOTAL|FIRST_HALF_SPREAD|FIRST_HALF_TOTAL|FIRST_HALF_MONEYLINE|FIRST_HALF_TEAM_TOTAL|OTHER",
@@ -2348,6 +2365,15 @@ def normalize_ai_pick(
         )
         or None
     )
+
+    # Preserve literal source transcription independently from normalized identity.
+    # These fields are intentionally never canonicalized here.
+    for source_field in (
+        "source_selection_text",
+        "source_team_text",
+        "source_matchup_text",
+    ):
+        pick[source_field] = clean_text(pick.get(source_field)) or None
 
     pick["team"] = (
         clean_text(
@@ -2710,6 +2736,20 @@ def repair_spread_identity_from_espn_schedule(
     if teams_equivalent(selected, resolved_selected):
         return pick, False
 
+    # PRIMARY SOURCE-LITERAL SAFETY GATE:
+    #
+    # The vision extractor preserves the exact selected-team token in
+    # source_team_text before expanding school identities. If that literal token
+    # maps to the ESPN counterpart through football_identity aliases (for example
+    # GSU -> Georgia State), the source itself confirms the repair. This is
+    # stronger evidence than fuzzy similarity and does not rely on the opponent
+    # alone.
+    literal_source_team = clean_text(pick.get("source_team_text"))
+    literal_confirms_resolved = bool(
+        literal_source_team
+        and teams_equivalent(literal_source_team, resolved_selected)
+    )
+
     # IMPORTANT SAFETY GATE:
     #
     # A unique game for the *other* extracted matchup side is not enough evidence
@@ -2781,7 +2821,7 @@ def repair_spread_identity_from_espn_schedule(
         and sum(a != b for a, b in zip(selected_token, resolved_acronym)) == 1
     )
 
-    if identity_similarity < 0.67 and not one_char_acronym_ocr:
+    if identity_similarity < 0.67 and not one_char_acronym_ocr and not literal_confirms_resolved:
         print(
             "INGEST ESPN IDENTITY CONFLICT PRESERVED:",
             pick.get("picker"),
@@ -2799,7 +2839,21 @@ def repair_spread_identity_from_espn_schedule(
         )
         return pick, False
 
-    if one_char_acronym_ocr and identity_similarity < 0.67:
+    if literal_confirms_resolved and not teams_equivalent(selected, resolved_selected):
+        print(
+            "INGEST SOURCE-LITERAL IDENTITY CONFIRMED:",
+            pick.get("picker"),
+            "| source token:",
+            literal_source_team,
+            "| parsed team:",
+            selected,
+            "| ESPN team:",
+            resolved_selected,
+            "| anchor:",
+            anchor,
+        )
+
+    if one_char_acronym_ocr and identity_similarity < 0.67 and not literal_confirms_resolved:
         print(
             "INGEST ESPN ONE-CHAR ACRONYM OCR CONFIRMED:",
             pick.get("picker"),
