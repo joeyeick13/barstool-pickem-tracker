@@ -2573,6 +2573,190 @@ def validate_normal_pick(pick):
 
 
 # ============================================================
+# ESPN-ASSISTED SOURCE IDENTITY REPAIR
+# ============================================================
+
+def repair_spread_identity_from_espn_schedule(
+    pick,
+    *,
+    season_year,
+    week,
+    slate_cache,
+):
+    """
+    Repair a narrowly defined OCR/transcription failure by using the ESPN
+    schedule as an independent identity check.
+
+    This is intentionally limited to SPREAD wagers with a complete two-team
+    matchup. It is designed for cases where one side of the source graphic is
+    read correctly and the other side is visually misread (for example GSU as
+    ASU).
+
+    Safety rules:
+      - never changes picker, week, market, line, odds, units, or result;
+      - requires the selected team to match one of the two extracted matchup
+        sides, so we know which side of the graphic the wager selected;
+      - uses the OTHER extracted matchup side as the independent anchor;
+      - the anchor must identify exactly one ESPN event in the complete week
+        slate;
+      - that event must contain exactly one team equivalent to the anchor;
+      - only then may the selected-team identity and matchup/opponent metadata
+        be repaired to the other ESPN team;
+      - ambiguous or missing schedule evidence fails closed and leaves the
+        source extraction unchanged.
+
+    Original source-derived identity fields are preserved in
+    pre_espn_ingest_repair_* metadata whenever a repair occurs.
+    """
+
+    if base_market(normalize_bet_type(pick.get("bet_type"))) != "SPREAD":
+        return pick, False
+
+    matchup = clean_text(pick.get("matchup"))
+    sides = split_matchup(matchup) if matchup else None
+
+    if not sides or len(sides) != 2:
+        return pick, False
+
+    selected = clean_text(side_identity(pick))
+    if not selected:
+        return pick, False
+
+    selected_side_indexes = [
+        index
+        for index, side in enumerate(sides)
+        if teams_equivalent(selected, side)
+    ]
+
+    # We must know exactly which visible matchup side was selected.
+    if len(selected_side_indexes) != 1:
+        return pick, False
+
+    selected_index = selected_side_indexes[0]
+    anchor_index = 1 - selected_index
+    anchor = clean_text(sides[anchor_index])
+
+    if not anchor:
+        return pick, False
+
+    cache_key = (int(season_year), int(week))
+
+    if cache_key not in slate_cache:
+        try:
+            slate_cache[cache_key] = build_complete_week_slate(
+                [pick],
+                int(season_year),
+                int(week),
+            )
+        except Exception as exc:
+            print(
+                "INGEST ESPN SOURCE IDENTITY CHECK UNAVAILABLE:",
+                pick.get("picker"),
+                "|",
+                pick.get("selection"),
+                "|",
+                type(exc).__name__,
+                exc,
+            )
+            slate_cache[cache_key] = None
+
+    events = slate_cache.get(cache_key)
+
+    if events is None:
+        return pick, False
+
+    anchored_events = []
+
+    for event in events:
+        event_matchup = clean_text(event_matchup_text(event))
+        event_sides = split_matchup(event_matchup) if event_matchup else None
+
+        if not event_sides or len(event_sides) != 2:
+            continue
+
+        anchor_matches = [
+            index
+            for index, event_side in enumerate(event_sides)
+            if teams_equivalent(anchor, event_side)
+        ]
+
+        if len(anchor_matches) != 1:
+            continue
+
+        anchored_events.append(
+            (
+                event,
+                event_matchup,
+                event_sides,
+                anchor_matches[0],
+            )
+        )
+
+    # One correctly read opponent must identify exactly one game that week.
+    if len(anchored_events) != 1:
+        return pick, False
+
+    event, resolved_matchup, event_sides, event_anchor_index = anchored_events[0]
+    resolved_anchor = clean_text(event_sides[event_anchor_index])
+    resolved_selected = clean_text(event_sides[1 - event_anchor_index])
+
+    if not resolved_selected or not resolved_anchor:
+        return pick, False
+
+    # If ESPN already agrees with the selected team, there is no selected-team
+    # OCR error to repair here. Later schedule enrichment may canonicalize stale
+    # opponent/matchup metadata without changing the wager identity.
+    if teams_equivalent(selected, resolved_selected):
+        return pick, False
+
+    line = safe_float(pick.get("line"))
+    if line is None:
+        return pick, False
+
+    old_selection = clean_text(pick.get("selection"))
+    old_team = clean_text(pick.get("team"))
+    old_side = clean_text(pick.get("side"))
+    old_opponent = clean_text(pick.get("opponent"))
+    old_matchup = matchup
+
+    pick.setdefault("pre_espn_ingest_repair_selection", old_selection or None)
+    pick.setdefault("pre_espn_ingest_repair_team", old_team or None)
+    pick.setdefault("pre_espn_ingest_repair_side", old_side or None)
+    pick.setdefault("pre_espn_ingest_repair_opponent", old_opponent or None)
+    pick.setdefault("pre_espn_ingest_repair_matchup", old_matchup or None)
+
+    pick["selection"] = f"{resolved_selected} {line:+g}"
+    pick["team"] = resolved_selected
+
+    # For spread markets, side may contain the selected team name. Preserve
+    # OVER/UNDER-style values defensively, though they should not occur here.
+    if old_side and old_side.upper() not in {"OVER", "UNDER"}:
+        pick["side"] = resolved_selected
+
+    pick["opponent"] = resolved_anchor
+    pick["matchup"] = resolved_matchup
+    pick["espn_ingest_identity_repaired"] = True
+    pick["espn_ingest_identity_repair_event_id"] = str(event.get("id") or "") or None
+
+    print(
+        "INGEST ESPN SOURCE IDENTITY REPAIR:",
+        pick.get("picker"),
+        "|",
+        old_selection,
+        "| matchup:",
+        old_matchup,
+        "->",
+        pick.get("selection"),
+        "| matchup:",
+        resolved_matchup,
+        "| anchor:",
+        anchor,
+    )
+
+    return pick, True
+
+
+# ============================================================
 # VALIDATE ENTIRE NORMAL-POST EXTRACTION
 # ============================================================
 
@@ -2581,6 +2765,7 @@ def validate_normal_post_payload(
     *,
     image_urls,
     default_week,
+    season_year,
     picker_hint,
     preflight_inventory,
 ):
@@ -2800,12 +2985,20 @@ def validate_normal_post_payload(
         }
 
     normalized = []
+    slate_cache = {}
 
     for raw_pick in raw_picks:
         pick = normalize_ai_pick(
             raw_pick,
             default_week=default_week,
             picker_hint=picker_hint,
+        )
+
+        pick, _ = repair_spread_identity_from_espn_schedule(
+            pick,
+            season_year=season_year,
+            week=pick_week(pick),
+            slate_cache=slate_cache,
         )
 
         validate_normal_pick(
@@ -3737,11 +3930,20 @@ def process_normal_posts(
         # ----------------------------------------------------
 
         try:
+            season_year = None
+            created_at = str(post.get("created_at") or "")
+            season_match = re.match(r"(\d{4})-", created_at)
+            if season_match:
+                season_year = int(season_match.group(1))
+            if season_year is None:
+                season_year = datetime.now(PACIFIC).year
+
             validated = (
                 validate_normal_post_payload(
                     payload,
                     image_urls=image_urls,
                     default_week=week,
+                    season_year=season_year,
                     picker_hint=picker_hint,
                     preflight_inventory=preflight_inventory,
                 )
