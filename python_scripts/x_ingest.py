@@ -2709,6 +2709,45 @@ def repair_spread_identity_from_espn_schedule(
     if teams_equivalent(selected, resolved_selected):
         return pick, False
 
+    # IMPORTANT SAFETY GATE:
+    #
+    # A unique game for the *other* extracted matchup side is not enough evidence
+    # to replace the selected spread team. The opponent/matchup text itself may be
+    # stale or misread (for example SMU paired with Mississippi State, or Minnesota
+    # paired with Northwestern). In those cases the selected wager identity must be
+    # preserved and schedule_enrich.py can repair only the stale game metadata.
+    #
+    # Ingest may replace the selected team only when the selected identity and the
+    # ESPN counterpart are themselves strongly text-similar, which is evidence of
+    # a narrow OCR/transcription error such as Arizona State vs Georgia State.
+    # This is deliberately conservative and generic; it contains no week/team rule.
+    from difflib import SequenceMatcher
+
+    selected_norm = norm(selected)
+    resolved_norm = norm(resolved_selected)
+
+    identity_similarity = SequenceMatcher(
+        None,
+        selected_norm,
+        resolved_norm,
+    ).ratio()
+
+    if identity_similarity < 0.67:
+        print(
+            "INGEST ESPN IDENTITY CONFLICT PRESERVED:",
+            pick.get("picker"),
+            "|",
+            pick.get("selection"),
+            "| matchup:",
+            matchup,
+            "| ESPN counterpart:",
+            resolved_selected,
+            "| similarity:",
+            f"{identity_similarity:.3f}",
+            "| action: preserve selected wager; defer metadata repair",
+        )
+        return pick, False
+
     line = safe_float(pick.get("line"))
     if line is None:
         return pick, False
