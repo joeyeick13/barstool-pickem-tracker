@@ -2234,17 +2234,84 @@ def enrich_schedule():
         if compatibility is False:
 
             # ------------------------------------------------
-            # A new resolution is NOT allowed to use the
-            # historical-metadata repair rule.
+            # SAFE NEW-EVENT METADATA REPAIR
+            # ------------------------------------------------
             #
-            # The repair rule is only for a previously locked
-            # event that is independently anchored by the
-            # selected team.
+            # The resolver has independently identified one
+            # ESPN event, but the source-card matchup metadata
+            # may be stale or wrong.  We may repair that stale
+            # metadata ONLY when the selected wager team
+            # independently maps to exactly one participant in
+            # the resolved ESPN event.
             #
-            # A brand-new contradictory resolution must fail
-            # closed.
+            # This restores the same fail-closed trust rule used
+            # for existing event locks:
+            #   * UNIQUE_MATCH -> repair derived matchup metadata
+            #   * anything else -> review; never force the lock
+            #
+            # Totals have no selected-team anchor, so they can
+            # never enter this repair path.
             # ------------------------------------------------
 
+            anchor = selected_team_event_matches(
+                pick,
+                event,
+            )
+
+            if anchor.get("status") == "UNIQUE_MATCH":
+                repaired, details = repair_matchup_from_locked_event(
+                    pick,
+                    event,
+                    anchor,
+                )
+
+                if repaired:
+                    repaired_hints = wager_matchup_hints(
+                        pick
+                    )
+                    repaired_compatibility = matchup_matches_event(
+                        repaired_hints,
+                        event,
+                    )
+
+                    if repaired_compatibility is True:
+                        apply_match(
+                            pick,
+                            event,
+                            method="NEW_EVENT_METADATA_REPAIR",
+                            confidence="SELECTED_TEAM_VALIDATED",
+                        )
+
+                        newly_matched += 1
+                        metadata_repairs += 1
+                        resolution_methods[
+                            "NEW_EVENT_METADATA_REPAIR"
+                        ] = (
+                            resolution_methods.get(
+                                "NEW_EVENT_METADATA_REPAIR",
+                                0,
+                            )
+                            + 1
+                        )
+
+                        print(
+                            "PREGAME MATCHED AFTER METADATA REPAIR:",
+                            pick.get("picker"),
+                            "|",
+                            pick.get("selection"),
+                            "| event:",
+                            event.get("id"),
+                            "|",
+                            event_matchup_text(event),
+                            "| original matchup:",
+                            pick.get("pre_espn_repair_matchup"),
+                        )
+
+                        continue
+
+            # No unique selected-team proof, repair failure, or
+            # repaired metadata still does not match ESPN: fail
+            # closed and require review.
             candidate_id = str(
                 event.get("id")
                 or ""
@@ -2253,27 +2320,17 @@ def enrich_schedule():
             mark_review(
                 pick,
                 "NEW_EVENT_MATCHUP_CONFLICT",
-                method=
-                    "RESOLVER_RESULT_CONFLICT",
+                method="RESOLVER_RESULT_CONFLICT",
                 candidate_event_ids=[
                     candidate_id
                 ] if candidate_id else [],
             )
 
-            pick[
-                "event_id"
-            ] = None
-
-            pick[
-                "game_time"
-            ] = None
-
-            pick[
-                "game_matchup"
-            ] = None
+            pick["event_id"] = None
+            pick["game_time"] = None
+            pick["game_matchup"] = None
 
             review += 1
-
             review_reasons[
                 "NEW_EVENT_MATCHUP_CONFLICT"
             ] = (
@@ -2290,25 +2347,18 @@ def enrich_schedule():
                 "|",
                 pick.get("selection"),
             )
-
             print(
                 "  wager matchup:",
                 (
-                    " vs ".join(
-                        hints
-                    )
+                    " vs ".join(hints)
                     if len(hints) == 2
                     else None
                 ),
             )
-
             print(
                 "  resolver event:",
-                event_matchup_text(
-                    event
-                ),
+                event_matchup_text(event),
             )
-
             print(
                 "  action: REVIEW — event was NOT locked",
             )
