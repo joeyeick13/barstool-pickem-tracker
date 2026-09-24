@@ -91,7 +91,7 @@ MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 7
+CURRENT_INGEST_VALIDATION_VERSION = 8
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -2544,6 +2544,18 @@ def normalize_ai_pick(
         pick.get("line")
     )
 
+    # Canonicalize game-total selections from structured fields. The model may
+    # transcribe handwritten lowercase "u" as "w" (for example w44.5), but
+    # side + numeric line are the authoritative structured representation.
+    # Keep the literal source text separately in source_selection_text.
+    if (
+        base_market(pick.get("bet_type")) == "TOTAL"
+        and pick.get("side") in {"OVER", "UNDER"}
+        and pick.get("line") is not None
+    ):
+        label = "Over" if pick["side"] == "OVER" else "Under"
+        pick["selection"] = f"{label} {pick['line']:g}"
+
     try:
         confidence = float(
             pick.get("confidence")
@@ -3532,6 +3544,23 @@ def stored_pick_from_ai(
         "matchup":
             extracted.get(
                 "matchup"
+            ),
+
+        # Preserve the source-atomic transcription in the stored row. These
+        # fields are immutable evidence for downstream deterministic checks.
+        "source_selection_text":
+            extracted.get(
+                "source_selection_text"
+            ),
+
+        "source_team_text":
+            extracted.get(
+                "source_team_text"
+            ),
+
+        "source_matchup_text":
+            extracted.get(
+                "source_matchup_text"
             ),
 
         "team":
