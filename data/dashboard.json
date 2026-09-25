@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-25T01:26:26.143471+00:00",
+  "updated_at": "2026-09-25T07:42:38.657411+00:00",
   "cappers": [
     {
       "picker": "Big Cat",
@@ -128,7 +128,7 @@
       "game_matchup": "Northwestern @ Indiana",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.155238+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.965478+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -175,7 +175,7 @@
       "game_matchup": "Texas @ Tennessee",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.155509+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.965660+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -222,7 +222,7 @@
       "game_matchup": "UCLA @ Maryland",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.155772+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.965830+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -269,7 +269,7 @@
       "game_matchup": "Notre Dame @ Purdue",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.156064+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.966010+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -316,7 +316,7 @@
       "game_matchup": "Utah @ Iowa State",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.156348+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.966197+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -363,7 +363,7 @@
       "game_matchup": "Boise St @ W Michigan",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.156660+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.966402+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -410,7 +410,7 @@
       "game_matchup": "Iowa @ Michigan",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.156937+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.966571+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -457,7 +457,7 @@
       "game_matchup": "Ole Miss @ Florida",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.157229+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.966769+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -504,7 +504,7 @@
       "game_matchup": "Vanderbilt @ Auburn",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.157458+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.966919+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -551,7 +551,7 @@
       "game_matchup": "Nebraska @ Michigan St",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.157775+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.967128+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -598,7 +598,7 @@
       "game_matchup": "South Carolina @ Alabama",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.158016+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.967301+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -645,7 +645,7 @@
       "game_matchup": "Oregon @ USC",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.158174+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.967458+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -692,7 +692,7 @@
       "game_matchup": "Missouri @ Mississippi St",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.158364+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.967669+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -739,7 +739,7 @@
       "game_matchup": "Minnesota @ Washington",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.158552+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.967861+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -786,7 +786,7 @@
       "game_matchup": "Texas @ Tennessee",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.140518+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.951345+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -833,7 +833,7 @@
       "game_matchup": "Wake Forest @ Louisville",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.140734+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.951566+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -880,7 +880,7 @@
       "game_matchup": "N Illinois @ Georgia St",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.141009+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.951844+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -927,7 +927,7 @@
       "game_matchup": "Iowa @ Michigan",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.141179+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.952019+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -974,7 +974,7 @@
       "game_matchup": "Iowa @ Michigan",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.141341+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.952182+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1021,7 +1021,7 @@
       "game_matchup": "Ole Miss @ Florida",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.141531+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.952376+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1068,7 +1068,7 @@
       "game_matchup": "Oklahoma @ Georgia",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.141701+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.952550+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1115,7 +1115,7 @@
       "game_matchup": "New Mexico @ New Mexico St",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.141894+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.952750+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1162,7 +1162,7 @@
       "game_matchup": "South Florida @ Bowling Green",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.142091+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.952955+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1209,7 +1209,7 @@
       "game_matchup": "James Madison @ Old Dominion",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.142278+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.953146+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1256,7 +1256,7 @@
       "game_matchup": "C Michigan @ Miami",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.142502+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.953377+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1303,7 +1303,7 @@
       "game_matchup": "Troy @ Utah State",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.142683+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.953563+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1350,7 +1350,7 @@
       "game_matchup": "Oregon @ USC",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.142846+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.953731+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1397,7 +1397,7 @@
       "game_matchup": "Missouri @ Mississippi St",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.143038+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.953929+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1444,7 +1444,7 @@
       "game_matchup": "Tulsa @ Arkansas",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.143211+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.954105+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1499,7 +1499,7 @@
       "game_matchup": "Missouri St @ SMU",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.143421+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.954323+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1554,7 +1554,7 @@
       "game_matchup": "Minnesota @ Washington",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.143611+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.954521+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1601,7 +1601,7 @@
       "game_matchup": "Army @ Temple",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.146928+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.957895+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1648,7 +1648,7 @@
       "game_matchup": "Texas @ Tennessee",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.147098+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.958070+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1695,7 +1695,7 @@
       "game_matchup": "Virginia Tech @ Boston College",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.147273+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.958255+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1742,7 +1742,7 @@
       "game_matchup": "San Diego St @ Toledo",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.147465+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.958458+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1789,7 +1789,7 @@
       "game_matchup": "South Alabama @ Kentucky",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.147634+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.958644+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1836,7 +1836,7 @@
       "game_matchup": "UCLA @ Maryland",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.147797+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.958819+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1883,7 +1883,7 @@
       "game_matchup": "Notre Dame @ Purdue",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.147980+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.959003+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1930,7 +1930,7 @@
       "game_matchup": "Iowa @ Michigan",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.151379+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.962373+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -1977,7 +1977,7 @@
       "game_matchup": "Ole Miss @ Florida",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.151566+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.962568+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -2024,7 +2024,7 @@
       "game_matchup": "Oklahoma @ Georgia",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.151737+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.962748+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -2071,7 +2071,7 @@
       "game_matchup": "New Mexico @ New Mexico St",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.151930+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.962939+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -2118,7 +2118,7 @@
       "game_matchup": "James Madison @ Old Dominion",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.152116+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.963128+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -2165,7 +2165,7 @@
       "game_matchup": "Kansas St @ Cincinnati",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.152333+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.963349+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -2212,7 +2212,7 @@
       "game_matchup": "Oklahoma St @ West Virginia",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.152618+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.963631+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -2259,7 +2259,7 @@
       "game_matchup": "MTSU @ Jax State",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.153024+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.963991+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -2306,7 +2306,7 @@
       "game_matchup": "Oregon @ USC",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.153300+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.964251+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -2353,7 +2353,7 @@
       "game_matchup": "Texas A&M @ LSU",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.153658+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.964475+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -2400,7 +2400,7 @@
       "game_matchup": "Missouri @ Mississippi St",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.154021+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.964700+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -2447,7 +2447,7 @@
       "game_matchup": "Oregon St @ UTEP",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.154281+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.964882+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -2494,7 +2494,7 @@
       "game_matchup": "Oregon St @ UTEP",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.154379+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.964947+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -2541,7 +2541,7 @@
       "game_matchup": "Rice @ Fresno St",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.154706+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.965151+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
@@ -2588,7 +2588,7 @@
       "game_matchup": "Georgia Tech @ Stanford",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-09-25T01:26:09.154985+00:00",
+      "schedule_checked_at": "2026-09-25T07:42:27.965323+00:00",
       "event_resolution_reason": null,
       "status": "OPEN",
       "result": null
