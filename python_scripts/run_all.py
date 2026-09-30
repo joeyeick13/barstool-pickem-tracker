@@ -4,6 +4,7 @@ from x_ingest import ingest
 from data_corrections import apply_verified_corrections
 from total_matchup_enrich import enrich_total_matchups
 from schedule_enrich import enrich_schedule
+from sportsbook_validate import validate_sportsbook
 from grade import grade_open
 from audit_tracker import run_audit
 from build_site import build
@@ -45,17 +46,6 @@ def run_pipeline():
     # ========================================================
     # STEP 2 — HISTORICAL VERIFIED CORRECTIONS
     # ========================================================
-    #
-    # TEMPORARY LEGACY LAYER.
-    #
-    # This exists only to preserve corrections that were
-    # manually verified before the permanent ingestion and
-    # identity architecture was installed.
-    #
-    # IMPORTANT:
-    # Do NOT add Week 4, Week 5, or future weekly card patches
-    # here. New weeks must work through the permanent pipeline.
-    # ========================================================
 
     print()
     print("=" * 72)
@@ -66,16 +56,6 @@ def run_pipeline():
 
     # ========================================================
     # STEP 3 — LEGACY TOTAL MATCHUP ENRICHMENT
-    # ========================================================
-    #
-    # This remains temporarily for older stored wagers that
-    # were created before transactional structured ingestion.
-    #
-    # New wagers should already carry their game identity from
-    # x_ingest.py.
-    #
-    # This stage must NOT become the normal way future weekly
-    # cards are repaired.
     # ========================================================
 
     print()
@@ -94,15 +74,6 @@ def run_pipeline():
     # ========================================================
     # STEP 4 — ESPN EVENT LOCKING
     # ========================================================
-    #
-    # schedule_enrich.py uses the shared exhaustive ESPN
-    # resolver and locks each provisional CFB wager to one
-    # deterministic ESPN event_id.
-    #
-    # Once an event_id is stored, it is treated as the game's
-    # identity. Missing stored event IDs are not silently
-    # rematched to another game.
-    # ========================================================
 
     print()
     print("=" * 72)
@@ -112,56 +83,56 @@ def run_pipeline():
     enrich_schedule()
 
     # ========================================================
-    # STEP 5 — GRADING
+    # STEP 5 — DRAFTKINGS VALIDATION
     # ========================================================
     #
-    # grade.py grades completed games from the stored ESPN
-    # event identity using the same shared resolver
-    # architecture.
+    # sportsbook_validate.py independently checks the
+    # ESPN-locked CFB wager against DraftKings via OddsPapi.
     #
-    # Official PAT HILL reconciled rows remain authoritative.
+    # The initial implementation runs in observation mode:
+    # it reports sportsbook comparisons but does NOT modify
+    # picks.json.
+    #
+    # Official PAT HILL reconciled rows remain authoritative
+    # and are excluded from sportsbook validation.
     # ========================================================
 
     print()
     print("=" * 72)
-    print("STEP 5 — GRADING")
+    print("STEP 5 — DRAFTKINGS VALIDATION")
+    print("=" * 72)
+
+    validate_sportsbook()
+
+    # ========================================================
+    # STEP 6 — GRADING
+    # ========================================================
+
+    print()
+    print("=" * 72)
+    print("STEP 6 — GRADING")
     print("=" * 72)
 
     grade_open()
 
     # ========================================================
-    # STEP 6 — PERMANENT INTEGRITY AUDIT
-    # ========================================================
-    #
-    # CRITICAL:
-    #
-    # The dashboard is NOT rebuilt until this audit passes.
-    #
-    # If ingestion, identity resolution, event locking, or
-    # grading produces structurally unsafe data, run_audit()
-    # raises an exception and GitHub Actions fails.
-    #
-    # That prevents silently publishing corrupted tracker data.
+    # STEP 7 — PERMANENT INTEGRITY AUDIT
     # ========================================================
 
     print()
     print("=" * 72)
-    print("STEP 6 — TRACKER INTEGRITY AUDIT")
+    print("STEP 7 — TRACKER INTEGRITY AUDIT")
     print("=" * 72)
 
     run_audit()
 
     # ========================================================
-    # STEP 7 — DASHBOARD BUILD
-    # ========================================================
-    #
-    # Reached only after the tracker passes the permanent
-    # integrity audit.
+    # STEP 8 — DASHBOARD BUILD
     # ========================================================
 
     print()
     print("=" * 72)
-    print("STEP 7 — DASHBOARD BUILD")
+    print("STEP 8 — DASHBOARD BUILD")
     print("=" * 72)
 
     build()
