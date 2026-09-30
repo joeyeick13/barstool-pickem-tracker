@@ -28,7 +28,7 @@ on:
   #   4:07 PM, 6:07 PM, 8:07 PM, 11:07 PM
   #
   # Saturday:
-  #   Every hour at :07
+  #   Every hour at :37
   #
   # Sunday:
   #   2:07 AM, 10:07 AM, 2:07 PM, 5:07 PM
@@ -116,6 +116,7 @@ jobs:
         env:
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ODDSPAPI_API_KEY: ${{ secrets.ODDSPAPI_API_KEY }}
           X_USERNAME: barstoolpickem
           OPENAI_MODEL: gpt-5.6-luna
         run: |
