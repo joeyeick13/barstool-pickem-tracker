@@ -33,54 +33,18 @@ from espn_resolver import (
 # ============================================================
 
 API_BASE = "https://api.oddspapi.io/v4"
-
 BOOKMAKER = "draftkings"
 
 SPORT_ID = 14
-
-# OddsPapi:
-# NCAA, Regular Season
 NCAA_TOURNAMENT_ID = 27653
 
 HTTP_TIMEOUT = 90
 
-# ESPN kickoff -> OddsPapi fixture matching.
-#
-# We first require BOTH teams to match and then use kickoff
-# time only as an additional constraint.
-FIXTURE_TIME_TOLERANCE_MINUTES = 90
-FIXTURE_QUERY_PADDING_HOURS = 3
+FIXTURE_WINDOW_HOURS = 3
+FIXTURE_TOLERANCE_MINUTES = 90
 
-# Historical DraftKings closing-board reconstruction.
-#
-# A quote older than this is not treated as a reliable
-# pre-kickoff board.
-SNAPSHOT_MAX_AGE_HOURS = 12
-
-# OddsPapi documented endpoint cooldowns.
-FIXTURES_COOLDOWN_SECONDS = 2.10
-MARKETS_COOLDOWN_SECONDS = 1.10
+GENERAL_COOLDOWN_SECONDS = 1.05
 HISTORICAL_COOLDOWN_SECONDS = 5.10
-
-# ------------------------------------------------------------
-# HISTORICAL AUDIT
-# ------------------------------------------------------------
-#
-# Default is Week 4 for the current audit.
-#
-# This can later be overridden without changing code:
-#
-# SPORTSBOOK_AUDIT_WEEK=5
-#
-# IMPORTANT:
-#
-# This module is READ ONLY.
-#
-# It never saves picks.json.
-# It never changes official results.
-# It never changes event IDs.
-# It never changes selections.
-# ------------------------------------------------------------
 
 AUDIT_OFFICIAL_WEEK = int(
     os.getenv(
@@ -89,17 +53,30 @@ AUDIT_OFFICIAL_WEEK = int(
     )
 )
 
+SEASON_YEAR = int(
+    os.getenv(
+        "PICKEM_SEASON_YEAR",
+        "2026",
+    )
+)
+
 
 # ============================================================
-# TIME HELPERS
+# BASIC HELPERS
 # ============================================================
+
+def _clean(value):
+    return str(
+        value or ""
+    ).strip()
+
 
 def _parse_dt(value):
     if not value:
         return None
 
     try:
-        parsed = datetime.fromisoformat(
+        dt = datetime.fromisoformat(
             str(value)
             .strip()
             .replace(
@@ -108,22 +85,25 @@ def _parse_dt(value):
             )
         )
 
-    except Exception:
+    except (
+        TypeError,
+        ValueError,
+    ):
         return None
 
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(
+    if dt.tzinfo is None:
+        dt = dt.replace(
             tzinfo=timezone.utc
         )
 
-    return parsed.astimezone(
+    return dt.astimezone(
         timezone.utc
     )
 
 
-def _iso_utc(value):
+def _iso(dt):
     return (
-        value
+        dt
         .astimezone(
             timezone.utc
         )
@@ -133,11 +113,7 @@ def _iso_utc(value):
     )
 
 
-# ============================================================
-# PICK HELPERS
-# ============================================================
-
-def _week_number(pick):
+def _week(pick):
     try:
         return int(
             pick.get(
@@ -154,26 +130,15 @@ def _week_number(pick):
 
 def _is_cfb(pick):
     return (
-        str(
+        _clean(
             pick.get(
                 "sport"
             )
-            or ""
-        )
-        .strip()
-        .upper()
+        ).upper()
         in {
             "CFB",
             "NCAAF",
         }
-    )
-
-
-def _is_official(pick):
-    return bool(
-        pick.get(
-            "official_reconciled"
-        )
     )
 
 
@@ -183,22 +148,18 @@ def _eligible(pick):
     ):
         return False
 
-    week = _week_number(
-        pick
-    )
-
-    # Current historical audit.
     if (
-        week
+        _week(
+            pick
+        )
         == AUDIT_OFFICIAL_WEEK
     ):
         return True
 
-    # Normal behavior:
-    # never sportsbook-audit already-official historical
-    # rows outside the explicitly requested audit week.
-    return not _is_official(
-        pick
+    return not bool(
+        pick.get(
+            "official_reconciled"
+        )
     )
 
 
@@ -208,185 +169,6 @@ def _label(pick):
         f"{pick.get('picker')} | "
         f"{pick.get('selection')}"
     )
-
-
-# ============================================================
-# MARKET HELPERS
-# ============================================================
-
-def _market_period_key(
-    pick
-):
-    value = str(
-        market_period(
-            normalize_bet_type(
-                pick.get(
-                    "bet_type"
-                )
-            )
-        )
-        or ""
-    ).strip().lower()
-
-    return (
-        value
-        .replace(
-            " ",
-            "",
-        )
-        .replace(
-            "_",
-            "",
-        )
-        .replace(
-            "-",
-            "",
-        )
-    )
-
-
-def _period_matches(
-    pick,
-    meta,
-):
-    wanted = _market_period_key(
-        pick
-    )
-
-    actual = str(
-        meta.get(
-            "period"
-        )
-        or ""
-    ).strip().lower()
-
-    actual_key = (
-        actual
-        .replace(
-            " ",
-            "",
-        )
-        .replace(
-            "_",
-            "",
-        )
-        .replace(
-            "-",
-            "",
-        )
-    )
-
-    # Full game.
-    if wanted in {
-        "",
-        "full",
-        "fullgame",
-        "game",
-        "result",
-        "fulltime",
-    }:
-        return actual_key in {
-            "",
-            "full",
-            "fullgame",
-            "game",
-            "match",
-            "result",
-            "fulltime",
-        }
-
-    # First half.
-    if wanted in {
-        "1h",
-        "firsthalf",
-        "half1",
-    }:
-        return actual_key in {
-            "1h",
-            "firsthalf",
-            "half1",
-            "p1",
-        }
-
-    # First quarter.
-    if wanted in {
-        "1q",
-        "firstquarter",
-        "quarter1",
-    }:
-        return actual_key in {
-            "1q",
-            "firstquarter",
-            "quarter1",
-            "q1",
-        }
-
-    return (
-        actual_key
-        == wanted
-    )
-
-
-def _market_family(
-    meta
-):
-    name = str(
-        meta.get(
-            "marketName"
-        )
-        or ""
-    ).lower()
-
-    market_type = str(
-        meta.get(
-            "marketType"
-        )
-        or ""
-    ).lower()
-
-    if (
-        "team total"
-        in name
-    ):
-        return "TEAM_TOTAL"
-
-    if (
-        "handicap"
-        in name
-        or "spread"
-        in name
-        or "handicap"
-        in market_type
-    ):
-        return "SPREAD"
-
-    if (
-        "total"
-        in name
-        or "over under"
-        in name
-        or "totals"
-        in market_type
-    ):
-        return "TOTAL"
-
-    if (
-        "winner"
-        in name
-        or "moneyline"
-        in name
-        or "money line"
-        in name
-        or market_type
-        in {
-            "winner",
-            "moneyline",
-            "money_line",
-        }
-    ):
-        return "MONEYLINE"
-
-    return None
 
 
 # ============================================================
@@ -410,21 +192,17 @@ class OddsPapi:
 
         self._markets = None
 
-    # --------------------------------------------------------
-    # GENERIC GET
-    # --------------------------------------------------------
-
     def get(
         self,
         endpoint,
         cooldown=0.0,
         **params,
     ):
-        query = dict(
+        params = dict(
             params
         )
 
-        query[
+        params[
             "apiKey"
         ] = self.api_key
 
@@ -434,81 +212,43 @@ class OddsPapi:
             1,
             5,
         ):
-
             response = (
                 self.session.get(
                     f"{API_BASE}/{endpoint}",
-                    params=query,
+                    params=params,
                     timeout=HTTP_TIMEOUT,
                 )
             )
 
-            # OddsPapi uses 404 for an empty fixture window.
             if (
                 response.status_code
                 == 404
             ):
-                if cooldown:
-                    time.sleep(
-                        cooldown
-                    )
-
                 return None
 
-            # Respect provider throttling.
             if (
                 response.status_code
                 == 429
             ):
-                retry_seconds = (
-                    5.0
-                    * attempt
+                wait = max(
+                    5.0 * attempt,
+                    float(
+                        response.headers.get(
+                            "Retry-After"
+                        )
+                        or 0
+                    ),
                 )
 
-                try:
-                    payload = (
-                        response.json()
-                    )
-
-                    retry_ms = (
-                        (
-                            payload.get(
-                                "error"
-                            )
-                            or {}
-                        )
-                        .get(
-                            "retryMs"
-                        )
-                    )
-
-                    if (
-                        retry_ms
-                        is not None
-                    ):
-                        retry_seconds = max(
-                            (
-                                float(
-                                    retry_ms
-                                )
-                                / 1000.0
-                                + 0.5
-                            ),
-                            retry_seconds,
-                        )
-
-                except Exception:
-                    pass
-
                 time.sleep(
-                    retry_seconds
+                    wait
                 )
 
                 last_error = (
                     requests.HTTPError(
                         (
-                            "429 from "
-                            f"OddsPapi /{endpoint}"
+                            "429 from OddsPapi "
+                            f"/{endpoint}"
                         ),
                         response=response,
                     )
@@ -539,10 +279,6 @@ class OddsPapi:
             )
         )
 
-    # --------------------------------------------------------
-    # FIXTURES
-    # --------------------------------------------------------
-
     def fixtures_near(
         self,
         kickoff,
@@ -551,7 +287,7 @@ class OddsPapi:
             kickoff
             - timedelta(
                 hours=
-                    FIXTURE_QUERY_PADDING_HOURS
+                    FIXTURE_WINDOW_HOURS
             )
         )
 
@@ -559,15 +295,15 @@ class OddsPapi:
             kickoff
             + timedelta(
                 hours=
-                    FIXTURE_QUERY_PADDING_HOURS
+                    FIXTURE_WINDOW_HOURS
             )
         )
 
         key = (
-            _iso_utc(
+            _iso(
                 start
             ),
-            _iso_utc(
+            _iso(
                 end
             ),
         )
@@ -579,7 +315,7 @@ class OddsPapi:
             payload = self.get(
                 "fixtures",
                 cooldown=
-                    FIXTURES_COOLDOWN_SECONDS,
+                    GENERAL_COOLDOWN_SECONDS,
                 sportId=
                     SPORT_ID,
                 tournamentId=
@@ -588,6 +324,7 @@ class OddsPapi:
                 **{
                     "from":
                         key[0],
+
                     "to":
                         key[1],
                 },
@@ -610,10 +347,6 @@ class OddsPapi:
             ]
         )
 
-    # --------------------------------------------------------
-    # MARKET CATALOG
-    # --------------------------------------------------------
-
     def markets(
         self
     ):
@@ -621,24 +354,15 @@ class OddsPapi:
             self._markets
             is None
         ):
-            payload = self.get(
-                "markets",
-                cooldown=
-                    MARKETS_COOLDOWN_SECONDS,
-                language="en",
-            )
-
-            if not isinstance(
-                payload,
-                list,
-            ):
-                raise RuntimeError(
-                    (
-                        "OddsPapi /markets "
-                        "did not return "
-                        "a JSON list."
-                    )
+            payload = (
+                self.get(
+                    "markets",
+                    cooldown=
+                        GENERAL_COOLDOWN_SECONDS,
+                    language="en",
                 )
+                or []
+            )
 
             self._markets = {
                 str(
@@ -664,10 +388,6 @@ class OddsPapi:
             }
 
         return self._markets
-
-    # --------------------------------------------------------
-    # HISTORICAL ODDS
-    # --------------------------------------------------------
 
     def historical_odds(
         self,
@@ -710,18 +430,24 @@ class OddsPapi:
 
 
 # ============================================================
-# ESPN EVENT -> TEAM PAIR
+# ESPN EVENT SIDES
 # ============================================================
 
-def _espn_home_away(
+def _espn_sides(
     event
 ):
-    away = None
     home = None
+    away = None
 
     for competitor in competitors(
         event
     ):
+        name = (
+            competitor_display_name(
+                competitor
+            )
+        )
+
         location = (
             competitor_home_away(
                 competitor
@@ -730,158 +456,53 @@ def _espn_home_away(
 
         if (
             location
-            == "away"
+            == "home"
         ):
-            away = (
-                competitor_display_name(
-                    competitor
-                )
-            )
+            home = name
 
         elif (
             location
-            == "home"
+            == "away"
         ):
-            home = (
-                competitor_display_name(
-                    competitor
-                )
-            )
-
-    if (
-        away
-        and home
-    ):
-        return (
-            away,
-            home,
-        )
-
-    # Fail-soft display fallback.
-    event_competitors = (
-        competitors(
-            event
-        )
-    )
-
-    if (
-        len(
-            event_competitors
-        )
-        == 2
-    ):
-        return (
-            competitor_display_name(
-                event_competitors[0]
-            ),
-            competitor_display_name(
-                event_competitors[1]
-            ),
-        )
+            away = name
 
     return (
-        None,
-        None,
+        home,
+        away,
     )
 
 
 # ============================================================
-# ODDSPAPI FIXTURE IDENTITY
+# ODDSPAPI FIXTURE SIDES
 # ============================================================
 
-def _fixture_names(
+def _fixture_sides(
     fixture
 ):
-    participant1 = str(
-        fixture.get(
-            "participant1Name"
-        )
-        or fixture.get(
-            "participant1ShortName"
-        )
-        or fixture.get(
-            "participant1Abbr"
-        )
-        or ""
-    ).strip()
-
-    participant2 = str(
-        fixture.get(
-            "participant2Name"
-        )
-        or fixture.get(
-            "participant2ShortName"
-        )
-        or fixture.get(
-            "participant2Abbr"
-        )
-        or ""
-    ).strip()
-
     return (
-        participant1,
-        participant2,
+        _clean(
+            fixture.get(
+                "participant1Name"
+            )
+        ),
+        _clean(
+            fixture.get(
+                "participant2Name"
+            )
+        ),
     )
 
 
-def _name_equivalent(
+def _same_team(
     left,
     right,
 ):
-    if (
-        not left
-        or not right
-    ):
-        return False
-
-    return teams_equivalent(
-        left,
-        right,
-    )
-
-
-def _fixture_pair_matches(
-    away,
-    home,
-    fixture,
-):
-    participant1, participant2 = (
-        _fixture_names(
-            fixture
-        )
-    )
-
-    if (
-        not participant1
-        or not participant2
-    ):
-        return False
-
-    # OddsPapi participant order is not assumed to equal
-    # ESPN away/home order.
-    return (
-        (
-            _name_equivalent(
-                away,
-                participant1,
-            )
-            and
-            _name_equivalent(
-                home,
-                participant2,
-            )
-        )
-        or
-        (
-            _name_equivalent(
-                away,
-                participant2,
-            )
-            and
-            _name_equivalent(
-                home,
-                participant1,
-            )
+    return bool(
+        left
+        and right
+        and teams_equivalent(
+            left,
+            right,
         )
     )
 
@@ -890,125 +511,121 @@ def _fixture_pair_matches(
 # ESPN EVENT -> ODDSPAPI FIXTURE
 # ============================================================
 
-def _match_oddspapi_fixture(
+def _match_fixture(
     api,
-    espn_event,
+    event,
 ):
-    kickoff = event_datetime(
-        espn_event
+    kickoff = (
+        event_datetime(
+            event
+        )
     )
 
-    if (
-        kickoff
-        is None
-    ):
-        return (
-            None,
-            "ESPN_EVENT_WITHOUT_KICKOFF",
-            None,
-        )
-
-    away, home = (
-        _espn_home_away(
-            espn_event
+    home, away = (
+        _espn_sides(
+            event
         )
     )
 
     if (
-        not away
+        kickoff is None
         or not home
+        or not away
     ):
         return (
             None,
-            "ESPN_EVENT_WITHOUT_TWO_TEAMS",
+            "ESPN_EVENT_INCOMPLETE",
             None,
         )
-
-    fixtures = api.fixtures_near(
-        kickoff
-    )
 
     candidates = []
 
-    for fixture in fixtures:
-
-        try:
-            fixture_sport = int(
-                fixture.get(
-                    "sportId"
-                )
-                or 0
+    for fixture in (
+        api.fixtures_near(
+            kickoff
+        )
+    ):
+        participant1, participant2 = (
+            _fixture_sides(
+                fixture
             )
+        )
 
-        except Exception:
-            fixture_sport = 0
-
-        try:
-            fixture_tournament = int(
+        fixture_time = (
+            _parse_dt(
                 fixture.get(
-                    "tournamentId"
+                    "startTime"
                 )
-                or 0
-            )
-
-        except Exception:
-            fixture_tournament = 0
-
-        if (
-            fixture_sport
-            != SPORT_ID
-        ):
-            continue
-
-        if (
-            fixture_tournament
-            != NCAA_TOURNAMENT_ID
-        ):
-            continue
-
-        fixture_time = _parse_dt(
-            fixture.get(
-                "startTime"
             )
         )
 
         if (
-            fixture_time
-            is None
+            not participant1
+            or not participant2
+            or fixture_time is None
         ):
             continue
 
-        delta_minutes = (
+        delta = (
             abs(
                 (
                     fixture_time
                     - kickoff
-                )
-                .total_seconds()
+                ).total_seconds()
             )
             / 60.0
         )
 
         if (
-            delta_minutes
+            delta
             >
-            FIXTURE_TIME_TOLERANCE_MINUTES
+            FIXTURE_TOLERANCE_MINUTES
         ):
             continue
 
-        # Critical safety condition:
-        # BOTH teams must match.
-        if not _fixture_pair_matches(
-            away,
-            home,
-            fixture,
+        # OddsPapi American football:
+        # participant 1 = home
+        # participant 2 = away.
+        if (
+            _same_team(
+                home,
+                participant1,
+            )
+            and _same_team(
+                away,
+                participant2,
+            )
         ):
+            identity_rank = 0
+            orientation = (
+                "P1_HOME"
+            )
+
+        # Defensive fallback only.
+        elif (
+            _same_team(
+                home,
+                participant2,
+            )
+            and _same_team(
+                away,
+                participant1,
+            )
+        ):
+            identity_rank = 1
+            orientation = (
+                "REVERSED"
+            )
+
+        else:
             continue
 
         candidates.append(
             (
-                delta_minutes,
+                identity_rank,
+                delta,
                 fixture,
+                orientation,
             )
         )
 
@@ -1019,117 +636,71 @@ def _match_oddspapi_fixture(
             {
                 "espn_event_id":
                     event_id(
-                        espn_event
+                        event
                     ),
+
                 "espn_matchup":
                     event_matchup_text(
-                        espn_event
+                        event
                     ),
+
                 "espn_kickoff":
                     kickoff.isoformat(),
-                "oddspapi_candidates_in_window":
-                    len(
-                        fixtures
-                    ),
             },
         )
 
     candidates.sort(
-        key=lambda row:
-            row[0]
+        key=lambda row: (
+            row[0],
+            row[1],
+        )
     )
 
-    # If two different OddsPapi fixtures match the same teams
-    # at the exact same time, fail closed.
+    best = candidates[0]
+
     if (
         len(
             candidates
         )
         > 1
+        and candidates[1][0:2]
+        == best[0:2]
     ):
-        first_delta = (
-            candidates[0][0]
+        return (
+            None,
+            "ODDSPAPI_FIXTURE_AMBIGUOUS",
+            None,
         )
 
-        equally_close = [
-            row
-
-            for row
-            in candidates
-
-            if (
-                abs(
-                    row[0]
-                    - first_delta
-                )
-                < 0.01
-            )
-        ]
-
-        if (
-            len(
-                equally_close
-            )
-            > 1
-        ):
-            return (
-                None,
-                "ODDSPAPI_FIXTURE_AMBIGUOUS",
-                {
-                    "espn_event_id":
-                        event_id(
-                            espn_event
-                        ),
-                    "espn_matchup":
-                        event_matchup_text(
-                            espn_event
-                        ),
-                    "fixture_ids":
-                        [
-                            row[1].get(
-                                "fixtureId"
-                            )
-
-                            for row
-                            in equally_close
-                        ],
-                },
-            )
-
-    delta, fixture = (
-        candidates[0]
-    )
-
-    participant1, participant2 = (
-        _fixture_names(
-            fixture
-        )
-    )
+    (
+        _,
+        delta,
+        fixture,
+        orientation,
+    ) = best
 
     return (
         fixture,
         "MATCHED",
         {
-            "espn_event_id":
-                event_id(
-                    espn_event
-                ),
-            "espn_matchup":
-                event_matchup_text(
-                    espn_event
-                ),
-            "espn_kickoff":
-                kickoff.isoformat(),
-            "oddspapi_fixture_id":
+            "fixture_id":
                 fixture.get(
                     "fixtureId"
                 ),
-            "oddspapi_matchup":
-                (
-                    f"{participant1} "
-                    f"vs "
-                    f"{participant2}"
+
+            "participant1":
+                fixture.get(
+                    "participant1Name"
                 ),
+
+            "participant2":
+                fixture.get(
+                    "participant2Name"
+                ),
+
+            "orientation":
+                orientation,
+
             "kickoff_delta_minutes":
                 round(
                     delta,
@@ -1140,10 +711,499 @@ def _match_oddspapi_fixture(
 
 
 # ============================================================
-# HISTORICAL RESPONSE HELPERS
+# CONTEXT-ONLY TEAM ABBREVIATIONS
 # ============================================================
 
-def _history_book(
+_CONTEXT_ALIASES = {
+    "osu": (
+        "ohio state",
+        "oklahoma state",
+        "oregon state",
+    ),
+
+    "um": (
+        "michigan",
+        "miami",
+        "mississippi",
+        "montana",
+    ),
+
+    "usc": (
+        "usc",
+        "south carolina",
+    ),
+
+    "tu": (
+        "temple",
+        "tulane",
+        "tulsa",
+    ),
+}
+
+
+def _selected_espn_team(
+    pick,
+    event,
+):
+    """
+    Resolve the wager side only AFTER ESPN has identified the
+    exact game.
+
+    Ambiguous aliases never become global football identities.
+    """
+
+    selected = _clean(
+        side_identity(
+            pick
+        )
+        or pick.get(
+            "team"
+        )
+    )
+
+    names = [
+        competitor_display_name(
+            competitor
+        )
+
+        for competitor
+        in competitors(
+            event
+        )
+    ]
+
+    if (
+        len(
+            names
+        )
+        != 2
+        or not selected
+    ):
+        return (
+            None,
+            "NO_SELECTED_TEAM",
+        )
+
+    direct = [
+        name
+
+        for name
+        in names
+
+        if _same_team(
+            selected,
+            name,
+        )
+    ]
+
+    if (
+        len(
+            direct
+        )
+        == 1
+    ):
+        return (
+            direct[0],
+            "DIRECT",
+        )
+
+    key = (
+        selected
+        .lower()
+        .replace(
+            ".",
+            "",
+        )
+        .strip()
+    )
+
+    # --------------------------------------------------------
+    # UT
+    # --------------------------------------------------------
+    #
+    # Verified Pick Em context:
+    #
+    # Texas @ Tennessee
+    # UT +4.5
+    #
+    # UT means Tennessee.
+    #
+    # This deliberately does NOT create a global UT alias.
+    # --------------------------------------------------------
+
+    if (
+        key
+        == "ut"
+    ):
+        has_texas = any(
+            _same_team(
+                "Texas",
+                name,
+            )
+
+            for name
+            in names
+        )
+
+        tennessee = [
+            name
+
+            for name
+            in names
+
+            if _same_team(
+                "Tennessee",
+                name,
+            )
+        ]
+
+        if (
+            has_texas
+            and len(
+                tennessee
+            )
+            == 1
+        ):
+            return (
+                tennessee[0],
+                (
+                    "CONTEXT_UT_"
+                    "TEXAS_TENNESSEE"
+                ),
+            )
+
+    candidates = (
+        _CONTEXT_ALIASES.get(
+            key,
+            (),
+        )
+    )
+
+    contextual = [
+        name
+
+        for name
+        in names
+
+        if any(
+            _same_team(
+                candidate,
+                name,
+            )
+
+            for candidate
+            in candidates
+        )
+    ]
+
+    if (
+        len(
+            contextual
+        )
+        == 1
+    ):
+        return (
+            contextual[0],
+            (
+                "CONTEXT_"
+                f"{key.upper()}"
+            ),
+        )
+
+    return (
+        None,
+        "AMBIGUOUS_SELECTED_TEAM",
+    )
+
+
+# ============================================================
+# ESPN SELECTED TEAM -> ODDSPAPI PARTICIPANT
+# ============================================================
+
+def _selected_fixture_number(
+    pick,
+    event,
+    fixture,
+):
+    (
+        selected_name,
+        method,
+    ) = _selected_espn_team(
+        pick,
+        event,
+    )
+
+    if not selected_name:
+        return (
+            None,
+            method,
+            None,
+        )
+
+    participant1, participant2 = (
+        _fixture_sides(
+            fixture
+        )
+    )
+
+    match1 = (
+        _same_team(
+            selected_name,
+            participant1,
+        )
+    )
+
+    match2 = (
+        _same_team(
+            selected_name,
+            participant2,
+        )
+    )
+
+    if (
+        match1
+        == match2
+    ):
+        return (
+            None,
+            (
+                "SELECTED_TEAM_NOT_"
+                "UNIQUE_IN_FIXTURE"
+            ),
+            selected_name,
+        )
+
+    return (
+        (
+            "1"
+            if match1
+            else "2"
+        ),
+        method,
+        selected_name,
+    )
+
+
+# ============================================================
+# MARKET CLASSIFICATION
+# ============================================================
+
+def _period_ok(
+    pick,
+    market,
+):
+    wanted = _clean(
+        market_period(
+            normalize_bet_type(
+                pick.get(
+                    "bet_type"
+                )
+            )
+        )
+    ).lower()
+
+    actual = _clean(
+        market.get(
+            "period"
+        )
+    ).lower()
+
+    if wanted in {
+        "",
+        "full",
+        "fullgame",
+        "full_game",
+        "game",
+    }:
+        return actual in {
+            "",
+            "fulltime",
+            "full_time",
+            "game",
+            "match",
+        }
+
+    if wanted in {
+        "1h",
+        "firsthalf",
+        "first_half",
+    }:
+        return actual in {
+            "1h",
+            "firsthalf",
+            "first_half",
+            "first half",
+        }
+
+    if wanted in {
+        "1q",
+        "firstquarter",
+        "first_quarter",
+    }:
+        return actual in {
+            "1q",
+            "firstquarter",
+            "first_quarter",
+            "first quarter",
+        }
+
+    return (
+        actual.replace(
+            "_",
+            "",
+        )
+        ==
+        wanted.replace(
+            "_",
+            "",
+        )
+    )
+
+
+def _market_family(
+    market,
+):
+    name = _clean(
+        market.get(
+            "marketName"
+        )
+    ).lower()
+
+    market_type = _clean(
+        market.get(
+            "marketType"
+        )
+    ).lower()
+
+    # --------------------------------------------------------
+    # IMPORTANT
+    # --------------------------------------------------------
+    #
+    # Team totals MUST be classified before generic totals.
+    #
+    # Previously:
+    #
+    # Over Under Team 1
+    #
+    # could fall through to TOTAL and incorrectly validate a
+    # full-game Over/Under.
+    # --------------------------------------------------------
+
+    if (
+        "team 1"
+        in name
+        or "team 2"
+        in name
+        or "team total"
+        in name
+        or "participant 1 total"
+        in name
+        or "participant 2 total"
+        in name
+    ):
+        return "TEAM_TOTAL"
+
+    if (
+        "handicap"
+        in name
+        or "spread"
+        in name
+        or "handicap"
+        in market_type
+    ):
+        return "SPREAD"
+
+    if (
+        "total"
+        in name
+        or "over under"
+        in name
+        or "total"
+        in market_type
+    ):
+        return "TOTAL"
+
+    if (
+        "winner"
+        in name
+        or "moneyline"
+        in name
+        or "money line"
+        in name
+        or market_type
+        in {
+            "winner",
+            "moneyline",
+            "money_line",
+        }
+    ):
+        return "MONEYLINE"
+
+    return None
+
+
+def _catalog_markets(
+    api,
+    pick,
+):
+    wanted = base_market(
+        normalize_bet_type(
+            pick.get(
+                "bet_type"
+            )
+        )
+    )
+
+    rows = []
+
+    for (
+        market_id,
+        meta,
+    ) in api.markets().items():
+
+        sport = safe_float(
+            meta.get(
+                "sportId"
+            )
+        )
+
+        if sport not in (
+            None,
+            float(
+                SPORT_ID
+            ),
+        ):
+            continue
+
+        if (
+            _market_family(
+                meta
+            )
+            != wanted
+        ):
+            continue
+
+        if not _period_ok(
+            pick,
+            meta,
+        ):
+            continue
+
+        rows.append(
+            (
+                market_id,
+                meta,
+            )
+        )
+
+    return rows
+
+
+# ============================================================
+# HISTORICAL ODDS HELPERS
+# ============================================================
+
+def _history_markets(
     history
 ):
     books = (
@@ -1153,46 +1213,40 @@ def _history_book(
         or {}
     )
 
-    if not isinstance(
-        books,
-        dict,
-    ):
-        return {}
-
-    return (
+    book = (
         books.get(
             BOOKMAKER
         )
         or {}
     )
 
-
-def _history_markets(
-    history
-):
-    book = _history_book(
-        history
-    )
-
-    markets = (
+    return (
         book.get(
             "markets"
         )
         or {}
     )
 
-    if not isinstance(
-        markets,
-        dict,
-    ):
-        return {}
 
-    return markets
-
-
-def _snapshots(
-    outcome
+def _history_entries(
+    history_market,
+    outcome_id,
 ):
+    outcome = (
+        (
+            history_market.get(
+                "outcomes"
+            )
+            or {}
+        )
+        .get(
+            str(
+                outcome_id
+            )
+        )
+        or {}
+    )
+
     players = (
         outcome.get(
             "players"
@@ -1200,229 +1254,198 @@ def _snapshots(
         or {}
     )
 
-    values = (
+    entries = (
         players.get(
             "0"
         )
     )
 
-    # Historical odds:
-    # players["0"] is a LIST of snapshots.
     if isinstance(
-        values,
+        entries,
         list,
     ):
         return [
-            item
+            entry
 
-            for item
-            in values
+            for entry
+            in entries
 
             if isinstance(
-                item,
+                entry,
                 dict,
             )
         ]
 
-    # Defensive compatibility.
     if isinstance(
-        values,
+        entries,
         dict,
     ):
         return [
-            values
+            entries
         ]
 
     return []
 
 
-def _snapshot_at_or_before(
-    outcome,
-    target,
-):
-    candidates = []
-
-    for snapshot in _snapshots(
-        outcome
-    ):
-        created = _parse_dt(
-            snapshot.get(
-                "createdAt"
-            )
-        )
-
-        price = safe_float(
-            snapshot.get(
-                "price"
-            )
-        )
-
-        if (
-            created
-            is None
-            or price
-            is None
-            or price
-            <= 1.0
-        ):
-            continue
-
-        if (
-            created
-            <= target
-        ):
-            candidates.append(
-                (
-                    created,
-                    price,
-                    snapshot,
-                )
-            )
-
-    if not candidates:
-        return None
-
-    candidates.sort(
-        key=lambda row:
-            row[0]
-    )
-
-    return (
-        candidates[-1]
-    )
-
-
-# ============================================================
-# MARKET CATALOG HELPERS
-# ============================================================
-
-def _outcome_name(
+def _outcome_id(
     meta,
-    outcome_id,
+    wanted_name,
 ):
+    wanted = str(
+        wanted_name
+    ).lower()
+
     for outcome in (
         meta.get(
             "outcomes"
         )
         or []
     ):
-        if (
-            str(
-                outcome.get(
-                    "outcomeId"
-                )
+        name = _clean(
+            outcome.get(
+                "outcomeName"
             )
-            ==
-            str(
-                outcome_id
+        ).lower()
+
+        if name in {
+            wanted,
+            (
+                "participant "
+                + wanted
+            ),
+        }:
+            return outcome.get(
+                "outcomeId"
             )
-        ):
-            return str(
-                outcome.get(
-                    "outcomeName"
-                )
-                or ""
-            ).strip()
 
-    return ""
+    return None
 
 
-def _two_sided_market_at(
-    history_market,
-    meta,
-    target,
+def _latest_active_before(
+    entries,
+    cutoff,
 ):
-    rows = []
+    usable = []
 
-    outcomes = (
-        history_market.get(
-            "outcomes"
+    for entry in entries:
+        created = _parse_dt(
+            entry.get(
+                "createdAt"
+            )
         )
-        or {}
-    )
 
-    for (
-        outcome_id,
-        outcome,
-    ) in outcomes.items():
-
-        if not isinstance(
-            outcome,
-            dict,
-        ):
-            continue
-
-        snapshot = (
-            _snapshot_at_or_before(
-                outcome,
-                target,
+        price = safe_float(
+            entry.get(
+                "price"
             )
         )
 
         if (
-            snapshot
-            is None
+            created is None
+            or created > cutoff
+            or price is None
+            or price <= 1
         ):
             continue
 
-        (
-            created,
-            price,
-            raw,
-        ) = snapshot
-
-        # We want a usable two-sided board.
         if (
-            raw.get(
+            entry.get(
                 "active"
             )
             is False
         ):
             continue
 
-        rows.append(
-            {
-                "outcome_id":
-                    str(
-                        outcome_id
-                    ),
-                "outcome_name":
-                    _outcome_name(
-                        meta,
-                        outcome_id,
-                    ),
-                "created_at":
-                    created,
-                "price":
-                    price,
-            }
+        usable.append(
+            (
+                created,
+                entry,
+            )
         )
+
+    if not usable:
+        return None
+
+    return max(
+        usable,
+        key=lambda row:
+            row[0],
+    )
+
+
+def _market_quote(
+    history_market,
+    meta,
+    cutoff,
+):
+    quotes = []
+
+    for outcome in (
+        meta.get(
+            "outcomes"
+        )
+        or []
+    ):
+        outcome_id = (
+            outcome.get(
+                "outcomeId"
+            )
+        )
+
+        latest = (
+            _latest_active_before(
+                _history_entries(
+                    history_market,
+                    outcome_id,
+                ),
+                cutoff,
+            )
+        )
+
+        if latest:
+            quotes.append(
+                {
+                    "name":
+                        _clean(
+                            outcome.get(
+                                "outcomeName"
+                            )
+                        ),
+
+                    "created":
+                        latest[0],
+
+                    "entry":
+                        latest[1],
+                }
+            )
 
     if (
         len(
-            rows
+            quotes
         )
         != 2
     ):
         return None
 
     newest = max(
-        row[
-            "created_at"
+        quote[
+            "created"
         ]
-        for row
-        in rows
+
+        for quote
+        in quotes
     )
 
     oldest = min(
-        row[
-            "created_at"
+        quote[
+            "created"
         ]
-        for row
-        in rows
+
+        for quote
+        in quotes
     )
 
-    # Both sides should describe essentially the same board.
     if (
         newest
         - oldest
@@ -1433,397 +1456,197 @@ def _two_sided_market_at(
     ):
         return None
 
-    # Reject stale historical markets.
-    if (
-        target
-        - newest
-        >
-        timedelta(
-            hours=
-                SNAPSHOT_MAX_AGE_HOURS
+    prices = [
+        safe_float(
+            quote[
+                "entry"
+            ].get(
+                "price"
+            )
         )
+
+        for quote
+        in quotes
+    ]
+
+    if any(
+        price is None
+        or price <= 1
+
+        for price
+        in prices
     ):
         return None
 
-    implied = sum(
-        1.0
-        / row[
-            "price"
-        ]
-
-        for row
-        in rows
-    )
-
     hold = (
-        implied
+        sum(
+            1.0
+            / price
+
+            for price
+            in prices
+        )
         - 1.0
     )
 
-    # Reject obviously incoherent two-sided price pairs.
     if (
-        hold
-        < -0.05
-        or hold
-        > 0.25
+        hold < -0.05
+        or hold > 0.25
     ):
         return None
 
-    # Main spread/total lines are generally the rungs priced
-    # closest to even money.
-    evenness = sum(
-        abs(
-            row[
-                "price"
-            ]
-            - 2.0
-        )
-
-        for row
-        in rows
-    )
-
     return {
-        "rows":
-            rows,
+        "quotes":
+            quotes,
+
         "newest":
             newest,
-        "oldest":
-            oldest,
+
+        "evenness":
+            sum(
+                abs(
+                    price
+                    - 2.0
+                )
+
+                for price
+                in prices
+            ),
+
         "hold":
             hold,
-        "evenness":
-            evenness,
     }
 
 
-def _catalog_for_history(
+# ============================================================
+# DRAFTKINGS CLOSING MARKET
+# ============================================================
+
+def _best_market(
     api,
     history,
     pick,
+    cutoff,
+    selected_number=None,
 ):
-    family = base_market(
-        normalize_bet_type(
-            pick.get(
-                "bet_type"
-            )
-        )
-    )
-
-    catalog = api.markets()
-
-    results = []
-
-    for (
-        market_id,
-        history_market,
-    ) in _history_markets(
-        history
-    ).items():
-
-        meta = catalog.get(
-            str(
-                market_id
-            )
-        )
-
-        if not meta:
-            continue
-
-        try:
-            market_sport = int(
-                meta.get(
-                    "sportId"
-                )
-                or 0
-            )
-
-        except Exception:
-            market_sport = 0
-
-        if (
-            market_sport
-            != SPORT_ID
-        ):
-            continue
-
-        if (
-            _market_family(
-                meta
-            )
-            != family
-        ):
-            continue
-
-        if not _period_matches(
-            pick,
-            meta,
-        ):
-            continue
-
-        results.append(
-            (
-                str(
-                    market_id
-                ),
-                meta,
-                history_market,
-            )
-        )
-
-    return results
-
-
-# ============================================================
-# PARTICIPANT / SPREAD HELPERS
-# ============================================================
-
-def _selected_participant_number(
-    pick,
-    fixture,
-):
-    selected = side_identity(
-        pick
-    )
-
-    if not selected:
-        return None
-
-    participant1, participant2 = (
-        _fixture_names(
-            fixture
-        )
-    )
-
-    match1 = _name_equivalent(
-        selected,
-        participant1,
-    )
-
-    match2 = _name_equivalent(
-        selected,
-        participant2,
-    )
-
-    if (
-        match1
-        and not match2
-    ):
-        return "1"
-
-    if (
-        match2
-        and not match1
-    ):
-        return "2"
-
-    return None
-
-
-def _participant_line(
-    meta,
-    participant_number,
-):
-    handicap = safe_float(
-        meta.get(
-            "handicap"
-        )
-    )
-
-    if (
-        handicap
-        is None
-    ):
-        return None
-
-    # OddsPapi handicap is expressed from participant 1's
-    # perspective. Participant 2 receives the reciprocal line.
-    if (
-        participant_number
-        == "1"
-    ):
-        return handicap
-
-    return -handicap
-
-
-def _market_has_participant(
-    board,
-    participant_number,
-):
-    return any(
-        (
-            str(
-                row.get(
-                    "outcome_name"
-                )
-                or ""
-            )
-            .strip()
-            ==
-            participant_number
-        )
-
-        for row
-        in board[
-            "rows"
-        ]
-    )
-
-
-# ============================================================
-# CLOSING MARKET RECONSTRUCTION
-# ============================================================
-
-def _best_closing_market(
-    api,
-    history,
-    pick,
-    fixture,
-    kickoff,
-):
-    family = base_market(
-        normalize_bet_type(
-            pick.get(
-                "bet_type"
-            )
+    historical = (
+        _history_markets(
+            history
         )
     )
 
     candidates = []
 
-    participant_number = None
-
-    if family in {
-        "SPREAD",
-        "MONEYLINE",
-    }:
-        participant_number = (
-            _selected_participant_number(
-                pick,
-                fixture,
-            )
-        )
-
-        if (
-            participant_number
-            is None
-        ):
-            return (
-                None,
-                (
-                    "SELECTED_TEAM_NOT_IN_"
-                    "ODDSPAPI_FIXTURE"
-                ),
-            )
-
     for (
         market_id,
         meta,
-        history_market,
-    ) in _catalog_for_history(
+    ) in _catalog_markets(
         api,
-        history,
         pick,
     ):
-
-        board = (
-            _two_sided_market_at(
-                history_market,
-                meta,
-                (
-                    kickoff
-                    - timedelta(
-                        seconds=1
-                    )
-                ),
+        history_market = (
+            historical.get(
+                str(
+                    market_id
+                )
             )
         )
 
-        if (
-            board
-            is None
+        if not isinstance(
+            history_market,
+            dict,
         ):
             continue
 
         if (
-            participant_number
+            selected_number
             is not None
-            and not _market_has_participant(
-                board,
-                participant_number,
-            )
         ):
+            selected_outcome = (
+                _outcome_id(
+                    meta,
+                    selected_number,
+                )
+            )
+
+            if (
+                selected_outcome
+                is None
+            ):
+                continue
+
+            if not _latest_active_before(
+                _history_entries(
+                    history_market,
+                    selected_outcome,
+                ),
+                cutoff,
+            ):
+                continue
+
+        quote = (
+            _market_quote(
+                history_market,
+                meta,
+                cutoff,
+            )
+        )
+
+        if quote is None:
             continue
 
         candidates.append(
             {
                 "market_id":
-                    market_id,
+                    str(
+                        market_id
+                    ),
+
                 "meta":
                     meta,
-                "board":
-                    board,
-                "participant_number":
-                    participant_number,
+
+                "quote":
+                    quote,
             }
         )
 
     if not candidates:
-        return (
-            None,
-            (
-                "NO_USABLE_PREKICK_"
-                "DRAFTKINGS_MARKET"
-            ),
-        )
+        return None
 
-    # --------------------------------------------------------
-    # MAIN-LINE PROXY
-    # --------------------------------------------------------
+    # Historical odds do not give us a dependable single
+    # main-line flag for every snapshot.
     #
-    # OddsPapi historical snapshots do not expose the live
-    # mainLine flag documented on /odds.
-    #
-    # Therefore, for the historical audit, choose the
-    # two-sided spread/total rung whose two prices are closest
-    # to even money immediately before kickoff.
-    #
-    # This is intentionally used as an independent closing-line
-    # sanity check, NOT as proof of the original X-post line.
-    # --------------------------------------------------------
-
+    # Within the EXACT market family and period, choose the
+    # two-sided DraftKings rung priced closest to even money.
     candidates.sort(
         key=lambda row: (
             row[
-                "board"
+                "quote"
             ][
                 "evenness"
             ],
+
             -row[
-                "board"
+                "quote"
             ][
                 "newest"
             ].timestamp(),
         )
     )
 
-    return (
-        candidates[0],
-        "MATCHED",
-    )
+    return candidates[0]
 
 
 # ============================================================
 # SPREAD AUDIT
 # ============================================================
 
-def _spread_result(
+def _spread_audit(
     api,
     history,
     pick,
+    event,
     fixture,
-    kickoff,
 ):
     x_line = safe_float(
         pick.get(
@@ -1831,10 +1654,7 @@ def _spread_result(
         )
     )
 
-    if (
-        x_line
-        is None
-    ):
+    if x_line is None:
         return (
             "REVIEW",
             "MISSING_X_SPREAD_LINE",
@@ -1842,55 +1662,104 @@ def _spread_result(
         )
 
     (
-        chosen,
-        reason,
-    ) = _best_closing_market(
-        api,
-        history,
+        selected_number,
+        side_method,
+        selected_name,
+    ) = _selected_fixture_number(
         pick,
+        event,
         fixture,
-        kickoff,
     )
 
     if (
-        chosen
+        selected_number
         is None
     ):
         return (
+            "REVIEW",
+            side_method,
+            {
+                "selected_espn_team":
+                    selected_name,
+            },
+        )
+
+    kickoff = (
+        event_datetime(
+            event
+        )
+    )
+
+    chosen = (
+        _best_market(
+            api,
+            history,
+            pick,
+            (
+                kickoff
+                - timedelta(
+                    seconds=1
+                )
+            ),
+            selected_number=
+                selected_number,
+        )
+    )
+
+    if chosen is None:
+        return (
             "UNAVAILABLE",
-            reason,
+            "NO_PREKICK_DK_SPREAD",
             None,
         )
 
-    dk_line = _participant_line(
-        chosen[
-            "meta"
-        ],
-        chosen[
-            "participant_number"
-        ],
+    participant1_line = (
+        safe_float(
+            chosen[
+                "meta"
+            ].get(
+                "handicap"
+            )
+        )
     )
 
     if (
-        dk_line
+        participant1_line
         is None
     ):
         return (
             "UNAVAILABLE",
             (
-                "DRAFTKINGS_MARKET_"
-                "WITHOUT_HANDICAP"
+                "DK_SPREAD_WITHOUT_"
+                "HANDICAP"
             ),
             None,
         )
 
-    magnitude_difference = abs(
-        abs(
-            x_line
+    # OddsPapi handicap is participant 1's handicap.
+    #
+    # Participant 2 receives the reciprocal.
+    dk_line = (
+        participant1_line
+
+        if (
+            selected_number
+            == "1"
         )
-        -
+
+        else
+        -participant1_line
+    )
+
+    magnitude_difference = (
         abs(
-            dk_line
+            abs(
+                x_line
+            )
+            -
+            abs(
+                dk_line
+            )
         )
     )
 
@@ -1906,8 +1775,7 @@ def _spread_result(
         exact
         or (
             x_line
-            == 0
-            and dk_line
+            == dk_line
             == 0
         )
         or (
@@ -1918,6 +1786,25 @@ def _spread_result(
     )
 
     detail = {
+        "selected_espn_team":
+            selected_name,
+
+        "selected_fixture_participant":
+            selected_number,
+
+        "side_resolution":
+            side_method,
+
+        "participant1":
+            fixture.get(
+                "participant1Name"
+            ),
+
+        "participant2":
+            fixture.get(
+                "participant2Name"
+            ),
+
         "x_line":
             x_line,
 
@@ -1943,42 +1830,17 @@ def _spread_result(
                 "period"
             ),
 
-        "market_handicap_participant1":
-            chosen[
-                "meta"
-            ].get(
-                "handicap"
-            ),
-
         "snapshot_at":
             chosen[
-                "board"
+                "quote"
             ][
                 "newest"
             ].isoformat(),
-
-        "market_hold":
-            round(
-                chosen[
-                    "board"
-                ][
-                    "hold"
-                ],
-                5,
-            ),
 
         "magnitude_difference":
             round(
                 magnitude_difference,
                 3,
-            ),
-
-        "note":
-            (
-                "Closing-line proxy only; "
-                "official reconciliation "
-                "no longer contains the "
-                "original X card timestamp."
             ),
     }
 
@@ -2002,12 +1864,6 @@ def _spread_result(
             detail,
         )
 
-    # User-approved sign discrepancy threshold:
-    # opposite sign + magnitude difference <= 3.
-    #
-    # HISTORICAL AUDIT MODE DOES NOT MUTATE.
-    #
-    # We flag it so it can be inspected before any correction.
     if (
         magnitude_difference
         <= 3.0
@@ -2015,8 +1871,8 @@ def _spread_result(
         return (
             "SIGN_REVIEW",
             (
-                "OPPOSITE_SIGN_WITHIN_3_"
-                "VS_DK_CLOSE"
+                "OPPOSITE_SIGN_WITHIN_"
+                "3_VS_DK_CLOSE"
             ),
             detail,
         )
@@ -2024,23 +1880,22 @@ def _spread_result(
     return (
         "REVIEW",
         (
-            "OPPOSITE_SIGN_OVER_3_"
-            "VS_DK_CLOSE"
+            "OPPOSITE_SIGN_OVER_"
+            "3_VS_DK_CLOSE"
         ),
         detail,
     )
 
 
 # ============================================================
-# TOTAL AUDIT
+# GAME TOTAL AUDIT
 # ============================================================
 
-def _total_result(
+def _total_audit(
     api,
     history,
     pick,
-    fixture,
-    kickoff,
+    event,
 ):
     x_line = safe_float(
         pick.get(
@@ -2048,37 +1903,46 @@ def _total_result(
         )
     )
 
-    if (
-        x_line
-        is None
-    ):
+    if x_line is None:
         return (
             "REVIEW",
             "MISSING_X_TOTAL_LINE",
             None,
         )
 
-    (
-        chosen,
-        reason,
-    ) = _best_closing_market(
-        api,
-        history,
-        pick,
-        fixture,
-        kickoff,
+    kickoff = (
+        event_datetime(
+            event
+        )
     )
 
-    if (
-        chosen
-        is None
-    ):
+    chosen = (
+        _best_market(
+            api,
+            history,
+            pick,
+            (
+                kickoff
+                - timedelta(
+                    seconds=1
+                )
+            ),
+        )
+    )
+
+    if chosen is None:
         return (
             "UNAVAILABLE",
-            reason,
+            "NO_PREKICK_DK_TOTAL",
             None,
         )
 
+    # _market_family() now guarantees that a game TOTAL cannot
+    # accidentally select:
+    #
+    # Over Under Team 1
+    # Over Under Team 2
+    #
     dk_line = safe_float(
         chosen[
             "meta"
@@ -2087,16 +1951,10 @@ def _total_result(
         )
     )
 
-    if (
-        dk_line
-        is None
-    ):
+    if dk_line is None:
         return (
             "UNAVAILABLE",
-            (
-                "DRAFTKINGS_MARKET_"
-                "WITHOUT_TOTAL"
-            ),
+            "DK_TOTAL_WITHOUT_HANDICAP",
             None,
         )
 
@@ -2128,28 +1986,10 @@ def _total_result(
 
         "snapshot_at":
             chosen[
-                "board"
+                "quote"
             ][
                 "newest"
             ].isoformat(),
-
-        "market_hold":
-            round(
-                chosen[
-                    "board"
-                ][
-                    "hold"
-                ],
-                5,
-            ),
-
-        "note":
-            (
-                "Totals are observation-only. "
-                "A different closing total does "
-                "not prove the X card was "
-                "extracted incorrectly."
-            ),
     }
 
     if (
@@ -2179,31 +2019,62 @@ def _total_result(
 # MONEYLINE AUDIT
 # ============================================================
 
-def _moneyline_result(
+def _moneyline_audit(
     api,
     history,
     pick,
+    event,
     fixture,
-    kickoff,
 ):
     (
-        chosen,
-        reason,
-    ) = _best_closing_market(
-        api,
-        history,
+        selected_number,
+        side_method,
+        selected_name,
+    ) = _selected_fixture_number(
         pick,
+        event,
         fixture,
-        kickoff,
     )
 
     if (
-        chosen
+        selected_number
         is None
     ):
         return (
+            "REVIEW",
+            side_method,
+            {
+                "selected_espn_team":
+                    selected_name,
+            },
+        )
+
+    kickoff = (
+        event_datetime(
+            event
+        )
+    )
+
+    chosen = (
+        _best_market(
+            api,
+            history,
+            pick,
+            (
+                kickoff
+                - timedelta(
+                    seconds=1
+                )
+            ),
+            selected_number=
+                selected_number,
+        )
+    )
+
+    if chosen is None:
+        return (
             "UNAVAILABLE",
-            reason,
+            "NO_PREKICK_DK_MONEYLINE",
             None,
         )
 
@@ -2214,6 +2085,15 @@ def _moneyline_result(
             "IN_DK_MONEYLINE"
         ),
         {
+            "selected_espn_team":
+                selected_name,
+
+            "selected_fixture_participant":
+                selected_number,
+
+            "side_resolution":
+                side_method,
+
             "market_id":
                 chosen[
                     "market_id"
@@ -2228,7 +2108,7 @@ def _moneyline_result(
 
             "snapshot_at":
                 chosen[
-                    "board"
+                    "quote"
                 ][
                     "newest"
                 ].isoformat(),
@@ -2243,23 +2123,9 @@ def _moneyline_result(
 def _audit_pick(
     api,
     pick,
-    espn_event,
+    event,
     fixture,
 ):
-    kickoff = event_datetime(
-        espn_event
-    )
-
-    if (
-        kickoff
-        is None
-    ):
-        return (
-            "UNAVAILABLE",
-            "NO_ESPN_KICKOFF",
-            None,
-        )
-
     fixture_id = (
         fixture.get(
             "fixtureId"
@@ -2289,8 +2155,15 @@ def _audit_pick(
             None,
         )
 
-    if not _history_book(
-        history
+    books = (
+        history.get(
+            "bookmakers"
+        )
+        or {}
+    )
+
+    if not books.get(
+        BOOKMAKER
     ):
         return (
             "UNAVAILABLE",
@@ -2310,36 +2183,47 @@ def _audit_pick(
         family
         == "SPREAD"
     ):
-        return _spread_result(
+        return _spread_audit(
             api,
             history,
             pick,
+            event,
             fixture,
-            kickoff,
         )
 
-    if family in {
-        "TOTAL",
-        "TEAM_TOTAL",
-    }:
-        return _total_result(
+    if (
+        family
+        == "TOTAL"
+    ):
+        return _total_audit(
             api,
             history,
             pick,
-            fixture,
-            kickoff,
+            event,
         )
 
     if (
         family
         == "MONEYLINE"
     ):
-        return _moneyline_result(
+        return _moneyline_audit(
             api,
             history,
             pick,
+            event,
             fixture,
-            kickoff,
+        )
+
+    # Do not let a team total silently fall through to a
+    # game-total comparison.
+    if (
+        family
+        == "TEAM_TOTAL"
+    ):
+        return (
+            "UNAVAILABLE",
+            "TEAM_TOTAL_AUDIT_NOT_ENABLED",
+            None,
         )
 
     return (
@@ -2353,7 +2237,7 @@ def _audit_pick(
 
 
 # ============================================================
-# MAIN VALIDATOR
+# MAIN
 # ============================================================
 
 def validate_sportsbook():
@@ -2390,24 +2274,11 @@ def validate_sportsbook():
         )
     )
 
-    print(
-        (
-            "Historical comparison uses "
-            "the final usable pre-kickoff "
-            "DraftKings board because "
-            "official reconciliation "
-            "replaced the original "
-            f"Week {AUDIT_OFFICIAL_WEEK} "
-            "X timestamp."
-        )
-    )
-
     api_key = os.getenv(
         "ODDSPAPI_API_KEY"
     )
 
     if not api_key:
-
         print(
             (
                 "Skipping DraftKings "
@@ -2435,7 +2306,7 @@ def validate_sportsbook():
             )
         )
 
-    eligible = [
+    audit_picks = [
         pick
 
         for pick
@@ -2449,64 +2320,28 @@ def validate_sportsbook():
             and _eligible(
                 pick
             )
-        )
-    ]
-
-    audit_picks = [
-        pick
-
-        for pick
-        in eligible
-
-        if (
-            _week_number(
+            and _week(
                 pick
             )
-            ==
-            AUDIT_OFFICIAL_WEEK
+            == AUDIT_OFFICIAL_WEEK
         )
     ]
 
     if not audit_picks:
-
         print(
             "No eligible wagers found."
         )
 
         return
 
-    # Current tracker season.
-    season_year = 2026
-
-    print()
-
-    print(
-        (
-            "Rebuilding authoritative "
-            "ESPN slate..."
-        )
-    )
-
     # --------------------------------------------------------
-    # ESPN IS THE GAME-IDENTITY AUTHORITY
-    # --------------------------------------------------------
-    #
-    # Do not ask OddsPapi to interpret raw abbreviations like:
-    #
-    # UT
-    # UM
-    # USC
-    # TU
-    # OSU
-    #
-    # The existing shared ESPN resolver handles those using
-    # matchup context and fails closed when unsafe.
+    # ESPN REMAINS THE GAME IDENTITY AUTHORITY
     # --------------------------------------------------------
 
-    espn_events = (
+    events = (
         build_complete_week_slate(
             audit_picks,
-            season_year,
+            SEASON_YEAR,
             AUDIT_OFFICIAL_WEEK,
         )
     )
@@ -2517,15 +2352,11 @@ def validate_sportsbook():
 
     counts = Counter()
 
-    # ESPN event -> OddsPapi fixture.
-    resolved_cache = {}
+    event_fixture_cache = {}
 
-    # Unique OddsPapi fixtures successfully linked.
-    matched_fixture_ids = set()
-
-    # Same wager appearing for multiple pickers can reuse its
-    # sportsbook comparison result.
     history_result_cache = {}
+
+    matched_fixture_ids = set()
 
     print()
 
@@ -2547,20 +2378,9 @@ def validate_sportsbook():
             pick
         )
 
-        # ----------------------------------------------------
-        # STEP A — RECONSTRUCT ESPN EVENT
-        # ----------------------------------------------------
-        #
-        # Official reconciliation deliberately removed the
-        # provisional event_id.
-        #
-        # Use a COPY of the pick and explicitly clear event_id
-        # so the shared resolver reconstructs the exact event
-        # from matchup/team context.
-        #
-        # Original picks.json is untouched.
-        # ----------------------------------------------------
-
+        # Official reconciliation removed the provisional
+        # event_id, so reconstruct the event from the existing
+        # ESPN resolver without mutating the real row.
         resolver_pick = dict(
             pick
         )
@@ -2572,18 +2392,18 @@ def validate_sportsbook():
         resolution = (
             resolve_event_detailed(
                 resolver_pick,
-                espn_events,
+                events,
             )
         )
 
-        espn_event = (
+        event = (
             resolution.get(
                 "event"
             )
         )
 
         if (
-            espn_event
+            event
             is None
         ):
             status = (
@@ -2605,47 +2425,36 @@ def validate_sportsbook():
 
             continue
 
-        espn_id = event_id(
-            espn_event
+        espn_id = (
+            event_id(
+                event
+            )
         )
 
         # ----------------------------------------------------
-        # STEP B — ESPN EVENT -> ODDSPAPI FIXTURE
+        # ESPN EVENT -> ODDSPAPI FIXTURE
         # ----------------------------------------------------
 
         if (
             espn_id
-            in resolved_cache
+            not in event_fixture_cache
         ):
-            (
-                fixture,
-                fixture_status,
-                fixture_detail,
-            ) = (
-                resolved_cache[
-                    espn_id
-                ]
-            )
-
-        else:
-            (
-                fixture,
-                fixture_status,
-                fixture_detail,
-            ) = (
-                _match_oddspapi_fixture(
-                    api,
-                    espn_event,
-                )
-            )
-
-            resolved_cache[
+            event_fixture_cache[
                 espn_id
-            ] = (
-                fixture,
-                fixture_status,
-                fixture_detail,
+            ] = _match_fixture(
+                api,
+                event,
             )
+
+        (
+            fixture,
+            fixture_status,
+            fixture_detail,
+        ) = (
+            event_fixture_cache[
+                espn_id
+            ]
+        )
 
         if (
             fixture
@@ -2680,23 +2489,28 @@ def validate_sportsbook():
             fixture_id
         )
 
-        # ----------------------------------------------------
-        # STEP C — HISTORICAL DRAFTKINGS
-        # ----------------------------------------------------
-
+        # Include selected-side identity in the cache key.
+        #
+        # This prevents an ambiguous abbreviation from borrowing
+        # another picker's side resolution for the same game.
         cache_key = (
             fixture_id,
+
             normalize_bet_type(
                 pick.get(
                     "bet_type"
                 )
             ),
-            str(
-                pick.get(
-                    "side"
+
+            _clean(
+                side_identity(
+                    pick
                 )
-                or ""
-            ),
+                or pick.get(
+                    "team"
+                )
+            ).lower(),
+
             safe_float(
                 pick.get(
                     "line"
@@ -2706,37 +2520,19 @@ def validate_sportsbook():
 
         if (
             cache_key
-            in history_result_cache
+            not in history_result_cache
         ):
-            (
-                status,
-                reason,
-                detail,
-            ) = (
+            try:
                 history_result_cache[
                     cache_key
-                ]
-            )
-
-        else:
-
-            try:
-                (
-                    status,
-                    reason,
-                    detail,
-                ) = _audit_pick(
+                ] = _audit_pick(
                     api,
                     pick,
-                    espn_event,
+                    event,
                     fixture,
                 )
 
             except requests.HTTPError as exc:
-
-                status = (
-                    "API_ERROR"
-                )
 
                 response_status = getattr(
                     exc.response,
@@ -2744,46 +2540,52 @@ def validate_sportsbook():
                     "unknown",
                 )
 
-                reason = (
-                    f"HTTP_"
-                    f"{response_status}"
+                history_result_cache[
+                    cache_key
+                ] = (
+                    "API_ERROR",
+                    (
+                        "HTTP_"
+                        f"{response_status}"
+                    ),
+                    None,
                 )
-
-                detail = None
 
             except requests.RequestException as exc:
 
-                status = (
-                    "API_ERROR"
+                history_result_cache[
+                    cache_key
+                ] = (
+                    "API_ERROR",
+                    (
+                        f"{type(exc).__name__}: "
+                        f"{exc}"
+                    ),
+                    None,
                 )
-
-                reason = (
-                    f"{type(exc).__name__}: "
-                    f"{exc}"
-                )
-
-                detail = None
 
             except Exception as exc:
 
-                status = (
-                    "VALIDATOR_ERROR"
+                history_result_cache[
+                    cache_key
+                ] = (
+                    "VALIDATOR_ERROR",
+                    (
+                        f"{type(exc).__name__}: "
+                        f"{exc}"
+                    ),
+                    None,
                 )
 
-                reason = (
-                    f"{type(exc).__name__}: "
-                    f"{exc}"
-                )
-
-                detail = None
-
+        (
+            status,
+            reason,
+            detail,
+        ) = (
             history_result_cache[
                 cache_key
-            ] = (
-                status,
-                reason,
-                detail,
-            )
+            ]
+        )
 
         counts[
             status
@@ -2837,8 +2639,8 @@ def validate_sportsbook():
 
     print(
         (
-            "Unique ESPN events "
-            "resolved to OddsPapi: "
+            "Unique OddsPapi "
+            "fixtures matched: "
             f"{len(matched_fixture_ids)}"
         )
     )
