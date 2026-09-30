@@ -1,6 +1,6 @@
 {
-  "last_x_post_id": "2104661796200063033",
-  "updated_at": "2026-09-30T09:35:19.559265+00:00",
+  "last_x_post_id": "2105321303221670211",
+  "updated_at": "2026-09-30T22:22:03.593024+00:00",
   "backfill_complete": true,
   "reply_backfill_complete": false,
   "reply_recovery_complete": true,
@@ -75,7 +75,8 @@
     "2103960301771104710",
     "2103974506536518101",
     "2104660195729174863",
-    "2104661796200063033"
+    "2104661796200063033",
+    "2105321303221670211"
   ],
   "processed_ids_initialized_v2": true,
   "failed_post_ids": [],
