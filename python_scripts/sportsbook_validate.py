@@ -26,18 +26,31 @@ API_BASE = "https://api.oddspapi.io/v4"
 
 BOOKMAKER = "draftkings"
 
-# OddsPapi NCAAF / college football sport.
 SPORT_ID = 14
 
 HTTP_TIMEOUT = 30
 
-# ESPN has already locked the exact game.
-# OddsPapi discovery is therefore restricted to a small time
-# window around that known game time.
 FIXTURE_WINDOW_HOURS = 18
 
-# /v4/odds currently has a 500ms endpoint cooldown.
 ODDS_COOLDOWN_SECONDS = 0.55
+
+# ============================================================
+# TEMPORARY HISTORICAL AUDIT CONFIG
+# ============================================================
+#
+# Week 4 has already been officially reconciled.
+#
+# Normally official rows are excluded from sportsbook
+# validation. For this temporary audit, Week 4 is deliberately
+# included so we can independently compare the original wagers
+# against DraftKings.
+#
+# IMPORTANT:
+# This file remains READ ONLY.
+# It never saves picks.json and never modifies a wager.
+# ============================================================
+
+AUDIT_OFFICIAL_WEEK = 4
 
 
 # ============================================================
@@ -163,8 +176,6 @@ class OddsPapi:
             )
         )
 
-        # Cache overlapping fixture searches so dozens of wagers
-        # from the same Saturday do not repeatedly hit OddsPapi.
         key = (
             start.date().isoformat(),
             end.date().isoformat(),
@@ -246,6 +257,22 @@ def _is_official(
     )
 
 
+def _week_number(
+    pick,
+):
+    try:
+        return int(
+            pick.get(
+                "week"
+            )
+        )
+    except (
+        TypeError,
+        ValueError,
+    ):
+        return None
+
+
 def _is_cfb(
     pick,
 ):
@@ -262,6 +289,140 @@ def _is_cfb(
             "CFB",
             "NCAAF",
         }
+    )
+
+
+def _eligible_for_validation(
+    pick,
+):
+    if not _is_cfb(
+        pick
+    ):
+        return False
+
+    week = _week_number(
+        pick
+    )
+
+    # Temporary historical audit:
+    #
+    # ALL Week 4 CFB wagers are eligible, even though they have
+    # already been officially reconciled.
+    if week == AUDIT_OFFICIAL_WEEK:
+        return True
+
+    # Normal production behavior remains unchanged for every
+    # other week: official rows are authoritative and skipped.
+    if _is_official(
+        pick
+    ):
+        return False
+
+    return True
+
+
+# ============================================================
+# FIXTURE IDENTITY HELPERS
+# ============================================================
+
+def _fixture_participants(
+    odds,
+):
+    return (
+        odds.get(
+            "participant1Name"
+        ),
+        odds.get(
+            "participant2Name"
+        ),
+    )
+
+
+def _pick_identity_hints(
+    pick,
+):
+    hints = []
+
+    team = pick.get(
+        "team"
+    )
+
+    opponent = pick.get(
+        "opponent"
+    )
+
+    if team:
+        hints.append(
+            team
+        )
+
+    if opponent:
+        hints.append(
+            opponent
+        )
+
+    return hints
+
+
+def _pair_matches(
+    hints,
+    team1,
+    team2,
+):
+    if len(
+        hints
+    ) < 2:
+        return False
+
+    return (
+        (
+            teams_equivalent(
+                hints[0],
+                team1,
+            )
+            and
+            teams_equivalent(
+                hints[1],
+                team2,
+            )
+        )
+        or
+        (
+            teams_equivalent(
+                hints[0],
+                team2,
+            )
+            and
+            teams_equivalent(
+                hints[1],
+                team1,
+            )
+        )
+    )
+
+
+def _single_hints_match(
+    hints,
+    team1,
+    team2,
+):
+    if not hints:
+        return False
+
+    return all(
+        any(
+            teams_equivalent(
+                hint,
+                team,
+            )
+            for team
+            in (
+                team1,
+                team2,
+            )
+        )
+        for hint
+        in hints
     )
 
 
@@ -305,12 +466,11 @@ def _match_fixture(
         except requests.RequestException:
             continue
 
-        team1 = odds.get(
-            "participant1Name"
-        )
-
-        team2 = odds.get(
-            "participant2Name"
+        (
+            team1,
+            team2,
+        ) = _fixture_participants(
+            odds
         )
 
         if (
@@ -319,90 +479,45 @@ def _match_fixture(
         ):
             continue
 
-        hints = [
-            pick.get(
-                "team"
-            ),
-            pick.get(
-                "opponent"
-            ),
-        ]
+        hints = _pick_identity_hints(
+            pick
+        )
 
-        hints = [
-            hint
-            for hint in hints
-            if hint
-        ]
-
-        if len(hints) == 2:
-            pair_ok = (
-                (
-                    teams_equivalent(
-                        hints[0],
-                        team1,
-                    )
-                    and
-                    teams_equivalent(
-                        hints[1],
-                        team2,
-                    )
-                )
-                or
-                (
-                    teams_equivalent(
-                        hints[0],
-                        team2,
-                    )
-                    and
-                    teams_equivalent(
-                        hints[1],
-                        team1,
-                    )
-                )
+        if len(
+            hints
+        ) >= 2:
+            pair_ok = _pair_matches(
+                hints,
+                team1,
+                team2,
             )
 
         else:
-            matchup = str(
-                pick.get(
-                    "event_matchup"
-                )
-                or pick.get(
-                    "matchup"
-                )
-                or ""
+            pair_ok = _single_hints_match(
+                hints,
+                team1,
+                team2,
             )
 
-            pair_ok = (
-                all(
-                    any(
-                        teams_equivalent(
-                            hint,
-                            team,
-                        )
-                        for team
-                        in (
-                            team1,
-                            team2,
-                        )
+            if not pair_ok:
+                matchup = str(
+                    pick.get(
+                        "event_matchup"
                     )
-                    for hint
-                    in hints
+                    or pick.get(
+                        "matchup"
+                    )
+                    or ""
                 )
-                if hints
-                else False
-            )
 
-            if (
-                not pair_ok
-                and matchup
-            ):
-                pair_ok = (
-                    team1.lower()
-                    in matchup.lower()
-                    and
-                    team2.lower()
-                    in matchup.lower()
-                )
+                if matchup:
+                    pair_ok = (
+                        team1.lower()
+                        in matchup.lower()
+                        and
+                        team2.lower()
+                        in matchup.lower()
+                    )
 
         if not pair_ok:
             continue
@@ -720,12 +835,11 @@ def _spread_observation(
             None,
         )
 
-    participant1 = odds.get(
-        "participant1Name"
-    )
-
-    participant2 = odds.get(
-        "participant2Name"
+    (
+        participant1,
+        participant2,
+    ) = _fixture_participants(
+        odds
     )
 
     if teams_equivalent(
@@ -829,8 +943,6 @@ def _spread_observation(
         ):
             continue
 
-        # OddsPapi handicap is expressed from participant 1's
-        # perspective. Participant 2 receives the reciprocal.
         draftkings_line = (
             handicap
             if selected_number == "1"
@@ -852,12 +964,6 @@ def _spread_observation(
             None,
         )
 
-    # OBSERVATION MODE:
-    #
-    # Choose the offered DraftKings rung whose absolute
-    # magnitude is closest to the X wager.
-    #
-    # This does NOT mutate the wager.
     rows.sort(
         key=lambda row:
             abs(
@@ -1027,11 +1133,6 @@ def _generic_observation(
         )
     )
 
-    # Totals are validation only.
-    #
-    # DraftKings offering the same total number does not prove
-    # whether the Barstool wager was Over or Under, because both
-    # directions are normally available.
     if (
         family
         in {
@@ -1189,6 +1290,15 @@ def validate_sportsbook():
         "=" * 72
     )
 
+    print(
+        f"Historical official audit enabled for Week "
+        f"{AUDIT_OFFICIAL_WEEK}."
+    )
+
+    print(
+        "READ ONLY: no wager data will be modified."
+    )
+
     api_key = os.getenv(
         "ODDSPAPI_API_KEY"
     )
@@ -1220,6 +1330,8 @@ def validate_sportsbook():
 
     counts = Counter()
 
+    eligible_count = 0
+
     for pick in picks:
         if not isinstance(
             pick,
@@ -1227,29 +1339,32 @@ def validate_sportsbook():
         ):
             continue
 
-        # Official PAT HILL reconciled rows are authoritative.
-        # Sportsbook validation never touches them.
-        if (
-            not _is_cfb(
-                pick
-            )
-            or _is_official(
-                pick
-            )
+        if not _eligible_for_validation(
+            pick
         ):
             continue
 
-        # ESPN must establish game identity first.
-        if not pick.get(
-            "event_id"
-        ):
-            continue
+        eligible_count += 1
 
         label = (
             f"W{pick.get('week')} | "
             f"{pick.get('picker')} | "
             f"{pick.get('selection')}"
         )
+
+        if not pick.get(
+            "event_id"
+        ):
+            counts[
+                "NO_EVENT_ID"
+            ] += 1
+
+            print(
+                f"NO_EVENT_ID: "
+                f"{label}"
+            )
+
+            continue
 
         try:
             (
@@ -1367,6 +1482,11 @@ def validate_sportsbook():
     )
     print(
         "-" * 72
+    )
+
+    print(
+        f"Eligible wagers: "
+        f"{eligible_count}"
     )
 
     for key in sorted(
