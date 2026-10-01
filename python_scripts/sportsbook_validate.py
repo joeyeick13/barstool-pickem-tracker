@@ -43,9 +43,8 @@ HTTP_TIMEOUT = 30
 AUDIT_OFFICIAL_WEEK = int(os.getenv("SPORTSBOOK_AUDIT_WEEK", "4"))
 SEASON_YEAR = int(os.getenv("PICKEM_SEASON_YEAR", "2026"))
 
-# This replacement is intentionally observation-only until one live run proves
-# ESPN's 2026 CFB DraftKings payload against the real Week 4 card.
-READ_ONLY = True
+# Official result rows may receive a tightly constrained sign-only correction
+# when ESPN/DraftKings proves the opposite sign within the agreed 3-point band.
 
 
 # ============================================================
@@ -658,7 +657,7 @@ def _audit_pick(item, pick, event):
 
 
 # ============================================================
-# SAFE PROVISIONAL SPREAD CORRECTION
+# SAFE SPORTSBOOK SPREAD SIGN CORRECTION
 # ============================================================
 
 def _format_line(value):
@@ -680,7 +679,7 @@ def _replace_selection_spread(selection, old_line, new_line):
     # Pick selections are stored in forms such as:
     #   Oregon -3
     #   MINN -9.5
-    #   Texas +4.5
+    #   Kentucky +20.5
     # Replace only a final signed numeric token and preserve the team text.
     updated, count = re.subn(
         r"([+-])\s*\d+(?:\.\d+)?\s*$",
@@ -696,20 +695,21 @@ def _replace_selection_spread(selection, old_line, new_line):
     return text
 
 
-def _apply_provisional_spread_correction(pick, event, status, detail):
-    """Apply the agreed DraftKings sign correction to provisional rows only.
+def _apply_spread_sign_correction(pick, event, status, detail):
+    """Apply the agreed DraftKings sign correction.
 
     Rules:
-      * never touch official PAT HILL rows
-      * exact ESPN event lock must already exist on the stored pick
       * only opposite-sign spread discrepancies are eligible
-      * magnitude difference must be <= 3 points
-      * preserve the original selection and line once
+      * DraftKings must be within 3 points in absolute magnitude
+      * preserve the SOURCE magnitude and change only the sign
+      * Kentucky +20.5 vs DK -20.5 -> Kentucky -20.5
+      * Minnesota -9.5 vs DK +12.5 -> Minnesota +9.5
+      * provisional rows require their existing exact ESPN event lock
+      * official audit rows may use the unique ESPN event reconstructed here
+      * preserve the original selection / line / official result once
+      * corrected official rows are marked for one ESPN re-grade downstream
       * idempotent on rerun
     """
-
-    if _is_official(pick):
-        return False
 
     if status != "SIGN_REVIEW":
         return False
@@ -717,15 +717,21 @@ def _apply_provisional_spread_correction(pick, event, status, detail):
     if not isinstance(detail, dict):
         return False
 
-    stored_event_id = _clean(pick.get("event_id"))
     resolved_event_id = _clean(event_id(event))
-
-    if (
-        not stored_event_id
-        or not resolved_event_id
-        or stored_event_id != resolved_event_id
-    ):
+    if not resolved_event_id:
         return False
+
+    is_official = _is_official(pick)
+    stored_event_id = _clean(pick.get("event_id"))
+
+    # A provisional pick must already have been locked pre-game to this exact
+    # ESPN event.  We never let sportsbook validation create/rematch that lock.
+    if not is_official:
+        if (
+            not stored_event_id
+            or stored_event_id != resolved_event_id
+        ):
+            return False
 
     old_line = safe_float(pick.get("line"))
     dk_line = safe_float(detail.get("draftkings_line"))
@@ -733,7 +739,7 @@ def _apply_provisional_spread_correction(pick, event, status, detail):
     if old_line is None or dk_line is None:
         return False
 
-    # Correction is sign-only in spirit: the sides must genuinely disagree.
+    # The sides must genuinely disagree.
     if old_line == 0 or dk_line == 0 or old_line * dk_line >= 0:
         return False
 
@@ -741,15 +747,23 @@ def _apply_provisional_spread_correction(pick, event, status, detail):
     if magnitude_difference > 3.0 + 0.000001:
         return False
 
+    # IMPORTANT: DraftKings is used to validate the SIGN, not to replace the
+    # source number.  The source magnitude remains authoritative.
+    corrected_line = (
+        abs(old_line)
+        if dk_line > 0
+        else -abs(old_line)
+    )
+
     old_selection = _clean(pick.get("selection"))
     new_selection = _replace_selection_spread(
         old_selection,
         old_line,
-        dk_line,
+        corrected_line,
     )
 
     # If we cannot safely update the visible selection, do not update the
-    # numeric line either.  This preserves audit_tracker spread integrity.
+    # numeric line either. This preserves audit_tracker spread integrity.
     if new_selection == old_selection:
         return False
 
@@ -759,12 +773,46 @@ def _apply_provisional_spread_correction(pick, event, status, detail):
     if "pre_sportsbook_line" not in pick:
         pick["pre_sportsbook_line"] = old_line
 
+    if is_official:
+        if "pre_sportsbook_result" not in pick:
+            pick["pre_sportsbook_result"] = pick.get("result")
+
+        if "pre_sportsbook_status" not in pick:
+            pick["pre_sportsbook_status"] = pick.get("status")
+
+        if "pre_sportsbook_profit" not in pick:
+            pick["pre_sportsbook_profit"] = pick.get("profit")
+
+        if "pre_sportsbook_grade_source" not in pick:
+            pick["pre_sportsbook_grade_source"] = pick.get("grade_source")
+
     pick["selection"] = new_selection
-    pick["line"] = dk_line
+    pick["line"] = corrected_line
+
+    # Official reconciled rows historically have no ESPN lock.  The
+    # sportsbook audit has just uniquely reconstructed this exact event, so
+    # persist it for the one downstream re-grade.  Provisional rows already
+    # have this same ID and are left logically unchanged.
+    pick["event_id"] = resolved_event_id
+
     pick["sportsbook_corrected"] = True
+    pick["sportsbook_correction_type"] = (
+        "SIGN_ONLY_PRESERVE_SOURCE_MAGNITUDE"
+    )
     pick["sportsbook_correction_source"] = "ESPN_DRAFTKINGS"
     pick["sportsbook_correction_event_id"] = resolved_event_id
-    pick["sportsbook_correction_at"] = datetime.now(timezone.utc).isoformat()
+    pick["sportsbook_reference_line"] = dk_line
+    pick["sportsbook_magnitude_difference"] = round(
+        magnitude_difference,
+        3,
+    )
+    pick["sportsbook_correction_at"] = datetime.now(
+        timezone.utc
+    ).isoformat()
+
+    if is_official:
+        pick["sportsbook_regrade_required"] = True
+        pick["sportsbook_regraded"] = False
 
     return True
 
@@ -780,7 +828,7 @@ def validate_sportsbook():
     print("=" * 72)
     print(f"Historical official audit week: {AUDIT_OFFICIAL_WEEK}")
     print("DraftKings provider: matched by provider name")
-    print("Official audit rows are read only; safe provisional spread corrections are enabled.")
+    print("Safe spread sign corrections are enabled for provisional and official audit rows.")
 
     picks = load_json(PICKS_FILE, [])
     if not isinstance(picks, list):
@@ -887,7 +935,7 @@ def validate_sportsbook():
             reason = f"{type(exc).__name__}: {exc}"
             detail = None
 
-        if _apply_provisional_spread_correction(
+        if _apply_spread_sign_correction(
             pick,
             event,
             status,
@@ -895,7 +943,8 @@ def validate_sportsbook():
         ):
             corrections_saved += 1
             status = "CORRECTED"
-            reason = "OPPOSITE_SIGN_WITHIN_3_POINTS_APPLIED"
+            reason = "OPPOSITE_SIGN_WITHIN_3_POINTS_SIGN_ONLY_APPLIED"
+            label = _label(pick)
 
         counts[status] += 1
         print(
@@ -923,7 +972,7 @@ def validate_sportsbook():
     for key in sorted(counts):
         print(f"{key}: {counts[key]}")
     print("-" * 72)
-    print(f"Provisional sportsbook corrections saved: {corrections_saved}")
+    print(f"Sportsbook sign corrections saved: {corrections_saved}")
 
 
 if __name__ == "__main__":
