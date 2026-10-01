@@ -170,6 +170,24 @@ def is_official_result(pick):
     )
 
 
+def needs_sportsbook_official_regrade(pick):
+    """
+    Narrow exception to the normal official-row lock.
+
+    When sportsbook_validate.py proves that an official spread was stored
+    with the wrong sign, it corrects only that sign, preserves the source
+    magnitude, stores the exact ESPN event ID, and marks this row for one
+    ESPN re-grade.  Every other official row remains immutable.
+    """
+
+    return bool(
+        is_official_result(pick)
+        and pick.get("sportsbook_corrected")
+        and pick.get("sportsbook_regrade_required")
+        and pick.get("sportsbook_correction_event_id")
+    )
+
+
 # ============================================================
 # MARKET NORMALIZATION
 # ============================================================
@@ -1563,6 +1581,17 @@ def grade_open():
         if not is_official_result(pick)
     ]
 
+    official_sportsbook_regrades = [
+        pick
+        for pick in official_locked
+        if needs_sportsbook_official_regrade(pick)
+    ]
+
+    grade_candidates = (
+        provisional
+        + official_sportsbook_regrades
+    )
+
     print(
         "Official result rows:",
         len(official_locked),
@@ -1573,8 +1602,15 @@ def grade_open():
         len(provisional),
     )
 
+    print(
+        "Official sportsbook regrades:",
+        len(official_sportsbook_regrades),
+    )
+
     # --------------------------------------------------------
     # Normalize provisional markets and spread signs.
+    # Official sportsbook-corrected rows are already normalized
+    # by sportsbook_validate.py and are not rewritten here.
     # --------------------------------------------------------
 
     spread_lines_repaired = 0
@@ -1601,7 +1637,7 @@ def grade_open():
 
     groups = {}
 
-    for pick in provisional:
+    for pick in grade_candidates:
 
         sport = str(
             pick.get("sport")
@@ -1694,6 +1730,7 @@ def grade_open():
     # --------------------------------------------------------
 
     official_preserved = 0
+    official_sportsbook_regraded = 0
     safely_graded = 0
     unmatched = 0
     matched_not_final = 0
@@ -1710,8 +1747,18 @@ def grade_open():
 
     for pick in picks:
 
-        # PAT HILL rows are immutable.
-        if is_official_result(pick):
+        official_regrade = (
+            needs_sportsbook_official_regrade(
+                pick
+            )
+        )
+
+        # PAT HILL rows remain immutable except for the narrow, explicit
+        # sportsbook sign-correction re-grade path.
+        if (
+            is_official_result(pick)
+            and not official_regrade
+        ):
             official_preserved += 1
             continue
 
@@ -1734,6 +1781,21 @@ def grade_open():
 
         if bet_type not in SUPPORTED:
 
+            review_unsupported += 1
+
+            if official_regrade:
+                preserved += 1
+                print(
+                    "OFFICIAL SPORTSBOOK RE-GRADE "
+                    "UNSUPPORTED - PRESERVING:",
+                    picker_name(pick),
+                    "|",
+                    pick_label(pick),
+                    "|",
+                    bet_type,
+                )
+                continue
+
             clear_grade(pick)
 
             mark_review(
@@ -1743,8 +1805,6 @@ def grade_open():
                     f"{bet_type}"
                 ),
             )
-
-            review_unsupported += 1
 
             print(
                 "UNSUPPORTED MARKET:",
@@ -1842,11 +1902,22 @@ def grade_open():
 
         else:
 
+            # A sportsbook-corrected official row must have the exact event ID
+            # persisted by sportsbook_validate.py.  Never rematch it here.
+            if official_regrade:
+                preserved += 1
+                print(
+                    "OFFICIAL SPORTSBOOK RE-GRADE "
+                    "MISSING EVENT LOCK - PRESERVING:",
+                    picker_name(pick),
+                    "|",
+                    pick_label(pick),
+                )
+                continue
+
             # Grading is downstream of schedule_enrich.py and must never create
             # a new event lock.  If the pre-game resolver refused to lock this
-            # wager (for example because source matchup metadata conflicts),
-            # preserve it OPEN for audit/retry instead of silently overriding
-            # that conflict during grading.
+            # wager, preserve it OPEN for audit/retry.
             clear_grade(pick)
             mark_open(pick)
             pick["grading_error"] = "NO_PRE_GAME_EVENT_LOCK"
@@ -1866,7 +1937,8 @@ def grade_open():
         # Refresh harmless ESPN metadata.
         # ----------------------------------------------------
 
-        clear_grade(pick)
+        if not official_regrade:
+            clear_grade(pick)
 
         refresh_event_metadata(
             pick,
@@ -1883,6 +1955,19 @@ def grade_open():
         # ----------------------------------------------------
 
         if not completed(event):
+
+            if official_regrade:
+                preserved += 1
+                print(
+                    "OFFICIAL SPORTSBOOK RE-GRADE "
+                    "EVENT NOT FINAL - PRESERVING:",
+                    picker_name(pick),
+                    "|",
+                    pick_label(pick),
+                    "| event:",
+                    event_value,
+                )
+                continue
 
             mark_open(pick)
 
@@ -1936,6 +2021,19 @@ def grade_open():
         # Fail closed if ESPN still does not confirm completion.
         if not completed(event):
 
+            if official_regrade:
+                preserved += 1
+                print(
+                    "OFFICIAL SPORTSBOOK RE-GRADE "
+                    "SUMMARY NOT FINAL - PRESERVING:",
+                    picker_name(pick),
+                    "|",
+                    pick_label(pick),
+                    "| event:",
+                    event_value,
+                )
+                continue
+
             mark_open(pick)
 
             matched_not_final += 1
@@ -1986,6 +2084,21 @@ def grade_open():
 
             if not period_scores:
 
+                period_unavailable += 1
+
+                if official_regrade:
+                    preserved += 1
+                    print(
+                        "OFFICIAL SPORTSBOOK RE-GRADE "
+                        "PERIOD SCORE UNAVAILABLE - PRESERVING:",
+                        picker_name(pick),
+                        "|",
+                        pick_label(pick),
+                        "| event:",
+                        event_value,
+                    )
+                    continue
+
                 mark_open(pick)
 
                 pick[
@@ -1993,8 +2106,6 @@ def grade_open():
                 ] = (
                     "Period score unavailable"
                 )
-
-                period_unavailable += 1
 
                 print(
                     "PERIOD SCORE UNAVAILABLE:",
@@ -2023,6 +2134,21 @@ def grade_open():
             "PUSH",
         }:
 
+            review_unsupported += 1
+
+            if official_regrade:
+                preserved += 1
+                print(
+                    "OFFICIAL SPORTSBOOK RE-GRADE "
+                    "NOT GRADEABLE - PRESERVING:",
+                    picker_name(pick),
+                    "|",
+                    pick_label(pick),
+                    "| event:",
+                    event_value,
+                )
+                continue
+
             mark_review(
                 pick,
                 (
@@ -2030,8 +2156,6 @@ def grade_open():
                     "locked ESPN event."
                 ),
             )
-
-            review_unsupported += 1
 
             print(
                 "MATCHED BUT NOT GRADEABLE:",
@@ -2049,6 +2173,13 @@ def grade_open():
             event,
             result,
         )
+
+        if official_regrade:
+            pick["sportsbook_regrade_required"] = False
+            pick["sportsbook_regraded"] = True
+            pick["sportsbook_regraded_at"] = now_iso()
+            pick["sportsbook_regrade_result"] = result
+            official_sportsbook_regraded += 1
 
         if period_scores is not None:
             pick[
@@ -2092,6 +2223,11 @@ def grade_open():
     print(
         "Official results preserved:",
         official_preserved,
+    )
+
+    print(
+        "Official sportsbook regraded:",
+        official_sportsbook_regraded,
     )
 
     print(
