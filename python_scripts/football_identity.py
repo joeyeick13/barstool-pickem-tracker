@@ -189,7 +189,7 @@ def team_name_variants(value):
 # ============================================================
 
 ALIASES = {
-    "air force": {"air force", "afa"},
+    "air force": {"air force", "afa", "af"},
     "akron": {"akron", "akr"},
     "alabama": {"alabama", "bama", "ala"},
     "appalachian state": {
@@ -562,6 +562,10 @@ ALIASES = {
     },
     "north texas": {
         "north texas",
+        "north tex",
+        "n texas",
+        "n tex",
+        "ntex",
         "unt",
     },
     "northern illinois": {
