@@ -93,7 +93,7 @@ MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 10
+CURRENT_INGEST_VALIDATION_VERSION = 11
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -3539,6 +3539,134 @@ def validate_normal_post_payload(
 
         return words, numbers
 
+    def _literal_total_direction(value):
+        text = clean_text(value).lower()
+        text = (
+            text
+            .replace("−", "-")
+            .replace("–", "-")
+            .replace("—", "-")
+            .replace("½", ".5")
+        )
+
+        matches = re.findall(
+            r"(?:^|\s)(over|under|o|u)\s*([0-9]+(?:\.[0-9]+)?)\b",
+            text,
+            flags=re.I,
+        )
+
+        if not matches:
+            return None
+
+        token = str(matches[-1][0]).lower()
+        return "OVER" if token in {"over", "o"} else "UNDER"
+
+    def _inventory_selection_compatible(inventory_row, raw_pick):
+        """
+        Verify the structured row still represents the same independently
+        inventoried wager. Literal equality is preferred. The only relaxed
+        case is team-total shorthand where the inventory may contain only the
+        visible O/U number (for example O30.5) while structured extraction
+        correctly restores the team-total owner (for example OSU TT O30.5).
+
+        This does NOT relax spread signs, total direction, numeric lines,
+        picker identity, or conflicting matchup text.
+        """
+        if not isinstance(inventory_row, dict):
+            return False
+
+        inventory_text = clean_text(inventory_row.get("selection"))
+        source_text = clean_text(
+            raw_pick.get("source_selection_text")
+            or raw_pick.get("selection")
+        )
+
+        inventory_signature = _literal_signature(inventory_text)
+        source_signature = _literal_signature(source_text)
+
+        if inventory_signature == source_signature:
+            return True
+
+        # Different numbers can never describe the same source wager.
+        if inventory_signature[1] != source_signature[1]:
+            return False
+
+        inventory_picker = normalize_picker_safe(
+            inventory_row.get("picker")
+        )
+        source_picker = normalize_picker_safe(
+            raw_pick.get("picker")
+        )
+
+        if (
+            inventory_picker
+            and source_picker
+            and inventory_picker != source_picker
+        ):
+            return False
+
+        raw_type = normalize_bet_type(
+            raw_pick.get("bet_type")
+        )
+
+        if base_market(raw_type) != "TEAM_TOTAL":
+            return False
+
+        inventory_direction = _literal_total_direction(
+            inventory_text
+        )
+        source_direction = (
+            _literal_total_direction(source_text)
+            or total_direction(raw_pick)
+        )
+
+        if (
+            not inventory_direction
+            or not source_direction
+            or inventory_direction != source_direction
+        ):
+            return False
+
+        # Require exactly one numeric line on each side and preserve it exactly.
+        if (
+            len(inventory_signature[1]) != 1
+            or len(source_signature[1]) != 1
+        ):
+            return False
+
+        inventory_line = safe_float(inventory_signature[1][0])
+        source_line = safe_float(raw_pick.get("line"))
+
+        if source_line is None:
+            source_line = safe_float(source_signature[1][0])
+
+        if (
+            inventory_line is None
+            or source_line is None
+            or abs(inventory_line - source_line) > 1e-9
+        ):
+            return False
+
+        # If both independent and structured passes retained matchup text, they
+        # may not disagree. This keeps the relaxed rule from mapping a bare O/U
+        # number onto the wrong game.
+        inventory_matchup = clean_text(
+            inventory_row.get("matchup")
+        )
+        source_matchup = clean_text(
+            raw_pick.get("source_matchup_text")
+            or raw_pick.get("matchup")
+        )
+
+        if (
+            inventory_matchup
+            and source_matchup
+            and norm(inventory_matchup) != norm(source_matchup)
+        ):
+            return False
+
+        return True
+
     normalized = []
     slate_cache = {}
 
@@ -3548,21 +3676,9 @@ def validate_normal_post_payload(
     ):
         inventory_row = inventory_rows[inventory_index - 1]
 
-        inventory_selection = _literal_signature(
-            inventory_row.get("selection")
-            if isinstance(inventory_row, dict)
-            else None
-        )
-
-        source_selection = _literal_signature(
-            raw_pick.get("source_selection_text")
-            or raw_pick.get("selection")
-        )
-
-        if (
-            inventory_selection
-            and source_selection
-            and inventory_selection != source_selection
+        if not _inventory_selection_compatible(
+            inventory_row,
+            raw_pick,
         ):
             raise ValueError(
                 "Inventory row mapping failed: row "
