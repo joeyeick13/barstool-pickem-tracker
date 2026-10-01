@@ -24,7 +24,9 @@ from football_identity import (
     best_matchup_hints,
     canonical_game_identity,
     canonical_pick_key,
+    canonical_selected_team,
     clean_text,
+    effective_line,
     market_period,
     norm,
     normalize_bet_type,
@@ -91,7 +93,7 @@ MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 9
+CURRENT_INGEST_VALIDATION_VERSION = 10
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -3947,6 +3949,137 @@ def pick_quality(pick):
     return score
 
 
+
+def _normalized_effective_line(pick):
+    value = effective_line(pick)
+
+    if value is None:
+        return None
+
+    try:
+        return round(float(value), 4)
+    except Exception:
+        return None
+
+
+def _same_picker_week_market(candidate, existing):
+    if norm(candidate.get("picker")) != norm(existing.get("picker")):
+        return False
+
+    if pick_week(candidate) != pick_week(existing):
+        return False
+
+    candidate_type = normalize_bet_type(candidate.get("bet_type"))
+    existing_type = normalize_bet_type(existing.get("bet_type"))
+
+    if market_period(candidate_type) != market_period(existing_type):
+        return False
+
+    if base_market(candidate_type) != base_market(existing_type):
+        return False
+
+    return True
+
+
+def _resolved_selected_team(pick):
+    return (
+        canonical_selected_team(pick)
+        or None
+    )
+
+
+def _team_is_in_game(team, game):
+    return bool(
+        team
+        and game
+        and team in set(game)
+    )
+
+
+def relaxed_duplicate_match(candidate, existing):
+    """
+    Safe cross-post duplicate detector.
+
+    Exact canonical identity remains the primary system. This fallback exists
+    only for a common official-account pattern: a later text/add-on post repeats
+    a wager that already appeared on the complete image card but omits the
+    matchup.
+
+    Safety rules:
+      * same picker, week, period, and market
+      * same original wager line
+      * spread/team identity must agree directly, or the fully named team from
+        one row must belong to the exact two-team matchup on the other row
+      * totals still require the same complete game identity
+      * no fuzzy team guessing
+    """
+
+    if not _same_picker_week_market(candidate, existing):
+        return False
+
+    candidate_type = normalize_bet_type(candidate.get("bet_type"))
+    market = base_market(candidate_type)
+
+    candidate_line = _normalized_effective_line(candidate)
+    existing_line = _normalized_effective_line(existing)
+
+    if candidate_line != existing_line:
+        return False
+
+    candidate_game = canonical_game_identity(candidate)
+    existing_game = canonical_game_identity(existing)
+
+    if market == "TOTAL":
+        if not candidate_game or not existing_game:
+            return False
+
+        return (
+            candidate_game == existing_game
+            and (total_direction(candidate) or "")
+            == (total_direction(existing) or "")
+        )
+
+    if market == "TEAM_TOTAL":
+        candidate_team = _resolved_selected_team(candidate)
+        existing_team = _resolved_selected_team(existing)
+
+        if not candidate_team or not existing_team:
+            return False
+
+        return (
+            candidate_team == existing_team
+            and (total_direction(candidate) or "")
+            == (total_direction(existing) or "")
+        )
+
+    if market in {"SPREAD", "MONEYLINE"}:
+        candidate_team = _resolved_selected_team(candidate)
+        existing_team = _resolved_selected_team(existing)
+
+        if (
+            candidate_team
+            and existing_team
+            and candidate_team == existing_team
+        ):
+            return True
+
+        if (
+            candidate_team
+            and _team_is_in_game(candidate_team, existing_game)
+        ):
+            return True
+
+        if (
+            existing_team
+            and _team_is_in_game(existing_team, candidate_game)
+        ):
+            return True
+
+        return False
+
+    return False
+
+
 def dedupe_picks(picks):
     """
     One permanent canonical identity system.
@@ -4030,13 +4163,52 @@ def dedupe_picks(picks):
         if index in keep_indexes
     ]
 
+    # A second pass catches cross-post repeats where one official source row
+    # omitted its matchup, so the exact canonical keys differ even though the
+    # wager is the same.  This uses relaxed_duplicate_match(), which is still
+    # deterministic and fail-closed.
+    relaxed_cleaned = []
+
+    for pick in cleaned:
+        duplicate_index = None
+
+        for index, kept in enumerate(relaxed_cleaned):
+            if relaxed_duplicate_match(pick, kept):
+                duplicate_index = index
+                break
+
+        if duplicate_index is None:
+            relaxed_cleaned.append(pick)
+            continue
+
+        kept = relaxed_cleaned[duplicate_index]
+
+        if pick_quality(pick) > pick_quality(kept):
+            duplicate = kept
+            relaxed_cleaned[duplicate_index] = pick
+        else:
+            duplicate = pick
+
+        removed += 1
+
+        print(
+            "RELAXED DUPLICATE REMOVED:",
+            duplicate.get("picker"),
+            "| Week",
+            duplicate.get("week"),
+            "|",
+            duplicate.get("selection"),
+            "| matchup:",
+            duplicate.get("matchup"),
+        )
+
     if removed:
         print(
             "Duplicate wagers removed:",
             removed,
         )
 
-    return cleaned
+    return relaxed_cleaned
 
 
 # ============================================================
@@ -4661,6 +4833,18 @@ def process_normal_posts(
                         "inside transaction"
                     )
 
+                if any(
+                    relaxed_duplicate_match(
+                        extracted,
+                        pending_stored,
+                    )
+                    for _, pending_stored in pending_rows
+                ):
+                    raise ValueError(
+                        "Duplicate wager inside transaction "
+                        "under relaxed canonical identity"
+                    )
+
                 pending_keys.add(key)
 
                 if key in seen_wagers:
@@ -4683,6 +4867,36 @@ def process_normal_posts(
                         extracted.get(
                             "matchup"
                         ),
+                    )
+
+                    continue
+
+                relaxed_existing = next(
+                    (
+                        existing_pick
+                        for existing_pick in existing
+                        if relaxed_duplicate_match(
+                            extracted,
+                            existing_pick,
+                        )
+                    ),
+                    None,
+                )
+
+                if relaxed_existing is not None:
+                    duplicate_count += 1
+
+                    print(
+                        "EXISTING WAGER RECOGNIZED (RELAXED):",
+                        extracted.get("picker"),
+                        "| Week",
+                        extracted.get("week"),
+                        "|",
+                        extracted.get("selection"),
+                        "| existing:",
+                        relaxed_existing.get("selection"),
+                        "| existing matchup:",
+                        relaxed_existing.get("matchup"),
                     )
 
                     continue
