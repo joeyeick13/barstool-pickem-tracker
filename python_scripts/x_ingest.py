@@ -91,7 +91,7 @@ MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 8
+CURRENT_INGEST_VALIDATION_VERSION = 9
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -1743,20 +1743,16 @@ def preflight_normal_source(
     picker_hint,
 ):
     """
-    Independently inventory the source before structured extraction.
+    Independently inventory TRACKED wagers before structured extraction.
 
-    This is deliberately a separate model request. It gives the final
-    extraction a second reading of dense cards and long text posts so a
-    self-consistent omission cannot silently pass validation.
+    This is deliberately a separate model request. It provides a row-by-row
+    checklist for Big Cat, Rico Bosco, and Stool Presidente only. Guest/fan
+    wagers may appear in an official @barstoolpickem post, but they are outside
+    this tracker and must not inflate the reconciliation count.
 
-    Inventory responses are also required to be internally consistent.
-    If the model reports a wager_count that does not equal the number of
-    wager rows it returned, or otherwise returns a structurally invalid
-    inventory, retry the independent inventory from the original source.
-
-    Never repair the model's reported count locally and never accept a
-    partial inventory merely because it is close. All attempts must
-    independently satisfy the same fail-closed validation.
+    Every accepted inventory must be internally consistent and every supplied
+    image must be inspected. Failed attempts are retried from the original
+    source; rows are never merged across attempts.
     """
 
     from openai import OpenAI
@@ -1767,41 +1763,43 @@ def preflight_normal_source(
     last_error = None
 
     for attempt in range(1, max_attempts + 1):
-
         retry_instruction = ""
 
         if attempt > 1:
             retry_instruction = f"""
 IMPORTANT RETRY INSTRUCTION:
 
-A previous independent inventory attempt was rejected because its output
-was structurally inconsistent or incomplete.
+A previous independent inventory attempt was rejected because its output was
+structurally inconsistent or incomplete.
 
 This is independent inventory attempt {attempt} of {max_attempts}.
 
-Re-read the ORIGINAL source material from scratch.
-
-Do NOT copy or repair the previous answer.
-
-Count the wagers again directly from the supplied source text and every
-supplied image.
+Re-read the ORIGINAL source material from scratch. Do NOT copy or repair the
+previous answer.
 
 Before responding, verify all of the following:
 
-1. wager_count exactly equals the number of objects in wagers.
-2. images_read exactly equals {len(image_urls)}.
-3. Every supplied image was inspected.
-4. Every individual wager physically visible in the source appears
+1. Count ONLY tracked wagers belonging to Big Cat, Rico Bosco, or Stool
+   Presidente / Dave Portnoy / El Pres.
+2. Ignore wagers belonging only to guests, fans, or any other person. An
+   untracked wager does NOT make the source incomplete.
+3. wager_count exactly equals the number of objects in wagers.
+4. images_read exactly equals {len(image_urls)}.
+5. Every supplied image was inspected.
+6. Every individual TRACKED wager physically visible in the source appears
    exactly once.
-5. Matchup headings, records, scores, decorative text, and other
-   non-wager material are not counted.
-6. If you cannot confidently produce a complete inventory, return
+7. Matchup headings, records, scores, decorative text, and untracked wagers are
+   not counted in wager_count.
+8. If you cannot confidently inventory every TRACKED wager, return
    complete=false rather than guessing.
 """.strip()
 
         prompt = f"""
 You are performing an INDEPENDENT completeness inventory of one verified
-@barstoolpickem source post.
+@barstoolpickem source post for a tracker that follows ONLY these people:
+- Big Cat
+- Rico Bosco
+- Stool Presidente / Dave Portnoy / El Pres
 
 SOURCE: {post_url}
 PICKER HINT: {picker_hint or 'Unknown'}
@@ -1811,12 +1809,18 @@ FULL SOURCE TEXT:
 There are {len(image_urls)} attached source images. Inspect every image.
 
 Count EVERY individual new NCAA football wager physically present in this
-source. Do not infer wagers from schedules or prior knowledge. Do not count
-matchup headings, records, scores, or decorative text.
+source that belongs to one of the THREE TRACKED PICKERS above.
 
-For every wager, transcribe a short exact wager label preserving the visible
-signed spread or total. If a matchup is explicitly attached to that wager,
-transcribe it; otherwise use null. Never invent an opponent or matchup.
+IMPORTANT:
+- Ignore wagers belonging to guests, fans, or any other person.
+- An untracked wager does NOT make the source incomplete.
+- Do not count matchup headings, records, scores, or decorative text.
+- If the picker hint identifies one tracked picker for the whole source, you may
+  use that hint for the wager rows in this source.
+
+For every TRACKED wager, transcribe a short exact wager label preserving the
+visible signed spread or total. If a matchup is explicitly attached to that
+wager, transcribe it; otherwise use null. Never invent an opponent or matchup.
 
 {retry_instruction}
 
@@ -1824,14 +1828,19 @@ Return JSON only:
 {{
   "complete": true,
   "wager_count": 0,
+  "untracked_wager_count": 0,
   "wagers": [
-    {{"selection": "exact wager", "matchup": null}}
+    {{
+      "picker": "Big Cat|Rico Bosco|Stool Presidente|null",
+      "selection": "exact tracked wager",
+      "matchup": null
+    }}
   ],
   "images_read": {len(image_urls)}
 }}
 
-Set complete=false if any supplied image or any part of the source cannot be
-read confidently enough to inventory every wager.
+Set complete=false only if you cannot confidently inventory every TRACKED wager.
+Untracked wagers are ignored for tracker completeness.
 """.strip()
 
         content = [
@@ -1880,6 +1889,11 @@ read confidently enough to inventory every wager.
                     "Independent source inventory returned invalid wager_count"
                 ) from exc
 
+            if count < 0:
+                raise ValueError(
+                    "Independent source inventory returned negative wager_count"
+                )
+
             wagers = payload.get("wagers")
 
             if not isinstance(wagers, list):
@@ -1910,6 +1924,16 @@ read confidently enough to inventory every wager.
                     f"(expected {len(image_urls)}, reported {images_read})"
                 )
 
+            try:
+                untracked_count = int(
+                    payload.get("untracked_wager_count") or 0
+                )
+            except Exception:
+                untracked_count = 0
+
+            if untracked_count < 0:
+                untracked_count = 0
+
             normalized_wagers = []
 
             for index, wager in enumerate(
@@ -1936,8 +1960,19 @@ read confidently enough to inventory every wager.
                     wager.get("matchup")
                 )
 
+                picker = normalize_picker_safe(
+                    wager.get("picker")
+                )
+
+                if not picker:
+                    picker = normalize_picker_safe(
+                        picker_hint
+                    )
+
                 normalized_wagers.append(
                     {
+                        "inventory_index": index,
+                        "picker": picker,
                         "selection": selection,
                         "matchup": matchup or None,
                     }
@@ -1945,6 +1980,7 @@ read confidently enough to inventory every wager.
 
             result = {
                 "wager_count": count,
+                "untracked_wager_count": untracked_count,
                 "wagers": normalized_wagers,
             }
 
@@ -1954,8 +1990,10 @@ read confidently enough to inventory every wager.
                     post_url,
                     "| attempt:",
                     attempt,
-                    "| wagers:",
+                    "| tracked wagers:",
                     count,
+                    "| untracked ignored:",
+                    untracked_count,
                 )
 
             return result
@@ -1994,15 +2032,15 @@ def parse_post_with_ai(
     reply_hint,
     parent_text,
     preflight_inventory,
+    reconciliation_attempt=1,
 ):
     """
     Extract one official source post.
 
-    IMPORTANT:
-    This function returns a payload, not merely a list of picks.
-
-    The payload contains explicit extraction-completeness metadata
-    which is validated before the post may be marked processed.
+    The independent inventory is a row-by-row checklist of TRACKED wagers.
+    Structured extraction must map each returned wager back to exactly one
+    inventory row. Guest/fan wagers are ignored rather than causing the post to
+    fail completeness validation.
     """
 
     from openai import OpenAI
@@ -2013,10 +2051,43 @@ def parse_post_with_ai(
         image_urls
     )
 
+    inventory_rows = list(
+        (preflight_inventory or {}).get("wagers")
+        or []
+    )
+
+    inventory_count = int(
+        (preflight_inventory or {}).get("wager_count")
+        or 0
+    )
+
+    reconciliation_instruction = ""
+
+    if reconciliation_attempt > 1:
+        reconciliation_instruction = f"""
+============================================================
+COUNT-RECONCILIATION RETRY {reconciliation_attempt}
+============================================================
+
+A prior structured extraction did not reconcile with the independently read
+TRACKED-wager inventory.
+
+Re-read the ORIGINAL source from scratch, then use the inventory as a strict
+row-by-row checklist:
+- return exactly {inventory_count} tracked pick objects;
+- return one and only one pick for each inventory_index from 1 through
+  {inventory_count};
+- do not omit a checklist row;
+- do not return an extra pick that has no checklist row;
+- if the original source clearly proves the inventory itself is wrong, set
+  complete=false and explain that specific disagreement in extraction_notes.
+
+Do not copy the prior failed extraction.
+""".strip()
+
     prompt = f"""
-You are a strict extraction engine for NCAA college football
-gambling picks from the verified official @barstoolpickem X
-account.
+You are a strict extraction engine for NCAA college football gambling picks
+from the verified official @barstoolpickem X account.
 
 TRACK ONLY:
 - Big Cat
@@ -2045,27 +2116,36 @@ IS OFFICIAL REPLY:
 NUMBER OF SOURCE IMAGES SUPPLIED:
 {supplied_image_count}
 
-INDEPENDENT SOURCE INVENTORY (separate first read):
+INDEPENDENT TRACKED-WAGER INVENTORY:
 {json.dumps(preflight_inventory, ensure_ascii=False)}
 
-The inventory is evidence, not authority. Re-read the original source yourself.
-If your extraction disagrees with its wager count or rows, set complete=false
-rather than silently dropping or inventing a wager.
+The independent inventory contains {inventory_count} TRACKED wager rows.
+It intentionally excludes guest/fan/untracked wagers.
+
+Use those inventory rows as a completeness CHECKLIST. Every returned pick must
+include inventory_index equal to the matching 1-based inventory row. Return
+exactly one structured pick per tracked inventory row.
+
+If the original source contains an untracked guest/fan wager, IGNORE it. It does
+not make complete=false and it must not be returned in picks.
+
+If you independently see an additional TRACKED wager that is genuinely absent
+from the inventory, do not invent a new checklist row. Set complete=false and
+explain the disputed source row in extraction_notes.
+
+{reconciliation_instruction}
 
 ============================================================
 SOURCE BOUNDARY
 ============================================================
 
-Only wagers physically contained in the ACTUAL SOURCE POST may
-be returned as picks.
+Only wagers physically contained in the ACTUAL SOURCE POST may be returned as
+picks.
 
-Parent context may identify the picker or explain the reply,
-but NEVER copy a wager from a parent post into this child post.
+Parent context may identify the picker or explain the reply, but NEVER copy a
+wager from a parent post into this child post.
 
-Never use fan content.
-
-Never use historical tracker data.
-
+Never use fan content as a tracked pick. Never use historical tracker data.
 This extraction is for NEW PICKS, not weekly result cards.
 
 ============================================================
@@ -2078,55 +2158,47 @@ If {supplied_image_count} images were supplied, inspect all
 {supplied_image_count} images before responding.
 
 Return images_supplied={supplied_image_count}.
+Return images_read as the number of supplied images actually inspected.
 
-Return images_read as the number of supplied images you were
-actually able to inspect.
-
-If any supplied image cannot be read well enough to determine
-whether it contains wagers, set complete=false.
+If any supplied image cannot be read well enough to determine whether it
+contains TRACKED wagers, set complete=false.
 
 For every image, return an image_checks entry with:
 - image_index: 1-based index
 - readable: true/false
-- contains_wagers: true/false
-- wager_count: number of individual wagers extracted from it
+- contains_wagers: true/false, meaning contains TRACKED wagers
+- wager_count: number of TRACKED wagers from the three tracked pickers
 
-Do not count matchup headings as wagers.
-
-Do not count records, kickoff times, scores, checkmarks, red Xs,
-or decorative text as wagers.
-
-If a card spans multiple images, read all pages.
+Do not include guest/fan/untracked wagers in image wager_count.
+Do not count matchup headings, records, kickoff times, scores, checkmarks, red
+Xs, or decorative text as wagers.
 
 ============================================================
 PICK EXTRACTION
 ============================================================
 
-Extract EVERY individual wager contained in this source post.
+Extract EVERY TRACKED wager represented in the independent inventory and the
+original source. Each tracked wager must be its own pick object.
 
-Each wager must be its own pick object.
+For every pick:
+- inventory_index MUST identify the matching inventory checklist row;
+- source_selection_text MUST preserve the literal visible/source wager text;
+- source_team_text MUST preserve the literal visible selected-team token when
+  one exists;
+- source_matchup_text MUST preserve the literal visible matchup when one exists.
 
 For card-style images:
-- matchup headings establish game context
-- each wager underneath belongs to the closest applicable
-  matchup heading
-- preserve that matchup on the wager
-- do not allow a total such as "Over 58.5" or "Under 53.5" to
-  lose its matchup context
+- matchup headings establish game context;
+- each wager underneath belongs to the closest applicable matchup heading;
+- preserve that matchup on the wager;
+- do not allow a total such as "Over 58.5" or "Under 53.5" to lose its matchup
+  context.
 
 CRITICAL LITERAL TRANSCRIPTION RULE:
 Before interpreting or expanding any school abbreviation, copy the visible text
-exactly as written on the source image. For every wager return:
-- source_selection_text: literal visible wager text (for example "GSU -10.5")
-- source_team_text: literal visible selected-team token (for example "GSU")
-- source_matchup_text: literal visible matchup text (for example "NIU @ GSU")
-
-Do NOT silently expand or autocorrect these source_* fields. If the image says
-GSU, source_team_text MUST be GSU -- never ASU, Arizona State, Georgia State,
-or another interpretation. The normalized team/matchup fields may expand the
-literal text separately. When handwriting is ambiguous, use the matchup and
-selection together to transcribe the repeated visible token consistently; do
-not use schedules or outside knowledge to alter source_* text.
+exactly as written on the source. Do NOT silently expand or autocorrect the
+source_* fields. The normalized team/matchup fields may expand literal text
+separately.
 
 Preserve:
 - picker
@@ -2146,13 +2218,11 @@ For spreads, the sign shown in the source is critical:
 - Team -3 means line=-3
 - Team +3 means line=3
 - selection MUST include the selected team AND exact signed spread.
-  Never return selection="Team" with the spread only in the line field.
 
 For totals:
 - side must be OVER or UNDER
 - line must be the total number
-- matchup must identify the game whenever the source provides
-  the matchup context
+- matchup must identify the game whenever source context provides it
 
 For team totals:
 - team must identify the team whose total is being wagered
@@ -2165,30 +2235,31 @@ For moneylines:
 PICKER
 ============================================================
 
-Normalize only to:
+Normalize tracked picks only to:
 - Big Cat
 - Rico Bosco
 - Stool Presidente
 
-If the source itself does not name the picker but the verified
-official parent context clearly identifies the picker, you may
-use that picker.
+If the source itself does not name the picker but verified official parent
+context or PICKER HINT clearly identifies the tracked picker, use that picker.
 
-If picker identity is still genuinely unknown for a wager, set
-complete=false rather than guessing.
+If a wager belongs to someone outside the three tracked pickers, ignore it. Do
+NOT set complete=false merely because an untracked wager exists.
+
+If a wager is supposed to map to a tracked inventory row but its tracked picker
+is genuinely unknowable, set complete=false rather than guessing.
 
 ============================================================
 IS THIS ACTUALLY A PICK POST?
 ============================================================
 
-The outer system intentionally sends some image posts that are
-not gambling-pick posts.
+Set is_pick_post=true ONLY if the ACTUAL SOURCE POST contains at least one new
+wager from one of the three tracked pickers.
 
-Set is_pick_post=true ONLY if the ACTUAL SOURCE POST contains at
-least one new tracked wager.
-
-If it contains no new tracked wager, set is_pick_post=false and
-return picks=[].
+If inventory_count is zero and the source contains only untracked wagers, set:
+- complete=true
+- is_pick_post=false
+- picks=[]
 
 A result card or PAT HILL standings card is NOT a new-pick post.
 
@@ -2199,17 +2270,17 @@ COMPLETENESS
 Set complete=true only when:
 
 1. Every supplied image was inspected.
-2. Every readable wager in the actual source post was extracted.
-3. No wager was copied from parent context.
-4. Every returned wager has a known tracked picker.
-5. Every returned wager has a usable market and selection.
-6. Every spread/total/team-total that requires a numeric line
-   has that line.
-7. Every total with source matchup context retains that matchup.
-8. You did not have to guess through an unreadable/cropped card.
+2. Every TRACKED wager in the actual source post was extracted exactly once.
+3. Every tracked inventory row is represented exactly once by inventory_index.
+4. No wager was copied from parent context.
+5. No untracked guest/fan wager was returned as a tracked pick.
+6. Every returned wager has a known tracked picker.
+7. Every returned wager has a usable market and selection.
+8. Every spread/total/team-total requiring a numeric line has that line.
+9. Every total with source matchup context retains that matchup.
+10. You did not have to guess through an unreadable/cropped source.
 
-If uncertain whether extraction is complete, set complete=false.
-
+If uncertain whether TRACKED extraction is complete, set complete=false.
 Do NOT invent data merely to make complete=true.
 
 ============================================================
@@ -2234,12 +2305,13 @@ Return JSON only:
   "extraction_notes": "",
   "picks": [
     {{
+      "inventory_index": 1,
       "picker": "Big Cat|Stool Presidente|Rico Bosco",
       "sport": "CFB",
       "matchup": "Team A @ Team B or null",
-      "source_selection_text": "literal wager text exactly as visible in image or null",
-      "source_team_text": "literal selected-team token exactly as visible in image or null",
-      "source_matchup_text": "literal matchup text exactly as visible in image or null",
+      "source_selection_text": "literal wager text exactly as visible/source or null",
+      "source_team_text": "literal selected-team token exactly as visible/source or null",
+      "source_matchup_text": "literal matchup text exactly as visible/source or null",
       "team": "selected/team-total team or null",
       "opponent": "opponent or null",
       "bet_type": "SPREAD|TOTAL|MONEYLINE|TEAM_TOTAL|FIRST_QUARTER_SPREAD|FIRST_QUARTER_TOTAL|FIRST_QUARTER_MONEYLINE|FIRST_QUARTER_TEAM_TOTAL|FIRST_HALF_SPREAD|FIRST_HALF_TOTAL|FIRST_HALF_MONEYLINE|FIRST_HALF_TEAM_TOTAL|OTHER",
@@ -2255,9 +2327,7 @@ Return JSON only:
   ]
 }}
 
-No markdown.
-No commentary outside JSON.
-JSON only.
+No markdown. No commentary outside JSON. JSON only.
 """
 
     content = [
@@ -2293,10 +2363,11 @@ JSON only.
                         + "re-opened successfully. Re-read EVERY original image from "
                         + "scratch, including the previously disputed image(s). Do not "
                         + "copy the prior extraction. Return complete=true only if every "
-                        + "image is readable and every wager is extracted."
+                        + "image is readable and every TRACKED wager is extracted."
                     ),
                 }
             ]
+
             for image_url in image_urls:
                 attempt_content.append(
                     {
@@ -2318,6 +2389,7 @@ JSON only.
         payload = parse_json_response(
             response.output_text
         )
+
         last_payload = payload
 
         checks = payload.get("image_checks")
@@ -2327,28 +2399,27 @@ JSON only.
             for check in checks:
                 if not isinstance(check, dict):
                     continue
+
                 if safe_bool(check.get("readable")):
                     continue
+
                 try:
                     image_index = int(check.get("image_index"))
                 except Exception:
                     continue
+
                 if 1 <= image_index <= supplied_image_count:
                     unreadable_indexes.append(image_index)
 
         # If the model did not explicitly flag an image as unreadable, return
-        # the payload unchanged and let the normal transaction validator apply
-        # every existing completeness/count rule.
+        # the payload unchanged and let the transaction validator enforce the
+        # inventory mapping and every other completeness rule.
         if not unreadable_indexes:
             return payload
 
         if extraction_attempt >= max_readability_attempts:
             return payload
 
-        # Re-open ONLY the disputed images. This probe does not create or amend
-        # picks. It merely determines whether the original image can actually be
-        # inspected. A successful probe causes a fresh full-source extraction;
-        # we never flip readable=true locally or commit a partial transcript.
         for image_index in sorted(set(unreadable_indexes)):
             probe_prompt = f"""
 You are performing a SOURCE IMAGE READABILITY CHECK for a verified
@@ -2358,18 +2429,19 @@ IMAGE NUMBER: {image_index} of {supplied_image_count}
 SOURCE: {post_url}
 
 Inspect this one original image carefully. Determine only whether the image is
-readable well enough to identify every visible wager row and its literal wager
-text. Do not infer anything from schedules or prior knowledge.
+readable well enough to identify every visible TRACKED wager row belonging to
+Big Cat, Rico Bosco, or Stool Presidente / Dave Portnoy / El Pres. Guest/fan
+wagers are outside this tracker.
 
 Return JSON only:
 {{
   "image_index": {image_index},
   "readable": true,
-  "visible_wager_count": 0
+  "visible_tracked_wager_count": 0
 }}
 
-Set readable=false if any wager row is too cropped, blurred, or obscured to be
-transcribed reliably.
+Set readable=false if any TRACKED wager row is too cropped, blurred, or obscured
+to be transcribed reliably.
 """.strip()
 
             probe_response = client.responses.create(
@@ -2413,8 +2485,8 @@ transcribed reliably.
                 image_index,
                 "| attempt:",
                 extraction_attempt,
-                "| visible wagers:",
-                probe_payload.get("visible_wager_count"),
+                "| visible tracked wagers:",
+                probe_payload.get("visible_tracked_wager_count"),
             )
 
         print(
@@ -2425,7 +2497,6 @@ transcribed reliably.
         )
 
     return last_payload
-
 
 # ============================================================
 # NORMALIZE ONE EXTRACTED PICK
@@ -3176,16 +3247,15 @@ def validate_normal_post_payload(
     preflight_inventory,
 ):
     """
-    Transaction boundary.
+    Transaction boundary for one normal source post.
 
-    Nothing from this source post may be committed until this
-    function succeeds completely.
+    The independent inventory is a strict checklist of TRACKED wagers only.
+    Structured extraction must map exactly one pick to every inventory row.
+    Guest/fan wagers are ignored by both layers and therefore cannot poison the
+    retry queue merely because they appear on the official account.
     """
 
-    if not isinstance(
-        payload,
-        dict,
-    ):
+    if not isinstance(payload, dict):
         raise ValueError(
             "Normal extraction payload is not an object"
         )
@@ -3196,48 +3266,31 @@ def validate_normal_post_payload(
 
     if not complete:
         notes = clean_text(
-            payload.get(
-                "extraction_notes"
-            )
+            payload.get("extraction_notes")
         )
 
         raise ValueError(
             "AI marked source extraction incomplete"
-            + (
-                f": {notes}"
-                if notes
-                else ""
-            )
+            + (f": {notes}" if notes else "")
         )
 
-    expected_images = len(
-        image_urls
-    )
+    expected_images = len(image_urls)
 
     try:
         reported_supplied = int(
-            payload.get(
-                "images_supplied"
-            )
-            or 0
+            payload.get("images_supplied") or 0
         )
     except Exception:
         reported_supplied = -1
 
     try:
         images_read = int(
-            payload.get(
-                "images_read"
-            )
-            or 0
+            payload.get("images_read") or 0
         )
     except Exception:
         images_read = -1
 
-    if (
-        reported_supplied
-        != expected_images
-    ):
+    if reported_supplied != expected_images:
         raise ValueError(
             "AI image-count mismatch: "
             f"source supplied {expected_images}, "
@@ -3250,20 +3303,16 @@ def validate_normal_post_payload(
             f"{images_read}/{expected_images}"
         )
 
-    checks = payload.get(
-        "image_checks"
-    )
-
+    checks = payload.get("image_checks")
     if checks is None:
         checks = []
 
-    if not isinstance(
-        checks,
-        list,
-    ):
+    if not isinstance(checks, list):
         raise ValueError(
             "image_checks is not a list"
         )
+
+    image_wager_count = 0
 
     if expected_images:
         if len(checks) != expected_images:
@@ -3275,125 +3324,251 @@ def validate_normal_post_payload(
         indexes = set()
 
         for check in checks:
-            if not isinstance(
-                check,
-                dict,
-            ):
+            if not isinstance(check, dict):
                 raise ValueError(
                     "Invalid image_checks entry"
                 )
 
             try:
                 image_index = int(
-                    check.get(
-                        "image_index"
-                    )
+                    check.get("image_index")
                 )
-            except Exception:
+            except Exception as exc:
                 raise ValueError(
                     "Image check has invalid index"
-                )
+                ) from exc
 
-            indexes.add(
-                image_index
-            )
+            indexes.add(image_index)
 
-            if not safe_bool(
-                check.get("readable")
-            ):
+            if not safe_bool(check.get("readable")):
                 raise ValueError(
-                    f"Source image {image_index} "
-                    "was not readable"
+                    f"Source image {image_index} was not readable"
                 )
 
             try:
                 wager_count = int(
-                    check.get(
-                        "wager_count"
-                    )
-                    or 0
+                    check.get("wager_count") or 0
                 )
-            except Exception:
+            except Exception as exc:
                 raise ValueError(
-                    f"Source image {image_index} "
-                    "has invalid wager_count"
-                )
+                    f"Source image {image_index} has invalid wager_count"
+                ) from exc
 
             if wager_count < 0:
                 raise ValueError(
-                    f"Source image {image_index} "
-                    "has negative wager_count"
+                    f"Source image {image_index} has negative wager_count"
                 )
 
+            image_wager_count += wager_count
+
         expected_indexes = set(
-            range(
-                1,
-                expected_images + 1,
-            )
+            range(1, expected_images + 1)
         )
 
         if indexes != expected_indexes:
             raise ValueError(
-                "Image check indexes do not cover "
-                "every supplied image"
+                "Image check indexes do not cover every supplied image"
             )
 
-    is_pick_post = safe_bool(
-        payload.get(
-            "is_pick_post"
+    inventory_rows = list(
+        (preflight_inventory or {}).get("wagers")
+        or []
+    )
+
+    try:
+        independent_count = int(
+            (preflight_inventory or {}).get("wager_count")
+            or 0
         )
+    except Exception as exc:
+        raise ValueError(
+            "Independent source inventory returned invalid wager_count"
+        ) from exc
+
+    if independent_count < 0:
+        raise ValueError(
+            "Independent source inventory returned negative wager_count"
+        )
+
+    if len(inventory_rows) != independent_count:
+        raise ValueError(
+            "Independent source inventory count does not match its rows "
+            f"(reported {independent_count}, rows {len(inventory_rows)})"
+        )
+
+    is_pick_post = safe_bool(
+        payload.get("is_pick_post")
     )
 
-    raw_picks = payload.get(
-        "picks"
-    )
+    raw_picks = payload.get("picks")
 
-    if not isinstance(
-        raw_picks,
-        list,
-    ):
+    if not isinstance(raw_picks, list):
         raise ValueError(
             "AI picks is not a list"
         )
 
-    if (
-        is_pick_post
-        and not raw_picks
-    ):
-        raise ValueError(
-            "AI says this is a pick post "
-            "but extracted zero wagers"
-        )
-
-    if (
-        not is_pick_post
-        and raw_picks
-    ):
-        raise ValueError(
-            "AI says this is not a pick post "
-            "but returned wagers"
-        )
-
-    # --------------------------------------------------------
-    # Non-pick candidate.
-    #
-    # It may safely be marked processed because:
-    # - extraction is complete
-    # - every image was read
-    # - AI explicitly says no new tracked wagers exist
-    # --------------------------------------------------------
-
     if not is_pick_post:
+        if raw_picks:
+            raise ValueError(
+                "AI says this is not a pick post but returned wagers"
+            )
+
+        if independent_count != 0:
+            raise ValueError(
+                "Tracked wager count reconciliation failed: "
+                f"inventory reports {independent_count}, "
+                "but structured extraction classified the post as non-pick"
+            )
+
+        if expected_images and image_wager_count != 0:
+            raise ValueError(
+                "Tracked wager count reconciliation failed: "
+                f"image checks report {image_wager_count}, "
+                "but structured extraction classified the post as non-pick"
+            )
+
         return {
             "is_pick_post": False,
             "picks": [],
-            "image_wager_count": 0,
+            "image_wager_count": image_wager_count,
         }
+
+    if not raw_picks:
+        raise ValueError(
+            "AI says this is a pick post but extracted zero wagers"
+        )
+
+    if independent_count <= 0:
+        raise ValueError(
+            "Tracked wager count reconciliation failed: "
+            f"structured extraction returned {len(raw_picks)} wager(s), "
+            "but independent tracked inventory reports zero"
+        )
+
+    if len(raw_picks) != independent_count:
+        raise ValueError(
+            "Tracked wager count reconciliation failed: "
+            f"inventory reports {independent_count}, "
+            f"structured extraction returned {len(raw_picks)}"
+        )
+
+    if expected_images and image_wager_count != independent_count:
+        raise ValueError(
+            "Tracked wager count reconciliation failed: "
+            f"image checks report {image_wager_count}, "
+            f"independent inventory reports {independent_count}"
+        )
+
+    expected_inventory_indexes = set(
+        range(1, independent_count + 1)
+    )
+
+    mapped_raw_picks = []
+    seen_inventory_indexes = set()
+
+    for raw_pick in raw_picks:
+        if not isinstance(raw_pick, dict):
+            raise ValueError(
+                "Extracted pick is not an object"
+            )
+
+        try:
+            inventory_index = int(
+                raw_pick.get("inventory_index")
+            )
+        except Exception as exc:
+            raise ValueError(
+                "Inventory row mapping failed: extracted wager is missing a "
+                "valid inventory_index"
+            ) from exc
+
+        if inventory_index not in expected_inventory_indexes:
+            raise ValueError(
+                "Inventory row mapping failed: inventory_index "
+                f"{inventory_index} is outside 1..{independent_count}"
+            )
+
+        if inventory_index in seen_inventory_indexes:
+            raise ValueError(
+                "Inventory row mapping failed: duplicate inventory_index "
+                f"{inventory_index}"
+            )
+
+        seen_inventory_indexes.add(inventory_index)
+        mapped_raw_picks.append((inventory_index, raw_pick))
+
+    if seen_inventory_indexes != expected_inventory_indexes:
+        missing = sorted(
+            expected_inventory_indexes - seen_inventory_indexes
+        )
+        raise ValueError(
+            "Inventory row mapping failed: missing inventory indexes "
+            f"{missing}"
+        )
+
+    def _literal_signature(value):
+        value = clean_text(value).lower()
+        value = (
+            value
+            .replace("−", "-")
+            .replace("–", "-")
+            .replace("—", "-")
+            .replace("½", ".5")
+        )
+
+        numbers = tuple(
+            re.findall(
+                r"[+-]?\d+(?:\.\d+)?",
+                value,
+            )
+        )
+
+        words = re.sub(
+            r"[+-]?\d+(?:\.\d+)?",
+            " ",
+            value,
+        )
+
+        words = re.sub(
+            r"[^a-z0-9]+",
+            "",
+            words,
+        )
+
+        return words, numbers
 
     normalized = []
     slate_cache = {}
 
-    for raw_pick in raw_picks:
+    for inventory_index, raw_pick in sorted(
+        mapped_raw_picks,
+        key=lambda item: item[0],
+    ):
+        inventory_row = inventory_rows[inventory_index - 1]
+
+        inventory_selection = _literal_signature(
+            inventory_row.get("selection")
+            if isinstance(inventory_row, dict)
+            else None
+        )
+
+        source_selection = _literal_signature(
+            raw_pick.get("source_selection_text")
+            or raw_pick.get("selection")
+        )
+
+        if (
+            inventory_selection
+            and source_selection
+            and inventory_selection != source_selection
+        ):
+            raise ValueError(
+                "Inventory row mapping failed: row "
+                f"{inventory_index} selection mismatch "
+                f"({inventory_row.get('selection')!r} vs "
+                f"{raw_pick.get('source_selection_text') or raw_pick.get('selection')!r})"
+            )
+
         pick = normalize_ai_pick(
             raw_pick,
             default_week=default_week,
@@ -3411,84 +3586,26 @@ def validate_normal_post_payload(
             slate_cache=slate_cache,
         )
 
-        validate_normal_pick(
-            pick
-        )
+        validate_normal_pick(pick)
+        normalized.append(pick)
 
-        normalized.append(
-            pick
-        )
-
-    # --------------------------------------------------------
-    # Validate image-reported wager count against extraction.
-    #
-    # This catches the most important multi-image omission case.
-    # --------------------------------------------------------
-
-    image_wager_count = 0
-
-    for check in checks:
-        try:
-            image_wager_count += int(
-                check.get(
-                    "wager_count"
-                )
-                or 0
-            )
-        except Exception:
-            raise ValueError(
-                "Invalid image wager count"
-            )
-
-    # Text-only posts have no image count to reconcile.
-    if expected_images:
-        if (
-            image_wager_count
-            != len(normalized)
-        ):
-            raise ValueError(
-                "Image wager-count reconciliation failed: "
-                f"image checks report "
-                f"{image_wager_count}, "
-                f"but {len(normalized)} wagers "
-                "were extracted"
-            )
-
-    # --------------------------------------------------------
-    # Independent inventory reconciliation.
-    # --------------------------------------------------------
-
-    independent_count = int(
-        (preflight_inventory or {}).get("wager_count")
-        or 0
-    )
-
-    if independent_count != len(normalized):
+    if len(normalized) != independent_count:
         raise ValueError(
-            "Independent source inventory reconciliation failed: "
+            "Tracked wager count reconciliation failed: "
             f"inventory reports {independent_count}, "
-            f"structured extraction returned {len(normalized)}"
+            f"validated extraction returned {len(normalized)}"
         )
 
-    # --------------------------------------------------------
-    # Internal canonical duplicate validation.
-    #
-    # AI must not return the same wager twice from one post.
-    # --------------------------------------------------------
-
+    # AI must not return the same tracked wager twice from one post.
     local_keys = set()
 
     for pick in normalized:
-        key = canonical_pick_key(
-            pick
-        )
+        key = canonical_pick_key(pick)
 
         if key in local_keys:
             raise ValueError(
-                "AI returned duplicate wager within "
-                f"the same source post: "
-                f"{pick.get('picker')} | "
-                f"{pick.get('selection')}"
+                "AI returned duplicate wager within the same source post: "
+                f"{pick.get('picker')} | {pick.get('selection')}"
             )
 
         local_keys.add(key)
@@ -3496,10 +3613,8 @@ def validate_normal_post_payload(
     return {
         "is_pick_post": True,
         "picks": normalized,
-        "image_wager_count":
-            image_wager_count,
+        "image_wager_count": image_wager_count,
     }
-
 
 # ============================================================
 # BUILD STORED NORMAL PICK
@@ -4302,16 +4417,16 @@ def process_normal_posts(
         # PHASE 1 + 2: EXTRACT AND VALIDATE THE ENTIRE SOURCE
         # ----------------------------------------------------
         #
-        # The independent inventory and the structured extraction are
-        # intentionally separate reads. Vision can occasionally omit one
-        # wager even when every image is readable. When the ONLY failure is
-        # a wager-count reconciliation mismatch, retry the complete
-        # structured extraction from the original source images.
+        # The independent tracked-wager inventory and the structured
+        # extraction are intentionally separate reads. The inventory is then
+        # used as a row-by-row checklist so dense cards and long text posts
+        # cannot silently drop wagers. Guest/fan wagers are excluded from both
+        # counts.
         #
-        # We never merge rows across attempts, manufacture the missing row,
-        # or weaken validation. One complete attempt must independently pass
-        # every existing source-atomic validation rule before anything is
-        # committed.
+        # We never merge rows across attempts or manufacture a missing wager.
+        # On a count/mapping mismatch, a fresh full-source extraction must map
+        # exactly one structured pick to every independently inventoried row
+        # before anything is committed.
 
         try:
             preflight_inventory = preflight_normal_source(
@@ -4377,6 +4492,7 @@ def process_normal_posts(
                     reply_hint=reply_hint,
                     parent_text=parent_text,
                     preflight_inventory=preflight_inventory,
+                    reconciliation_attempt=full_extraction_attempt,
                 )
 
                 validated = validate_normal_post_payload(
@@ -4408,6 +4524,8 @@ def process_normal_posts(
                 count_mismatch = (
                     "Image wager-count reconciliation failed" in message
                     or "Independent source inventory reconciliation failed" in message
+                    or "Tracked wager count reconciliation failed" in message
+                    or "Inventory row mapping failed" in message
                 )
 
                 if count_mismatch and full_extraction_attempt < max_full_extraction_attempts:
