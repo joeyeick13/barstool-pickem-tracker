@@ -1,6 +1,6 @@
 {
-  "last_x_post_id": "2105441419024388152",
-  "updated_at": "2026-10-01T15:49:14.180030+00:00",
+  "last_x_post_id": "2105724036982735016",
+  "updated_at": "2026-10-01T19:54:44.294553+00:00",
   "backfill_complete": true,
   "reply_backfill_complete": false,
   "reply_recovery_complete": true,
@@ -82,7 +82,11 @@
     "2105441419024388152"
   ],
   "processed_ids_initialized_v2": true,
-  "failed_post_ids": [],
+  "failed_post_ids": [
+    "2105709457015488960",
+    "2105721986127397292",
+    "2105724036982735016"
+  ],
   "official_result_threads_processed": [
     "2097352674010165426",
     "2099539388594028830",
