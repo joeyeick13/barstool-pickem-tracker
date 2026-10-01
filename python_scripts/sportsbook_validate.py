@@ -1,128 +1,96 @@
-            )
-            continue
+from __future__ import annotations
 
-        current_event_id = event_id(event)
-        resolved_event_ids.add(current_event_id)
+import os
+import re
+from collections import Counter, defaultdict
+from datetime import datetime, timezone
 
-        if current_event_id not in payload_cache:
-            try:
-                payload_cache[current_event_id] = odds_client.event_odds(current_event_id)
-            except requests.HTTPError as exc:
-                response_status = getattr(exc.response, "status_code", "unknown")
-                payload_cache[current_event_id] = {
-                    "_api_error": f"HTTP_{response_status}"
-                }
-            except requests.RequestException as exc:
-                payload_cache[current_event_id] = {
-                    "_api_error": f"{type(exc).__name__}: {exc}"
-                }
+import requests
 
-        payload = payload_cache[current_event_id]
+from common import PICKS_FILE, load_json, save_json
+from football_identity import (
+    base_market,
+    market_period,
+    normalize_bet_type,
+    safe_float,
+    side_identity,
+    teams_equivalent,
+)
+from espn_resolver import (
+    build_complete_week_slate,
+    competitor_display_name,
+    competitor_home_away,
+    competitors,
+    event_id,
+    event_matchup_text,
+    resolve_event_detailed,
+)
 
-        if payload.get("_api_error"):
-            status = "API_ERROR"
-            counts[status] += 1
-            print(
-                f"{status}: {label} | ESPN {current_event_id} | "
-                f"{payload['_api_error']}"
-            )
-            continue
 
-        item = _draftkings_item(payload)
+# ============================================================
+# CONFIG
+# ============================================================
 
-        if item is None:
-            status = "NO_DRAFTKINGS_PROVIDER"
-            counts[status] += 1
-            print(
-                f"{status}: {label} | ESPN {current_event_id} | "
-                f"{event_matchup_text(event)}"
-            )
-            print("  available_providers:", _available_providers(payload))
-            continue
+ESPN_ODDS_BASE = (
+    "https://sports.core.api.espn.com/v2/sports/football/"
+    "leagues/college-football"
+)
+DRAFTKINGS_PROVIDER_IDS = {"100", "41"}
+DRAFTKINGS_PROVIDER_NAME = "draftkings"
+HTTP_TIMEOUT = 30
 
-        draftkings_event_ids.add(current_event_id)
+# Keep the already-official week available for read-only historical audit.
+AUDIT_OFFICIAL_WEEK = int(os.getenv("SPORTSBOOK_AUDIT_WEEK", "4"))
+SEASON_YEAR = int(os.getenv("PICKEM_SEASON_YEAR", "2026"))
 
-        try:
-            status, reason, detail = _audit_pick(item, pick, event)
-        except Exception as exc:
-            status = "VALIDATOR_ERROR"
-            reason = f"{type(exc).__name__}: {exc}"
-            detail = None
+# This replacement is intentionally observation-only until one live run proves
+# ESPN's 2026 CFB DraftKings payload against the real Week 4 card.
+READ_ONLY = True
 
-        corrected = False
 
-        if (
-            status == "SIGN_REVIEW"
-            and detail
-        ):
-            corrected = _apply_sign_correction(
-                pick,
-                event,
-                detail,
-            )
+# ============================================================
+# CONTEXT-ONLY TEAM ABBREVIATIONS
+# ============================================================
+# These are NEVER registered as global football aliases. They are only used
+# inside an already-known two-team ESPN event, or as a last-resort two-team
+# matchup resolver that must produce exactly one ESPN event.
 
-            if corrected:
-                corrected_count += 1
-                status = (
-                    "SIGN_CORRECTED_WITHIN_3_POINTS"
-                )
+_CONTEXT_ALIASES = {
+    "osu": ("ohio state", "oklahoma state", "oregon state"),
+    "um": ("michigan", "miami", "mississippi", "montana"),
+    "usc": ("usc", "south carolina"),
+    "tu": ("temple", "tulane", "tulsa"),
+    # Reconciled Week 4 source text has "OU @ USC" for Oregon @ USC.
+    # Keeping OU contextual prevents a global Oklahoma/Oregon ambiguity.
+    "ou": ("oklahoma", "oregon"),
+}
 
-                reason = (
-                    "PROVISIONAL_SPREAD_CORRECTED_"
-                    "TO_DRAFTKINGS_SUMMARY"
-                )
 
-                detail = dict(
-                    detail
-                )
+# ============================================================
+# BASIC HELPERS
+# ============================================================
 
-                detail[
-                    "corrected_selection"
-                ] = pick.get(
-                    "selection"
-                )
+def _clean(value):
+    return str(value or "").strip()
 
-                detail[
-                    "corrected_line"
-                ] = pick.get(
-                    "line"
-                )
 
-        counts[status] += 1
+def _norm_token(value):
+    return "".join(ch for ch in _clean(value).lower() if ch.isalnum())
 
-        print(
-            f"{status}: {label} | ESPN {current_event_id} | {reason}"
-        )
 
-        if detail:
-            print(
-                "  ",
-                detail,
-            )
+def _week_number(pick):
+    try:
+        return int(pick.get("week"))
+    except (TypeError, ValueError):
+        return None
 
-    print()
-    print("-" * 72)
-    print("ESPN DRAFTKINGS AUDIT SUMMARY")
-    print("-" * 72)
-    print(f"Eligible CFB wagers: {len(eligible)}")
-    print(f"Unique ESPN events resolved: {len(resolved_event_ids)}")
-    print(
-        "Unique ESPN events with DraftKings: "
-        f"{len(draftkings_event_ids)}"
-    )
-    for key in sorted(counts):
-        print(f"{key}: {counts[key]}")
-    print(
-        f"Provisional spread sign corrections saved: "
-        f"{corrected_count}"
-    )
 
-    print("-" * 72)
+def _is_cfb(pick):
+    return _clean(pick.get("sport")).upper() in {"CFB", "NCAAF"}
 
-    if corrected_count:
-        save_json(
-            PICKS_FILE,
-            picks,
-        )
 
-        print(
+def _is_official(pick):
+    return bool(pick.get("official_reconciled"))
+
+
+def _eligible_for_validation(pick):
