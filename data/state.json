@@ -1,6 +1,6 @@
 {
-  "last_x_post_id": "2106402854898630999",
-  "updated_at": "2026-10-05T05:23:42.890967+00:00",
+  "last_x_post_id": "2107197461064265968",
+  "updated_at": "2026-10-06T11:56:41.471828+00:00",
   "backfill_complete": true,
   "reply_backfill_complete": false,
   "reply_recovery_complete": true,
@@ -87,7 +87,8 @@
     "2106225598817501385",
     "2106228566002213086",
     "2106229127787516041",
-    "2106402854898630999"
+    "2106402854898630999",
+    "2107197461064265968"
   ],
   "processed_ids_initialized_v2": true,
   "failed_post_ids": [],
@@ -95,11 +96,12 @@
     "2097352674010165426",
     "2099539388594028830",
     "2102077963780936032",
-    "2104660195729174863"
+    "2104660195729174863",
+    "2107197461064265968"
   ],
-  "last_official_reconciled_week": 4,
-  "last_official_result_post_id": "2104660195729174863",
-  "last_official_reconciled_at": "2026-09-29T11:17:10.119235+00:00",
+  "last_official_reconciled_week": 5,
+  "last_official_result_post_id": "2107197461064265968",
+  "last_official_reconciled_at": "2026-10-06T11:56:40.916431+00:00",
   "processed_ids_initialized_v3": true,
   "ingest_validation_version": 11,
   "processed_ids_initialized_v4": true,
