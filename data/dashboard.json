@@ -1,12 +1,12 @@
 {
-  "updated_at": "2026-10-07T01:28:02.373408+00:00",
+  "updated_at": "2026-10-07T10:09:38.329739+00:00",
   "cappers": [
     {
       "picker": "Big Cat",
-      "wins": 94,
+      "wins": 95,
       "losses": 74,
       "pushes": 1,
-      "win_pct": 56.0
+      "win_pct": 56.2
     },
     {
       "picker": "Stool Presidente",
@@ -47,7 +47,7 @@
       },
       {
         "week": 6,
-        "win_pct": 56.0
+        "win_pct": 56.2
       }
     ],
     "Stool Presidente": [
@@ -146,15 +146,15 @@
       "competition_id": "401871090",
       "game_time": "2026-10-07T00:00Z",
       "event_matchup": "Southern Miss @ Troy",
-      "event_status": "STATUS_IN_PROGRESS",
-      "event_resolution_method": "EXISTING_EVENT_ID_METADATA_COMPLETION",
+      "event_status": "STATUS_FINAL",
+      "event_resolution_method": "EXISTING_EVENT_ID",
       "game_match_status": "MATCHED",
       "game_match_source": "ESPN",
-      "game_match_confidence": "LOCKED_SELECTED_TEAM_VALIDATED",
+      "game_match_confidence": "LOCKED_VALIDATED",
       "game_matchup": "Southern Miss @ Troy",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-07T01:26:51.603778+00:00",
+      "schedule_checked_at": "2026-10-07T10:08:50.410124+00:00",
       "pre_espn_repair_team": "Troy",
       "matchup_metadata_repaired": true,
       "matchup_metadata_repair_source": "ESPN_LOCKED_EVENT",
@@ -162,8 +162,12 @@
       "matchup_metadata_repaired_at": "2026-10-07T01:26:51.603456+00:00",
       "matchup_metadata_repair_event_id": "401871090",
       "event_resolution_reason": null,
-      "status": "OPEN",
-      "result": null
+      "result": "WIN",
+      "status": "FINAL",
+      "final_score": "TROY 55 - USM 34",
+      "profit": 0.909,
+      "graded_at": "2026-10-07T10:09:38.230575+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Stool Presidente",
