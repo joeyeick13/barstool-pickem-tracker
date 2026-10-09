@@ -720,6 +720,12 @@ AMBIGUOUS_CONTEXT_GROUPS = {
     "kst": {
         "kansas state",
     },
+    # KSU is genuinely ambiguous in compact source cards: Kansas State and
+    # Kennesaw State both use it.  The second matchup side must disambiguate.
+    "ksu": {
+        "kansas state",
+        "kennesaw state",
+    },
     "um": {
         "michigan",
         "miami",
