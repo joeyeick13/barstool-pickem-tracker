@@ -696,6 +696,30 @@ AMBIGUOUS_CONTEXT_GROUPS = {
         "tulane",
         "tulsa",
     },
+    # Source cards also use TUL.  It is ambiguous between Tulane and Tulsa,
+    # so it is legal only inside a complete two-team matchup.
+    "tul": {
+        "tulane",
+        "tulsa",
+    },
+    # UH can mean Houston or Hawaii.  Keep it contextual and require the
+    # second matchup side to make the ESPN event unique.
+    "uh": {
+        "houston",
+        "hawaii",
+    },
+    # Common source-card abbreviations that are safe only in a complete
+    # two-team matchup.  They remain resolver-local instead of becoming
+    # global football aliases.
+    "wf": {
+        "wake forest",
+    },
+    "ncst": {
+        "nc state",
+    },
+    "kst": {
+        "kansas state",
+    },
     "um": {
         "michigan",
         "miami",
