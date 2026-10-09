@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-09T16:46:26.898037+00:00",
+  "updated_at": "2026-10-09T18:19:27.389443+00:00",
   "cappers": [
     {
       "picker": "Big Cat",
@@ -141,8 +141,20 @@
       "event_id": "401869949",
       "official_reconciled": false,
       "ingest_validated": true,
-      "ingest_validation_version": 13,
+      "ingest_validation_version": 16,
       "id": "14d33d4963d3cf3e",
+      "source_post_evidence": {
+        "2108381208594059670": {
+          "url": "https://x.com/barstoolpickem/status/2108381208594059670",
+          "text": "BOB DIACO PLAYS\n\n@stoolpresidente Georgia Southern +8.5 \n\n@BarstoolBigCat Florida -11.5\n\n@Return_Of_RB Air Force -7.5\n\n@jmccarthy55 Penn State -1.5\n\n@hen_ease UCLA +11.5\n\n@KevinZuppe Ole Miss -9.5",
+          "is_reply": false,
+          "conversation_id": "2108381208594059670",
+          "posted_at": "2026-10-09T02:17:06.000Z"
+        }
+      },
+      "source_post_ids": [
+        "2108381208594059670"
+      ],
       "competition_id": "401869949",
       "game_time": "2026-10-10T23:30Z",
       "event_matchup": "James Madison @ GA Southern",
@@ -155,7 +167,7 @@
       "game_match_review_reason": null,
       "event_resolution_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-09T16:45:43.341542+00:00",
+      "schedule_checked_at": "2026-10-09T18:18:37.594042+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -188,8 +200,20 @@
       "event_id": "401864516",
       "official_reconciled": false,
       "ingest_validated": true,
-      "ingest_validation_version": 13,
+      "ingest_validation_version": 16,
       "id": "7fc791ab40d120ac",
+      "source_post_evidence": {
+        "2108381208594059670": {
+          "url": "https://x.com/barstoolpickem/status/2108381208594059670",
+          "text": "BOB DIACO PLAYS\n\n@stoolpresidente Georgia Southern +8.5 \n\n@BarstoolBigCat Florida -11.5\n\n@Return_Of_RB Air Force -7.5\n\n@jmccarthy55 Penn State -1.5\n\n@hen_ease UCLA +11.5\n\n@KevinZuppe Ole Miss -9.5",
+          "is_reply": false,
+          "conversation_id": "2108381208594059670",
+          "posted_at": "2026-10-09T02:17:06.000Z"
+        }
+      },
+      "source_post_ids": [
+        "2108381208594059670"
+      ],
       "competition_id": "401864516",
       "game_time": "2026-10-10T23:30Z",
       "event_matchup": "Air Force @ N Illinois",
@@ -202,7 +226,7 @@
       "game_match_review_reason": null,
       "event_resolution_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-09T16:45:43.468610+00:00",
+      "schedule_checked_at": "2026-10-09T18:18:37.746549+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -235,8 +259,20 @@
       "event_id": "401856714",
       "official_reconciled": false,
       "ingest_validated": true,
-      "ingest_validation_version": 13,
+      "ingest_validation_version": 16,
       "id": "827b4ff4a0d04376",
+      "source_post_evidence": {
+        "2108381208594059670": {
+          "url": "https://x.com/barstoolpickem/status/2108381208594059670",
+          "text": "BOB DIACO PLAYS\n\n@stoolpresidente Georgia Southern +8.5 \n\n@BarstoolBigCat Florida -11.5\n\n@Return_Of_RB Air Force -7.5\n\n@jmccarthy55 Penn State -1.5\n\n@hen_ease UCLA +11.5\n\n@KevinZuppe Ole Miss -9.5",
+          "is_reply": false,
+          "conversation_id": "2108381208594059670",
+          "posted_at": "2026-10-09T02:17:06.000Z"
+        }
+      },
+      "source_post_ids": [
+        "2108381208594059670"
+      ],
       "competition_id": "401856714",
       "game_time": "2026-10-10T16:45Z",
       "event_matchup": "South Carolina @ Florida",
@@ -249,7 +285,7 @@
       "game_match_review_reason": null,
       "event_resolution_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-09T16:45:43.404262+00:00",
+      "schedule_checked_at": "2026-10-09T18:18:37.668180+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -282,8 +318,20 @@
       "event_id": "401871090",
       "official_reconciled": false,
       "ingest_validated": true,
-      "ingest_validation_version": 13,
+      "ingest_validation_version": 16,
       "id": "7532b212d79b0f56",
+      "source_post_evidence": {
+        "2107569390036173195": {
+          "url": "https://x.com/barstoolpickem/status/2107569390036173195",
+          "text": "Tuesday play from @BarstoolBigCat \n\nTroy -10",
+          "is_reply": false,
+          "conversation_id": "2107569390036173195",
+          "posted_at": "2026-10-06T20:31:13.000Z"
+        }
+      },
+      "source_post_ids": [
+        "2107569390036173195"
+      ],
       "competition_id": "401871090",
       "game_time": "2026-10-07T00:00Z",
       "event_matchup": "Southern Miss @ Troy",
@@ -296,12 +344,12 @@
       "game_match_review_reason": null,
       "event_resolution_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-09T16:45:43.275824+00:00",
+      "schedule_checked_at": "2026-10-09T18:18:37.513214+00:00",
       "result": "WIN",
       "status": "FINAL",
       "final_score": "TROY 55 - USM 34",
       "profit": 0.909,
-      "graded_at": "2026-10-09T16:46:26.839725+00:00",
+      "graded_at": "2026-10-09T18:19:27.303369+00:00",
       "grade_source": "ESPN"
     },
     {
