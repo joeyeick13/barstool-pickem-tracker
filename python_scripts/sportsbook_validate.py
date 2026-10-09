@@ -10,6 +10,7 @@ import requests
 from common import PICKS_FILE, load_json, save_json
 from football_identity import (
     base_market,
+    canonical_team,
     market_period,
     normalize_bet_type,
     safe_float,
@@ -817,6 +818,162 @@ def _apply_spread_sign_correction(pick, event, status, detail):
     return True
 
 
+
+# ============================================================
+# POST-CORRECTION PROVISIONAL DEDUPE
+# ============================================================
+
+def _source_evidence(pick):
+    evidence = {}
+
+    raw = pick.get("source_post_evidence")
+    if isinstance(raw, dict):
+        for raw_id, raw_meta in raw.items():
+            post_id = str(raw_id or "").strip()
+            if not post_id:
+                continue
+            evidence[post_id] = dict(raw_meta) if isinstance(raw_meta, dict) else {}
+
+    primary_id = _clean(pick.get("source_post_id"))
+    if primary_id and primary_id not in evidence:
+        evidence[primary_id] = {
+            "url": pick.get("source_url"),
+            "text": pick.get("source_text"),
+            "is_reply": pick.get("source_is_reply"),
+            "conversation_id": pick.get("conversation_id"),
+            "posted_at": pick.get("posted_at"),
+        }
+
+    for raw_id in (pick.get("source_post_ids") or []):
+        post_id = str(raw_id or "").strip()
+        if post_id:
+            evidence.setdefault(post_id, {})
+
+    return evidence
+
+
+def _merge_duplicate_provenance(keeper, duplicate):
+    evidence = _source_evidence(keeper)
+    evidence.update(_source_evidence(duplicate))
+
+    if evidence:
+        keeper["source_post_evidence"] = evidence
+        keeper["source_post_ids"] = sorted(
+            evidence,
+            key=lambda value: int(value) if str(value).isdigit() else 0,
+        )
+
+    audit_row = {
+        "selection": duplicate.get("selection"),
+        "line": duplicate.get("line"),
+        "pre_sportsbook_selection": duplicate.get("pre_sportsbook_selection"),
+        "pre_sportsbook_line": duplicate.get("pre_sportsbook_line"),
+        "source_post_id": duplicate.get("source_post_id"),
+        "event_id": duplicate.get("event_id"),
+        "correction_type": duplicate.get("sportsbook_correction_type"),
+    }
+
+    history = keeper.setdefault(
+        "merged_duplicate_audit",
+        [],
+    )
+    if audit_row not in history:
+        history.append(audit_row)
+
+
+def _provisional_spread_identity(pick):
+    if _is_official(pick) or not _is_cfb(pick):
+        return None
+
+    bet_type = normalize_bet_type(pick.get("bet_type"))
+    if base_market(bet_type) != "SPREAD":
+        return None
+
+    current_event_id = _clean(pick.get("event_id"))
+    if not current_event_id:
+        return None
+
+    line = safe_float(pick.get("line"))
+    if line is None:
+        return None
+
+    selected = canonical_team(side_identity(pick))
+    if not selected:
+        return None
+
+    return (
+        _clean(pick.get("picker")).lower(),
+        _week_number(pick),
+        market_period(bet_type),
+        current_event_id,
+        selected,
+        round(float(line), 4),
+    )
+
+
+def _dedupe_provisional_spreads_after_sign_validation(picks):
+    """Remove exact provisional spread duplicates created/exposed by sign fixes.
+
+    This is intentionally downstream of DraftKings validation.  It does not
+    guess which sign is right.  It only merges rows after both wagers already
+    resolve to the same picker/week/period/ESPN event/selected team/exact line.
+    """
+    groups = defaultdict(list)
+
+    for index, pick in enumerate(picks):
+        if not isinstance(pick, dict):
+            continue
+        key = _provisional_spread_identity(pick)
+        if key is not None:
+            groups[key].append((index, pick))
+
+    remove_indexes = set()
+    removed = 0
+
+    for key, members in groups.items():
+        if len(members) < 2:
+            continue
+
+        # Prefer a row that was already source-correct and/or already graded.
+        # A newly sportsbook-corrected duplicate should not displace the older
+        # clean row simply because validation exposed their equality.
+        def keeper_score(item):
+            index, pick = item
+            graded = 1 if pick.get("result") in {"WIN", "LOSS", "PUSH"} else 0
+            uncorrected = 1 if not pick.get("sportsbook_corrected") else 0
+            has_matchup = 1 if _pick_matchup(pick) else 0
+            return (graded, uncorrected, has_matchup, -index)
+
+        keeper_index, keeper = max(members, key=keeper_score)
+
+        for index, duplicate in members:
+            if index == keeper_index:
+                continue
+
+            _merge_duplicate_provenance(keeper, duplicate)
+            remove_indexes.add(index)
+            removed += 1
+
+            print(
+                "POST-CORRECTION DUPLICATE MERGED:",
+                _label(duplicate),
+                "| event:",
+                duplicate.get("event_id"),
+                "| kept:",
+                _label(keeper),
+            )
+
+    if not remove_indexes:
+        return picks, 0
+
+    cleaned = [
+        pick
+        for index, pick in enumerate(picks)
+        if index not in remove_indexes
+    ]
+
+    return cleaned, removed
+
 # ============================================================
 # MAIN
 # ============================================================
@@ -953,6 +1110,12 @@ def validate_sportsbook():
         if detail:
             print("  ", detail)
 
+    picks, post_correction_duplicates_removed = (
+        _dedupe_provisional_spreads_after_sign_validation(
+            picks
+        )
+    )
+
     print()
     print("-" * 72)
     print("ESPN DRAFTKINGS AUDIT SUMMARY")
@@ -963,7 +1126,7 @@ def validate_sportsbook():
         "Unique ESPN events with DraftKings odds: "
         f"{len(draftkings_event_ids)}"
     )
-    if corrections_saved:
+    if corrections_saved or post_correction_duplicates_removed:
         save_json(
             PICKS_FILE,
             picks,
@@ -973,6 +1136,10 @@ def validate_sportsbook():
         print(f"{key}: {counts[key]}")
     print("-" * 72)
     print(f"Sportsbook sign corrections saved: {corrections_saved}")
+    print(
+        "Post-correction provisional duplicates removed: "
+        f"{post_correction_duplicates_removed}"
+    )
 
 
 if __name__ == "__main__":
