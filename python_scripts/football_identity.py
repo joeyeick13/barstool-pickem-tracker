@@ -342,6 +342,9 @@ ALIASES = {
     "georgia southern": {
         "georgia southern",
         "ga southern",
+        "g south",
+        "g southern",
+        "gsouth",
         "gaso",
     },
     "georgia state": {
@@ -350,7 +353,6 @@ ALIASES = {
         "ga state",
         "ga st",
         "gast",
-        "gsu",
     },
     "georgia tech": {
         "georgia tech",
@@ -565,6 +567,10 @@ ALIASES = {
     },
     "north texas": {
         "north texas",
+        "north tex",
+        "n texas",
+        "n tex",
+        "ntex",
         "unt",
     },
     "northern illinois": {
@@ -576,6 +582,7 @@ ALIASES = {
     "northwestern": {
         "northwestern",
         "nw",
+        "nwu",
     },
     "notre dame": {
         "notre dame",
@@ -603,6 +610,7 @@ ALIASES = {
     },
     "ole miss": {
         "ole miss",
+        "ole",
         "mississippi",
     },
     "oregon": {
@@ -838,6 +846,10 @@ ALIASES = {
 
 AMBIGUOUS_ALIASES = {
     "osu",
+    # GSU is used for both Georgia State and Georgia Southern on compact
+    # betting cards. It is safe only when a second matchup team provides
+    # enough context to identify one ESPN event.
+    "gsu",
     # KSU is ambiguous between Kansas State and Kennesaw State.
     "ksu",
 }
