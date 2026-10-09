@@ -97,7 +97,7 @@ MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 16
+CURRENT_INGEST_VALIDATION_VERSION = 17
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -3988,8 +3988,80 @@ def validate_normal_post_payload(
         raw_type = normalize_bet_type(
             raw_pick.get("bet_type")
         )
+        raw_market = base_market(raw_type)
 
-        if base_market(raw_type) != "TEAM_TOTAL":
+        # Source-literal abbreviations may differ harmlessly between the
+        # independent inventory and structured extraction (for example
+        # ``JAX ST -3`` vs ``Jax -3``).  Permit that mapping only when the
+        # numeric spread is identical and both literal team tokens resolve to
+        # the same unambiguous football identity.  The independent inventory
+        # remains authoritative and is restored immediately after this check.
+        if raw_market == "SPREAD":
+            inventory_side = side_identity({
+                "bet_type": raw_type,
+                "selection": inventory_text,
+            })
+            source_side = side_identity({
+                "bet_type": raw_type,
+                "selection": source_text,
+            })
+
+            if (
+                inventory_side
+                and source_side
+                and teams_equivalent(inventory_side, source_side)
+            ):
+                return True
+
+            return False
+
+        # Full-game/derivative totals may use equivalent direction shorthand
+        # such as O48.5 vs Over 48.5.  Accept only an exact numeric line and
+        # the same O/U direction; conflicting matchup text still fails closed.
+        if raw_market == "TOTAL":
+            inventory_direction = _literal_total_direction(inventory_text)
+            source_direction = (
+                _literal_total_direction(source_text)
+                or total_direction(raw_pick)
+            )
+
+            if (
+                not inventory_direction
+                or not source_direction
+                or inventory_direction != source_direction
+            ):
+                return False
+
+            inventory_matchup = clean_text(inventory_row.get("matchup"))
+            source_matchup = clean_text(
+                raw_pick.get("source_matchup_text")
+                or raw_pick.get("matchup")
+            )
+
+            if inventory_matchup and source_matchup:
+                inventory_hints = split_matchup(inventory_matchup)
+                source_hints = split_matchup(source_matchup)
+
+                if len(inventory_hints) == 2 and len(source_hints) == 2:
+                    direct = (
+                        teams_equivalent(inventory_hints[0], source_hints[0])
+                        and teams_equivalent(inventory_hints[1], source_hints[1])
+                    )
+                    reverse = (
+                        teams_equivalent(inventory_hints[0], source_hints[1])
+                        and teams_equivalent(inventory_hints[1], source_hints[0])
+                    )
+                    if not (direct or reverse):
+                        # Exact normalized matchup text is also safe even when
+                        # it contains a deliberately ambiguous short token.
+                        if norm(inventory_matchup) != norm(source_matchup):
+                            return False
+                elif norm(inventory_matchup) != norm(source_matchup):
+                    return False
+
+            return True
+
+        if raw_market != "TEAM_TOTAL":
             return False
 
         inventory_direction = _literal_total_direction(
