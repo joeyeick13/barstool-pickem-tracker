@@ -97,7 +97,7 @@ MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 12
+CURRENT_INGEST_VALIDATION_VERSION = 13
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -371,6 +371,92 @@ def infer_week(
     return infer_week_from_date(
         created_at
     )
+
+
+def resolve_normal_pick_week(
+    text,
+    created_at,
+    last_official_week,
+):
+    """
+    Resolve the week for a NEW-PICK source post without letting an incidental
+    reference to a closed historical week suppress a current-week card.
+
+    Normal ingestion historically preferred any literal ``Week N`` token in
+    the post text. That is unsafe when a current-week picks post mentions the
+    prior week's record/standings in its caption: the old token can cause the
+    entire source to be skipped as a closed official week before its wagers
+    are even inventoried.
+
+    Trust policy:
+      1. If only one signal exists, use it.
+      2. If explicit text and posting-date week agree, use that week.
+      3. If the explicit week is already CLOSED/OFFICIAL but the posting date
+         falls in a later OPEN week, treat the old text as historical context
+         and use the posting-date week.
+      4. Otherwise preserve the explicit source week. This keeps legitimate
+         advance/future-week cards working when they are posted early.
+
+    Returns diagnostic metadata so the caller can make any override visible
+    in the run log.
+    """
+
+    explicit_week = explicit_week_from_text(
+        text
+    )
+    date_week = infer_week_from_date(
+        created_at
+    )
+
+    try:
+        closed_week = int(
+            last_official_week
+            or 0
+        )
+    except Exception:
+        closed_week = 0
+
+    if explicit_week is None:
+        return {
+            "week": date_week,
+            "explicit_week": None,
+            "date_week": date_week,
+            "method": "POST_DATE",
+        }
+
+    if date_week is None:
+        return {
+            "week": explicit_week,
+            "explicit_week": explicit_week,
+            "date_week": None,
+            "method": "EXPLICIT_TEXT",
+        }
+
+    if int(explicit_week) == int(date_week):
+        return {
+            "week": explicit_week,
+            "explicit_week": explicit_week,
+            "date_week": date_week,
+            "method": "EXPLICIT_DATE_AGREE",
+        }
+
+    if (
+        int(explicit_week) <= closed_week
+        and int(date_week) > closed_week
+    ):
+        return {
+            "week": date_week,
+            "explicit_week": explicit_week,
+            "date_week": date_week,
+            "method": "POST_DATE_OVERRIDES_CLOSED_EXPLICIT",
+        }
+
+    return {
+        "week": explicit_week,
+        "explicit_week": explicit_week,
+        "date_week": date_week,
+        "method": "EXPLICIT_TEXT",
+    }
 
 
 def standings_target_week(
@@ -2143,6 +2229,11 @@ PICKER HINT:
 DEFAULT WEEK:
 {inferred_week}
 
+WEEK ASSIGNMENT RULE:
+For NEW wagers in this source, DEFAULT WEEK is authoritative. Do not change a
+returned pick to an older week merely because the caption/image mentions a
+prior-week record, standings result, recap, or historical "Week N" label.
+
 IS OFFICIAL REPLY:
 {reply_hint}
 
@@ -2576,11 +2667,18 @@ def normalize_ai_pick(
             f"{picker} extracted wager has empty selection"
         )
 
+    # The source-post week is resolved once by the deterministic ingestion
+    # layer. Do not let the extraction model reassign a wager to an incidental
+    # historical week mentioned elsewhere in the caption/card.
     try:
-        week = int(
-            pick.get("week")
-            or default_week
-        )
+        if default_week:
+            week = int(
+                default_week
+            )
+        else:
+            week = int(
+                pick.get("week")
+            )
     except Exception:
         week = default_week
 
@@ -4724,18 +4822,43 @@ def process_normal_posts(
             )
         )
 
-        week = infer_week(
+        # Resolve the candidate week using both source text and posting date.
+        # A stale "Week N" reference to an already-closed week must not
+        # suppress a current-week picks card before the source is inspected.
+        last_official_week = int(
+            state.get("last_official_reconciled_week")
+            or 0
+        )
+
+        week_resolution = resolve_normal_pick_week(
             text,
             post.get(
                 "created_at"
             ),
+            last_official_week,
         )
+        week = week_resolution.get("week")
+
+        if (
+            week_resolution.get("method")
+            == "POST_DATE_OVERRIDES_CLOSED_EXPLICIT"
+        ):
+            print(
+                "NORMAL INGEST WEEK OVERRIDE:",
+                post_id,
+                "| explicit text week:",
+                week_resolution.get("explicit_week"),
+                "| posting-date week:",
+                week_resolution.get("date_week"),
+                "| last official reconciled week:",
+                last_official_week,
+                "| action: using open posting-date week",
+            )
 
         # Once a week has been officially reconciled from the PAT HILL
         # result cards, normal timeline ingestion must never add a new
         # provisional row back into that closed week. Late/retried source
         # posts are already represented by the authoritative official card.
-        last_official_week = int(state.get("last_official_reconciled_week") or 0)
         if week is not None and int(week) <= last_official_week:
             print(
                 "NORMAL INGEST SKIPPING CLOSED OFFICIAL WEEK POST:",
