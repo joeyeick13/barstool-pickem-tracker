@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 from common import (
@@ -364,6 +365,23 @@ AMBIGUOUS_CONTEXT_GROUPS = {
         "tulane",
         "tulsa",
     },
+    "tul": {
+        "tulane",
+        "tulsa",
+    },
+    "uh": {
+        "houston",
+        "hawaii",
+    },
+    "wf": {
+        "wake forest",
+    },
+    "ncst": {
+        "nc state",
+    },
+    "kst": {
+        "kansas state",
+    },
     "um": {
         "michigan",
         "miami",
@@ -664,6 +682,153 @@ def selected_team_event_matches(
         "status": status,
     }
 
+
+
+def _literal_selected_team_token(pick):
+    """Return the literal source token that named the selected team."""
+    literal = clean_text(pick.get("source_team_text"))
+    if literal:
+        return literal
+
+    if base_market(normalize_bet_type(pick.get("bet_type"))) != "SPREAD":
+        return None
+
+    selection = clean_text(pick.get("selection"))
+    match = re.search(
+        r"^(.+?)\s+[+-]\s*\d+(?:\.\d+)?\s*$",
+        selection,
+        flags=re.I,
+    )
+    if not match:
+        return None
+
+    return clean_text(match.group(1)) or None
+
+
+def repair_contextual_selected_team_from_event(pick, event):
+    """Repair an ambiguous source team token from a uniquely matched event.
+
+    This is for source literals such as OSU where global normalization is
+    intentionally unsafe.  The repair is allowed only when:
+      * the full two-team source matchup already matches the exact ESPN event;
+      * the literal selected-team token is one of our explicit context-only
+        ambiguity groups;
+      * the literal token occurs on exactly one side of the source matchup;
+      * source matchup order can be mapped to ESPN's two teams in exactly one
+        way; and
+      * the mapped ESPN team is a legitimate candidate for that literal token.
+
+    The visible selection and numeric line are never changed.  Only derived
+    team/opponent/matchup identity metadata is repaired.
+    """
+    market = base_market(normalize_bet_type(pick.get("bet_type")))
+    if market not in {"SPREAD", "MONEYLINE", "TEAM_TOTAL"}:
+        return False, "MARKET_NOT_TEAM_SIDED"
+
+    literal = _literal_selected_team_token(pick)
+    literal_key = normalized_ambiguous_context(literal)
+    if not literal_key or literal_key not in AMBIGUOUS_CONTEXT_GROUPS:
+        return False, "NO_CONTEXTUAL_SELECTED_TOKEN"
+
+    hints = wager_matchup_hints(pick)
+    if len(hints) != 2:
+        return False, "NO_COMPLETE_MATCHUP"
+
+    if matchup_matches_event(hints, event) is not True:
+        return False, "MATCHUP_DOES_NOT_PROVE_EVENT"
+
+    literal_indexes = [
+        index
+        for index, hint in enumerate(hints)
+        if normalized_ambiguous_context(hint) == literal_key
+    ]
+    if len(literal_indexes) != 1:
+        return False, "LITERAL_SELECTED_SIDE_NOT_UNIQUE"
+
+    away_team, home_team = ordered_event_teams(event)
+    if not away_team or not home_team:
+        return False, "EVENT_HOME_AWAY_UNAVAILABLE"
+
+    mappings = []
+
+    if (
+        team_hint_matches_event_team(hints[0], away_team)
+        and team_hint_matches_event_team(hints[1], home_team)
+    ):
+        mappings.append({0: away_team, 1: home_team})
+
+    if (
+        team_hint_matches_event_team(hints[0], home_team)
+        and team_hint_matches_event_team(hints[1], away_team)
+    ):
+        mappings.append({0: home_team, 1: away_team})
+
+    # The two-team source identity must map to ESPN in exactly one orientation.
+    unique_mappings = []
+    seen = set()
+    for mapping in mappings:
+        key = (mapping[0], mapping[1])
+        if key not in seen:
+            unique_mappings.append(mapping)
+            seen.add(key)
+
+    if len(unique_mappings) != 1:
+        return False, "SOURCE_EVENT_ORIENTATION_NOT_UNIQUE"
+
+    selected_event_team = unique_mappings[0][literal_indexes[0]]
+
+    if not contextual_ambiguous_match(literal, selected_event_team):
+        return False, "EVENT_TEAM_NOT_ALLOWED_FOR_CONTEXT_TOKEN"
+
+    opponent = opponent_from_event(selected_event_team, event)
+    if not opponent:
+        return False, "EVENT_OPPONENT_NOT_UNIQUE"
+
+    current_selected = clean_text(wager_selected_team(pick))
+
+    preserve_original_value(
+        pick,
+        "pre_context_selected_team",
+        "team",
+    )
+    preserve_original_value(
+        pick,
+        "pre_context_selected_side",
+        "side",
+    )
+    preserve_original_value(
+        pick,
+        "pre_context_selected_matchup",
+        "matchup",
+    )
+    preserve_original_value(
+        pick,
+        "pre_context_selected_opponent",
+        "opponent",
+    )
+
+    pick["team"] = selected_event_team
+
+    side = clean_text(pick.get("side"))
+    if side and side.upper() not in {"OVER", "UNDER"}:
+        pick["side"] = selected_event_team
+
+    pick["opponent"] = opponent
+    pick["matchup"] = f"{away_team} @ {home_team}"
+    pick["contextual_selected_team_repaired"] = True
+    pick["contextual_selected_team_repair_token"] = literal
+    pick["contextual_selected_team_repair_event_id"] = str(
+        event.get("id") or ""
+    )
+    pick["contextual_selected_team_repaired_at"] = utc_now_iso()
+
+    return True, {
+        "source_token": literal,
+        "old_selected_team": current_selected,
+        "selected_event_team": selected_event_team,
+        "opponent": opponent,
+        "matchup": pick.get("matchup"),
+    }
 
 def opponent_from_event(
     selected_event_team,
@@ -2234,84 +2399,17 @@ def enrich_schedule():
         if compatibility is False:
 
             # ------------------------------------------------
-            # SAFE NEW-EVENT METADATA REPAIR
-            # ------------------------------------------------
+            # A new resolution is NOT allowed to use the
+            # historical-metadata repair rule.
             #
-            # The resolver has independently identified one
-            # ESPN event, but the source-card matchup metadata
-            # may be stale or wrong.  We may repair that stale
-            # metadata ONLY when the selected wager team
-            # independently maps to exactly one participant in
-            # the resolved ESPN event.
+            # The repair rule is only for a previously locked
+            # event that is independently anchored by the
+            # selected team.
             #
-            # This restores the same fail-closed trust rule used
-            # for existing event locks:
-            #   * UNIQUE_MATCH -> repair derived matchup metadata
-            #   * anything else -> review; never force the lock
-            #
-            # Totals have no selected-team anchor, so they can
-            # never enter this repair path.
+            # A brand-new contradictory resolution must fail
+            # closed.
             # ------------------------------------------------
 
-            anchor = selected_team_event_matches(
-                pick,
-                event,
-            )
-
-            if anchor.get("status") == "UNIQUE_MATCH":
-                repaired, details = repair_matchup_from_locked_event(
-                    pick,
-                    event,
-                    anchor,
-                )
-
-                if repaired:
-                    repaired_hints = wager_matchup_hints(
-                        pick
-                    )
-                    repaired_compatibility = matchup_matches_event(
-                        repaired_hints,
-                        event,
-                    )
-
-                    if repaired_compatibility is True:
-                        apply_match(
-                            pick,
-                            event,
-                            method="NEW_EVENT_METADATA_REPAIR",
-                            confidence="SELECTED_TEAM_VALIDATED",
-                        )
-
-                        newly_matched += 1
-                        metadata_repairs += 1
-                        resolution_methods[
-                            "NEW_EVENT_METADATA_REPAIR"
-                        ] = (
-                            resolution_methods.get(
-                                "NEW_EVENT_METADATA_REPAIR",
-                                0,
-                            )
-                            + 1
-                        )
-
-                        print(
-                            "PREGAME MATCHED AFTER METADATA REPAIR:",
-                            pick.get("picker"),
-                            "|",
-                            pick.get("selection"),
-                            "| event:",
-                            event.get("id"),
-                            "|",
-                            event_matchup_text(event),
-                            "| original matchup:",
-                            pick.get("pre_espn_repair_matchup"),
-                        )
-
-                        continue
-
-            # No unique selected-team proof, repair failure, or
-            # repaired metadata still does not match ESPN: fail
-            # closed and require review.
             candidate_id = str(
                 event.get("id")
                 or ""
@@ -2320,17 +2418,27 @@ def enrich_schedule():
             mark_review(
                 pick,
                 "NEW_EVENT_MATCHUP_CONFLICT",
-                method="RESOLVER_RESULT_CONFLICT",
+                method=
+                    "RESOLVER_RESULT_CONFLICT",
                 candidate_event_ids=[
                     candidate_id
                 ] if candidate_id else [],
             )
 
-            pick["event_id"] = None
-            pick["game_time"] = None
-            pick["game_matchup"] = None
+            pick[
+                "event_id"
+            ] = None
+
+            pick[
+                "game_time"
+            ] = None
+
+            pick[
+                "game_matchup"
+            ] = None
 
             review += 1
+
             review_reasons[
                 "NEW_EVENT_MATCHUP_CONFLICT"
             ] = (
@@ -2347,18 +2455,25 @@ def enrich_schedule():
                 "|",
                 pick.get("selection"),
             )
+
             print(
                 "  wager matchup:",
                 (
-                    " vs ".join(hints)
+                    " vs ".join(
+                        hints
+                    )
                     if len(hints) == 2
                     else None
                 ),
             )
+
             print(
                 "  resolver event:",
-                event_matchup_text(event),
+                event_matchup_text(
+                    event
+                ),
             )
+
             print(
                 "  action: REVIEW — event was NOT locked",
             )
@@ -2375,6 +2490,44 @@ def enrich_schedule():
                 event,
             )
         )
+
+        # A complete two-team matchup can safely disambiguate a literal
+        # source token such as OSU after the resolver has uniquely selected the
+        # ESPN event.  Repair only derived team identity; preserve the source
+        # selection and line exactly.
+        if (
+            compatibility is True
+            and anchor.get("status") == "NO_MATCH"
+        ):
+            contextual_repaired, contextual_details = (
+                repair_contextual_selected_team_from_event(
+                    pick,
+                    event,
+                )
+            )
+
+            if contextual_repaired:
+                anchor = (
+                    selected_team_event_matches(
+                        pick,
+                        event,
+                    )
+                )
+                metadata_repairs += 1
+                method = f"{method}_CONTEXT_TEAM_REPAIR"
+
+                print(
+                    "PREGAME CONTEXTUAL SELECTED TEAM REPAIRED:",
+                    pick.get("picker"),
+                    "|",
+                    pick.get("selection"),
+                    "| source token:",
+                    contextual_details.get("source_token"),
+                    "| ESPN team:",
+                    contextual_details.get("selected_event_team"),
+                    "| event:",
+                    str(event.get("id") or ""),
+                )
 
         if (
             anchor.get(
