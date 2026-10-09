@@ -20,6 +20,7 @@ from common import (
 
 from football_identity import (
     SUPPORTED_MARKETS,
+    alias_group,
     base_market,
     best_matchup_hints,
     canonical_game_identity,
@@ -97,7 +98,7 @@ MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 17
+CURRENT_INGEST_VALIDATION_VERSION = 18
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -3337,11 +3338,82 @@ def repair_spread_identity_from_espn_schedule(
         if teams_equivalent(selected, side)
     ]
 
-    # We must know exactly which visible matchup side was selected.
-    if len(selected_side_indexes) != 1:
-        return pick, False
+    def _short_token(value):
+        return re.sub(r"[^a-z0-9]", "", norm(value))
 
-    selected_index = selected_side_indexes[0]
+    def _edit_distance_at_most_one(first, second):
+        first = _short_token(first)
+        second = _short_token(second)
+
+        if not first or not second:
+            return False
+
+        if not (2 <= len(first) <= 5 and 2 <= len(second) <= 5):
+            return False
+
+        if abs(len(first) - len(second)) > 1:
+            return False
+
+        if first == second:
+            return True
+
+        if len(first) == len(second):
+            return sum(a != b for a, b in zip(first, second)) <= 1
+
+        # One insertion/deletion.
+        if len(first) > len(second):
+            first, second = second, first
+
+        i = j = mismatches = 0
+        while i < len(first) and j < len(second):
+            if first[i] == second[j]:
+                i += 1
+                j += 1
+                continue
+            mismatches += 1
+            if mismatches > 1:
+                return False
+            j += 1
+
+        return True
+
+    def _short_alias_ocr_match(source_token, team_identity):
+        source_token = _short_token(source_token)
+        if not source_token or not (2 <= len(source_token) <= 5):
+            return False
+
+        aliases = set(alias_group(team_identity) or [])
+        aliases.add(norm(team_identity))
+
+        return any(
+            _edit_distance_at_most_one(source_token, alias)
+            for alias in aliases
+            if 2 <= len(_short_token(alias)) <= 5
+        )
+
+    # Normally the selected spread team must match exactly one visible matchup
+    # side.  A narrow exception handles a one-character OCR error in a compact
+    # team abbreviation (for example NIU vs NWU).  The approximation is used
+    # only to identify which side of an already-complete matchup was selected;
+    # the opposite side must still uniquely anchor one ESPN event below.
+    selected_side_ocr = False
+
+    if len(selected_side_indexes) == 1:
+        selected_index = selected_side_indexes[0]
+    elif len(selected_side_indexes) == 0:
+        approximate_indexes = [
+            index
+            for index, side in enumerate(sides)
+            if _short_alias_ocr_match(selected, side)
+        ]
+
+        if len(approximate_indexes) != 1:
+            return pick, False
+
+        selected_index = approximate_indexes[0]
+        selected_side_ocr = True
+    else:
+        return pick, False
     anchor_index = 1 - selected_index
     anchor = clean_text(sides[anchor_index])
 
@@ -3503,7 +3575,23 @@ def repair_spread_identity_from_espn_schedule(
         and sum(a != b for a, b in zip(selected_token, resolved_acronym)) == 1
     )
 
-    if identity_similarity < 0.67 and not one_char_acronym_ocr and not literal_confirms_resolved:
+    # ESPN abbreviations are not always the same shorthand printed on betting
+    # cards (Northwestern may appear as NW/NWU, for example).  Compare the
+    # short source token against the complete alias family of the resolved ESPN
+    # team as a second OCR check.  This remains fail-closed: the opposite
+    # matchup side already had to identify exactly one event and the token must
+    # be within one edit of a known short alias.
+    one_char_alias_ocr = _short_alias_ocr_match(
+        selected,
+        resolved_selected,
+    )
+
+    if (
+        identity_similarity < 0.67
+        and not one_char_acronym_ocr
+        and not one_char_alias_ocr
+        and not literal_confirms_resolved
+    ):
         print(
             "INGEST ESPN IDENTITY CONFLICT PRESERVED:",
             pick.get("picker"),
@@ -3535,16 +3623,20 @@ def repair_spread_identity_from_espn_schedule(
             anchor,
         )
 
-    if one_char_acronym_ocr and identity_similarity < 0.67 and not literal_confirms_resolved:
+    if (
+        (one_char_acronym_ocr or one_char_alias_ocr or selected_side_ocr)
+        and identity_similarity < 0.67
+        and not literal_confirms_resolved
+    ):
         print(
-            "INGEST ESPN ONE-CHAR ACRONYM OCR CONFIRMED:",
+            "INGEST ESPN SHORT-ALIAS OCR CONFIRMED:",
             pick.get("picker"),
             "| source team:",
             selected,
             "| ESPN team:",
             resolved_selected,
             "| ESPN acronym:",
-            resolved_acronym,
+            resolved_acronym or "NONE",
             "| anchor:",
             anchor,
         )
