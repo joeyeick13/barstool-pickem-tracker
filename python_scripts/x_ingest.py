@@ -97,7 +97,7 @@ MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 15
+CURRENT_INGEST_VALIDATION_VERSION = 16
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -2908,6 +2908,119 @@ def normalize_ai_pick(
     return pick
 
 
+
+# ============================================================
+# AUTHORITATIVE INVENTORY-LITERAL RESTORATION
+# ============================================================
+
+def restore_authoritative_inventory_literals(
+    pick,
+    inventory_row,
+):
+    """
+    Make the independent source inventory authoritative for literal source text.
+
+    The structured extraction is allowed to interpret market metadata, but it
+    must not silently expand or replace a visible source abbreviation.
+
+    Example:
+        visible source:  NW -37.5 | BALL ST @ NW
+        structured AI:  Navy -37.5 | Ball State @ Navy
+
+    The inventory/source literals win:
+        selection -> NW -37.5
+        team/side -> NW
+        matchup   -> BALL ST @ NW
+
+    This is intentionally narrow:
+      * source matchup text is restored whenever the independent inventory
+        supplied a complete matchup;
+      * selected-team restoration applies only to full-game SPREAD wagers;
+      * the numeric spread must agree with the already-validated structured
+        line;
+      * totals, team totals, moneylines, and derivative markets are untouched.
+    """
+
+    if not isinstance(inventory_row, dict):
+        return pick, False
+
+    inventory_selection = clean_text(
+        inventory_row.get("selection")
+    )
+    inventory_matchup = clean_text(
+        inventory_row.get("matchup")
+    )
+
+    changed = False
+
+    if inventory_selection:
+        pick["source_selection_text"] = (
+            inventory_selection
+        )
+
+    if (
+        inventory_matchup
+        and len(split_matchup(inventory_matchup)) == 2
+    ):
+        pick["source_matchup_text"] = (
+            inventory_matchup
+        )
+        pick["matchup"] = inventory_matchup
+        changed = True
+
+    if normalize_bet_type(
+        pick.get("bet_type")
+    ) != "SPREAD":
+        return pick, changed
+
+    if not inventory_selection:
+        return pick, changed
+
+    match = re.match(
+        r"^(.*?)\s*([+-])\s*(\d+(?:\.\d+)?)\s*$",
+        inventory_selection,
+        flags=re.I,
+    )
+
+    if not match:
+        return pick, changed
+
+    source_team = clean_text(
+        match.group(1)
+    )
+
+    if not source_team:
+        return pick, changed
+
+    source_line = float(
+        match.group(3)
+    )
+
+    if match.group(2) == "-":
+        source_line = -source_line
+
+    structured_line = safe_float(
+        pick.get("line")
+    )
+
+    if (
+        structured_line is not None
+        and abs(structured_line - source_line) > 1e-9
+    ):
+        # The row-level inventory reconciliation should already reject this
+        # case.  Keep the helper fail-closed anyway.
+        return pick, changed
+
+    pick["source_team_text"] = source_team
+    pick["selection"] = inventory_selection
+    pick["team"] = source_team
+    pick["side"] = source_team
+    pick["line"] = source_line
+    pick["source_literal_identity_restored"] = True
+
+    return pick, True
+
+
 # ============================================================
 # CONTEXT-ONLY SOURCE TEAM NORMALIZATION
 # ============================================================
@@ -3958,6 +4071,11 @@ def validate_normal_post_payload(
             raw_pick,
             default_week=default_week,
             picker_hint=picker_hint,
+        )
+
+        pick, _ = restore_authoritative_inventory_literals(
+            pick,
+            inventory_row,
         )
 
         pick, _ = normalize_contextual_source_team(
