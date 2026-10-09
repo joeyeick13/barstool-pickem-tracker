@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-09T16:35:08.135161+00:00",
+  "updated_at": "2026-10-09T16:46:26.898037+00:00",
   "cappers": [
     {
       "picker": "Big Cat",
@@ -141,7 +141,7 @@
       "event_id": "401869949",
       "official_reconciled": false,
       "ingest_validated": true,
-      "ingest_validation_version": 12,
+      "ingest_validation_version": 13,
       "id": "14d33d4963d3cf3e",
       "competition_id": "401869949",
       "game_time": "2026-10-10T23:30Z",
@@ -155,7 +155,7 @@
       "game_match_review_reason": null,
       "event_resolution_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-09T16:34:14.618648+00:00",
+      "schedule_checked_at": "2026-10-09T16:45:43.341542+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -188,7 +188,7 @@
       "event_id": "401864516",
       "official_reconciled": false,
       "ingest_validated": true,
-      "ingest_validation_version": 12,
+      "ingest_validation_version": 13,
       "id": "7fc791ab40d120ac",
       "competition_id": "401864516",
       "game_time": "2026-10-10T23:30Z",
@@ -202,7 +202,7 @@
       "game_match_review_reason": null,
       "event_resolution_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-09T16:34:14.812283+00:00",
+      "schedule_checked_at": "2026-10-09T16:45:43.468610+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -235,7 +235,7 @@
       "event_id": "401856714",
       "official_reconciled": false,
       "ingest_validated": true,
-      "ingest_validation_version": 12,
+      "ingest_validation_version": 13,
       "id": "827b4ff4a0d04376",
       "competition_id": "401856714",
       "game_time": "2026-10-10T16:45Z",
@@ -249,7 +249,7 @@
       "game_match_review_reason": null,
       "event_resolution_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-09T16:34:14.714510+00:00",
+      "schedule_checked_at": "2026-10-09T16:45:43.404262+00:00",
       "status": "OPEN",
       "result": null
     },
@@ -282,7 +282,7 @@
       "event_id": "401871090",
       "official_reconciled": false,
       "ingest_validated": true,
-      "ingest_validation_version": 12,
+      "ingest_validation_version": 13,
       "id": "7532b212d79b0f56",
       "competition_id": "401871090",
       "game_time": "2026-10-07T00:00Z",
@@ -296,12 +296,12 @@
       "game_match_review_reason": null,
       "event_resolution_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-09T16:34:14.519570+00:00",
+      "schedule_checked_at": "2026-10-09T16:45:43.275824+00:00",
       "result": "WIN",
       "status": "FINAL",
       "final_score": "TROY 55 - USM 34",
       "profit": 0.909,
-      "graded_at": "2026-10-09T16:35:08.056359+00:00",
+      "graded_at": "2026-10-09T16:46:26.839725+00:00",
       "grade_source": "ESPN"
     },
     {
