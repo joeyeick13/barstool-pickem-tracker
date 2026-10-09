@@ -63,6 +63,9 @@ _CONTEXT_ALIASES = {
     # Reconciled Week 4 source text has "OU @ USC" for Oregon @ USC.
     # Keeping OU contextual prevents a global Oklahoma/Oregon ambiguity.
     "ou": ("oklahoma", "oregon"),
+    # GSU is inherently ambiguous between Georgia State and Georgia Southern.
+    # Resolve it only inside the already-locked ESPN event.
+    "gsu": ("georgia state", "georgia southern"),
 }
 
 
