@@ -68,6 +68,27 @@ AMBIGUOUS_CONTEXT_GROUPS = {
         "south carolina",
         "usc",
     },
+    "tul": {
+        "tulane",
+        "tulsa",
+    },
+    "uh": {
+        "houston",
+        "hawaii",
+    },
+    "wf": {
+        "wake forest",
+    },
+    "ncst": {
+        "nc state",
+    },
+    "kst": {
+        "kansas state",
+    },
+    "ksu": {
+        "kansas state",
+        "kennesaw state",
+    },
 }
 
 
