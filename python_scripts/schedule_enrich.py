@@ -382,6 +382,10 @@ AMBIGUOUS_CONTEXT_GROUPS = {
     "kst": {
         "kansas state",
     },
+    "ksu": {
+        "kansas state",
+        "kennesaw state",
+    },
     "um": {
         "michigan",
         "miami",
@@ -685,24 +689,37 @@ def selected_team_event_matches(
 
 
 def _literal_selected_team_token(pick):
-    """Return the literal source token that named the selected team."""
-    literal = clean_text(pick.get("source_team_text"))
-    if literal:
-        return literal
+    """Return the literal source token that named the selected team.
 
+    Prefer source_selection_text because it is the exact wager string preserved
+    by ingestion.  source_team_text is a fallback only; model-generated team
+    fields must never override a visible abbreviation such as OSU or NW.
+    """
     if base_market(normalize_bet_type(pick.get("bet_type"))) != "SPREAD":
-        return None
+        literal = clean_text(pick.get("source_team_text"))
+        return literal or None
 
-    selection = clean_text(pick.get("selection"))
-    match = re.search(
-        r"^(.+?)\s+[+-]\s*\d+(?:\.\d+)?\s*$",
-        selection,
-        flags=re.I,
-    )
-    if not match:
-        return None
+    for value in (
+        pick.get("source_selection_text"),
+        pick.get("selection"),
+    ):
+        selection = clean_text(value)
+        if not selection:
+            continue
 
-    return clean_text(match.group(1)) or None
+        match = re.search(
+            r"^(.+?)\s+[+-]\s*\d+(?:\.\d+)?\s*$",
+            selection,
+            flags=re.I,
+        )
+
+        if match:
+            literal = clean_text(match.group(1))
+            if literal:
+                return literal
+
+    literal = clean_text(pick.get("source_team_text"))
+    return literal or None
 
 
 def repair_contextual_selected_team_from_event(pick, event):
