@@ -1387,7 +1387,12 @@ def audit_retry_queue(
         return
 
     if failed:
-        audit.warning(
+        # A failed source post means ingestion has unresolved official-account
+        # material. Publishing a freshly rebuilt dashboard in that state can
+        # silently replace a complete weekly card with only the few picks that
+        # happened to validate. Fail closed instead: keep the previous stable
+        # dashboard until the retry queue is empty.
+        audit.error(
             "FAILED_POSTS_WAITING",
             (
                 f"{len(failed)} X post(s) "
