@@ -97,7 +97,7 @@ MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 14
+CURRENT_INGEST_VALIDATION_VERSION = 15
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -4463,6 +4463,150 @@ def relaxed_duplicate_match(candidate, existing):
     return False
 
 
+
+def _normalized_source_evidence(pick):
+    """Return a normalized per-post provenance map for one wager row.
+
+    Older rows only have source_post_id/source_url.  Newer rows may carry
+    source_post_evidence with multiple official posts that independently show
+    the same wager.  This helper upgrades legacy rows in memory without
+    changing wager identity.
+    """
+    evidence = {}
+
+    raw = pick.get("source_post_evidence")
+    if isinstance(raw, dict):
+        for raw_id, raw_meta in raw.items():
+            post_id = str(raw_id or "").strip()
+            if not post_id:
+                continue
+            if isinstance(raw_meta, dict):
+                evidence[post_id] = dict(raw_meta)
+            else:
+                evidence[post_id] = {}
+
+    primary_id = str(pick.get("source_post_id") or "").strip()
+    if primary_id and primary_id not in evidence:
+        evidence[primary_id] = {
+            "url": pick.get("source_url"),
+            "text": pick.get("source_text"),
+            "is_reply": pick.get("source_is_reply"),
+            "conversation_id": pick.get("conversation_id"),
+            "posted_at": pick.get("posted_at"),
+        }
+
+    legacy_ids = pick.get("source_post_ids") or []
+    if isinstance(legacy_ids, (list, tuple, set)):
+        for raw_id in legacy_ids:
+            post_id = str(raw_id or "").strip()
+            if post_id:
+                evidence.setdefault(post_id, {})
+
+    return evidence
+
+
+def _apply_primary_source_from_evidence(pick, post_id, meta):
+    """Promote one corroborating source to the legacy primary source fields."""
+    pick["source_post_id"] = post_id
+
+    if isinstance(meta, dict):
+        if meta.get("url") is not None:
+            pick["source_url"] = meta.get("url")
+        if meta.get("text") is not None:
+            pick["source_text"] = meta.get("text")
+        if meta.get("is_reply") is not None:
+            pick["source_is_reply"] = bool(meta.get("is_reply"))
+        if "conversation_id" in meta:
+            pick["conversation_id"] = meta.get("conversation_id")
+        if meta.get("posted_at") is not None:
+            pick["posted_at"] = meta.get("posted_at")
+
+
+def register_source_evidence(pick, *, post, post_url, reply_hint):
+    """Record that another verified official post contains the same wager."""
+    post_id = str(post.get("id") or "").strip()
+    if not post_id:
+        return
+
+    evidence = _normalized_source_evidence(pick)
+    evidence[post_id] = {
+        "url": post_url,
+        "text": str(post.get("text") or ""),
+        "is_reply": bool(reply_hint),
+        "conversation_id": post.get("conversation_id"),
+        "posted_at": post.get("created_at"),
+    }
+
+    pick["source_post_evidence"] = evidence
+    pick["source_post_ids"] = sorted(
+        evidence,
+        key=post_numeric_sort,
+    )
+
+    if not str(pick.get("source_post_id") or "").strip():
+        _apply_primary_source_from_evidence(
+            pick,
+            post_id,
+            evidence[post_id],
+        )
+
+
+def merge_source_evidence_rows(keeper, duplicate):
+    """Merge official-source provenance when two stored rows dedupe."""
+    evidence = _normalized_source_evidence(keeper)
+    evidence.update(_normalized_source_evidence(duplicate))
+
+    if not evidence:
+        return
+
+    keeper["source_post_evidence"] = evidence
+    keeper["source_post_ids"] = sorted(
+        evidence,
+        key=post_numeric_sort,
+    )
+
+
+def wager_has_source_post(pick, post_id):
+    post_id = str(post_id or "").strip()
+    if not post_id:
+        return False
+
+    if str(pick.get("source_post_id") or "").strip() == post_id:
+        return True
+
+    return post_id in _normalized_source_evidence(pick)
+
+
+def detach_source_evidence(pick, post_id):
+    """Detach one source from a provisional wager.
+
+    Returns True when another official source still independently supports the
+    wager, so the row must be preserved.  Returns False when the removed source
+    was the row's only provenance and the row may be rebuilt/deleted.
+    """
+    post_id = str(post_id or "").strip()
+    evidence = _normalized_source_evidence(pick)
+    evidence.pop(post_id, None)
+
+    if not evidence:
+        return False
+
+    pick["source_post_evidence"] = evidence
+    pick["source_post_ids"] = sorted(
+        evidence,
+        key=post_numeric_sort,
+    )
+
+    if str(pick.get("source_post_id") or "").strip() == post_id:
+        new_primary = pick["source_post_ids"][0]
+        _apply_primary_source_from_evidence(
+            pick,
+            new_primary,
+            evidence.get(new_primary) or {},
+        )
+
+    return True
+
 def dedupe_picks(picks):
     """
     One permanent canonical identity system.
@@ -4500,7 +4644,7 @@ def dedupe_picks(picks):
             )
             continue
 
-        best_index, _ = max(
+        best_index, best_pick = max(
             members,
             key=lambda item: (
                 pick_quality(
@@ -4517,6 +4661,11 @@ def dedupe_picks(picks):
         for index, duplicate in members:
             if index == best_index:
                 continue
+
+            merge_source_evidence_rows(
+                best_pick,
+                duplicate,
+            )
 
             removed += 1
 
@@ -4568,9 +4717,19 @@ def dedupe_picks(picks):
 
         if pick_quality(pick) > pick_quality(kept):
             duplicate = kept
-            relaxed_cleaned[duplicate_index] = pick
+            keeper = pick
+            merge_source_evidence_rows(
+                keeper,
+                duplicate,
+            )
+            relaxed_cleaned[duplicate_index] = keeper
         else:
             duplicate = pick
+            keeper = kept
+            merge_source_evidence_rows(
+                keeper,
+                duplicate,
+            )
 
         removed += 1
 
@@ -5221,46 +5380,45 @@ def process_normal_posts(
         # ----------------------------------------------------
 
         if needs_validation_upgrade:
-            old_source_rows = [
-                pick
-                for pick in existing
-                if str(
-                    pick.get("source_post_id")
-                    or ""
-                ) == post_id
-                and not pick.get(
-                    "official_reconciled"
-                )
-            ]
+            old_source_rows = []
+            rebuilt_existing = []
+            corroborated_rows_preserved = 0
+            source_only_rows_removed = 0
 
-            old_source_keys = {
+            for old_pick in existing:
+                if (
+                    not old_pick.get("official_reconciled")
+                    and wager_has_source_post(old_pick, post_id)
+                ):
+                    old_source_rows.append(old_pick)
+
+                    if detach_source_evidence(old_pick, post_id):
+                        rebuilt_existing.append(old_pick)
+                        corroborated_rows_preserved += 1
+                    else:
+                        source_only_rows_removed += 1
+                    continue
+
+                rebuilt_existing.append(old_pick)
+
+            existing = rebuilt_existing
+
+            # Recompute from the rows that actually remain.  A corroborated row
+            # may retain the same canonical key after this source is detached.
+            seen_wagers = {
                 canonical_pick_key(pick)
-                for pick in old_source_rows
-            }
-
-            existing = [
-                pick
                 for pick in existing
-                if not (
-                    str(
-                        pick.get("source_post_id")
-                        or ""
-                    ) == post_id
-                    and not pick.get(
-                        "official_reconciled"
-                    )
-                )
-            ]
-
-            seen_wagers.difference_update(
-                old_source_keys
-            )
+            }
 
             print(
                 "REBUILDING VALIDATED SOURCE POST:",
                 post_id,
                 "| prior provisional rows:",
                 len(old_source_rows),
+                "| corroborated rows preserved:",
+                corroborated_rows_preserved,
+                "| source-only rows removed:",
+                source_only_rows_removed,
             )
 
         # ----------------------------------------------------
@@ -5301,6 +5459,23 @@ def process_normal_posts(
                 pending_keys.add(key)
 
                 if key in seen_wagers:
+                    exact_existing = next(
+                        (
+                            existing_pick
+                            for existing_pick in existing
+                            if canonical_pick_key(existing_pick) == key
+                        ),
+                        None,
+                    )
+
+                    if exact_existing is not None:
+                        register_source_evidence(
+                            exact_existing,
+                            post=post,
+                            post_url=post_url,
+                            reply_hint=reply_hint,
+                        )
+
                     duplicate_count += 1
 
                     print(
@@ -5320,6 +5495,7 @@ def process_normal_posts(
                         extracted.get(
                             "matchup"
                         ),
+                        "| source corroboration recorded",
                     )
 
                     continue
@@ -5337,6 +5513,13 @@ def process_normal_posts(
                 )
 
                 if relaxed_existing is not None:
+                    register_source_evidence(
+                        relaxed_existing,
+                        post=post,
+                        post_url=post_url,
+                        reply_hint=reply_hint,
+                    )
+
                     duplicate_count += 1
 
                     print(
@@ -5350,6 +5533,7 @@ def process_normal_posts(
                         relaxed_existing.get("selection"),
                         "| existing matchup:",
                         relaxed_existing.get("matchup"),
+                        "| source corroboration recorded",
                     )
 
                     continue
@@ -5360,6 +5544,13 @@ def process_normal_posts(
                     post_url=post_url,
                     reply_hint=reply_hint,
                     added_hint=added_hint,
+                )
+
+                register_source_evidence(
+                    stored,
+                    post=post,
+                    post_url=post_url,
+                    reply_hint=reply_hint,
                 )
 
                 # Final identity sanity check on the exact row
