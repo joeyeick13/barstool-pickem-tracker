@@ -97,7 +97,7 @@ MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 13
+CURRENT_INGEST_VALIDATION_VERSION = 14
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -1606,6 +1606,80 @@ def looks_like_pick_post(
 
 
 # ============================================================
+# COMPOUND WAGER DECOMPOSITION
+# ============================================================
+
+def split_compound_wager_selection(selection):
+    """
+    Split a single visible card cell only when it unambiguously contains two
+    separate supported wagers joined by a spaced ampersand.
+
+    Example:
+        "Army -3 & O48.5" -> ["Army -3", "O48.5"]
+
+    The rule is intentionally narrow. It does not split team names such as
+    "Texas A&M" because the ampersand is not surrounded by whitespace, and
+    it does not split arbitrary prose. Both sides must independently look like
+    a supported spread/total/team-total/moneyline-style wager.
+    """
+
+    selection = clean_text(selection)
+
+    if not selection:
+        return [selection]
+
+    parts = [
+        clean_text(part)
+        for part in re.split(r"\s+&\s+", selection)
+    ]
+
+    if len(parts) != 2 or not all(parts):
+        return [selection]
+
+    def _clause_kind(value):
+        value = clean_text(value)
+        lower = value.lower()
+
+        # Compact or verbose game/team total, including source shorthand O48.5.
+        if re.search(
+            r"(?:^|\s)(?:over|under|o|u)\s*\d+(?:\.\d+)?$",
+            lower,
+            flags=re.I,
+        ):
+            return "TOTAL"
+
+        if re.search(
+            r"\b(?:tt|team total)\b.*(?:over|under|o|u)\s*\d+(?:\.\d+)?$",
+            lower,
+            flags=re.I,
+        ):
+            return "TEAM_TOTAL"
+
+        # Spread: require a non-numeric team/token before a signed number.
+        if re.search(
+            r"[A-Za-z][A-Za-z0-9 .&'/-]{0,50}\s[+-]\s*\d+(?:\.\d+)?$",
+            value,
+        ):
+            return "SPREAD"
+
+        if re.search(
+            r"\b(?:ml|moneyline)\b",
+            lower,
+            flags=re.I,
+        ):
+            return "MONEYLINE"
+
+        return None
+
+    kinds = [_clause_kind(part) for part in parts]
+
+    if not all(kinds):
+        return [selection]
+
+    return parts
+
+
+# ============================================================
 # DETERMINISTIC MARKET NORMALIZATION
 # ============================================================
 
@@ -1887,7 +1961,9 @@ Before responding, verify all of the following:
 4. images_read exactly equals {len(image_urls)}.
 5. Every supplied image was inspected.
 6. Every individual TRACKED wager physically visible in the source appears
-   exactly once.
+   exactly once. A card cell that contains TWO bets joined by a spaced ampersand
+   is TWO wagers, not one. Example: "Army -3 & O48.5" must be returned as
+   separate rows "Army -3" and "O48.5".
 7. Matchup headings, records, scores, decorative text, and untracked wagers are
    not counted in wager_count.
 8. If you cannot confidently inventory every TRACKED wager, return
@@ -1921,6 +1997,13 @@ IMPORTANT:
 For every TRACKED wager, transcribe a short exact wager label preserving the
 visible signed spread or total. If a matchup is explicitly attached to that
 wager, transcribe it; otherwise use null. Never invent an opponent or matchup.
+
+IMPORTANT COMPOUND-CELL RULE:
+If one visible source cell contains multiple independent wagers joined by a
+spaced ampersand, count and return EACH wager separately. For example,
+"Army -3 & O48.5" is TWO wager rows: "Army -3" and "O48.5". Do not
+return the combined string as one wager. Team names such as "Texas A&M" are
+not compound cells and must not be split.
 
 {retry_instruction}
 
@@ -2035,15 +2118,16 @@ Untracked wagers are ignored for tracker completeness.
                 untracked_count = 0
 
             normalized_wagers = []
+            compound_expansions = []
 
-            for index, wager in enumerate(
+            for source_row_index, wager in enumerate(
                 wagers,
                 start=1,
             ):
                 if not isinstance(wager, dict):
                     raise ValueError(
                         "Independent source inventory returned invalid wager "
-                        f"row {index}"
+                        f"row {source_row_index}"
                     )
 
                 selection = clean_text(
@@ -2053,7 +2137,7 @@ Untracked wagers are ignored for tracker completeness.
                 if not selection:
                     raise ValueError(
                         "Independent source inventory returned empty selection "
-                        f"for wager row {index}"
+                        f"for wager row {source_row_index}"
                     )
 
                 matchup = clean_text(
@@ -2069,14 +2153,45 @@ Untracked wagers are ignored for tracker completeness.
                         picker_hint
                     )
 
-                normalized_wagers.append(
-                    {
-                        "inventory_index": index,
-                        "picker": picker,
-                        "selection": selection,
-                        "matchup": matchup or None,
-                    }
+                split_selections = split_compound_wager_selection(
+                    selection
                 )
+
+                if len(split_selections) > 1:
+                    compound_expansions.append(
+                        (selection, list(split_selections))
+                    )
+
+                for split_selection in split_selections:
+                    normalized_wagers.append(
+                        {
+                            "inventory_index": len(normalized_wagers) + 1,
+                            "picker": picker,
+                            "selection": split_selection,
+                            "matchup": matchup or None,
+                            "compound_source_selection": (
+                                selection
+                                if len(split_selections) > 1
+                                else None
+                            ),
+                        }
+                    )
+
+            if compound_expansions:
+                for original, expanded in compound_expansions:
+                    print(
+                        "INDEPENDENT INVENTORY COMPOUND WAGER EXPANDED:",
+                        post_url,
+                        "|",
+                        original,
+                        "->",
+                        expanded,
+                    )
+
+            # The model's row count remains structurally validated above. After
+            # deterministic compound-cell decomposition, the tracker count is the
+            # number of individual wagers, not the number of visual source cells.
+            count = len(normalized_wagers)
 
             result = {
                 "wager_count": count,
@@ -2249,6 +2364,10 @@ It intentionally excludes guest/fan/untracked wagers.
 Use those inventory rows as a completeness CHECKLIST. Every returned pick must
 include inventory_index equal to the matching 1-based inventory row. Return
 exactly one structured pick per tracked inventory row.
+
+Some inventory rows may have been deterministically split from a compound card
+cell such as "Army -3 & O48.5". Those are separate wagers. Return one pick for
+each split inventory row and NEVER recombine them into a single OTHER market.
 
 If the original source contains an untracked guest/fan wager, IGNORE it. It does
 not make complete=false and it must not be returned in picks.
@@ -3715,6 +3834,25 @@ def validate_normal_post_payload(
 
         if inventory_signature == source_signature:
             return True
+
+        # If the structured extractor preserved the literal combined source
+        # cell on each decomposed wager, allow the independently inventoried
+        # component to map back to that cell only when deterministic compound
+        # parsing proves the component is one of the exact two wagers. Market
+        # and line validation still run below on the normalized pick.
+        compound_parts = split_compound_wager_selection(
+            source_text
+        )
+
+        if len(compound_parts) > 1:
+            inventory_norm = norm(inventory_text)
+            compound_norms = {
+                norm(part)
+                for part in compound_parts
+            }
+
+            if inventory_norm in compound_norms:
+                return True
 
         # Different numbers can never describe the same source wager.
         if inventory_signature[1] != source_signature[1]:
