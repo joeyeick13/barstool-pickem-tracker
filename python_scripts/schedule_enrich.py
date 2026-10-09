@@ -353,6 +353,12 @@ AMBIGUOUS_CONTEXT_GROUPS = {
         "oklahoma state",
         "oregon state",
     },
+    # GSU is context-dependent between Georgia State and Georgia Southern.
+    # A complete matchup (for example JMU @ GSU) can safely disambiguate it.
+    "gsu": {
+        "georgia state",
+        "georgia southern",
+    },
     # Source-card abbreviations that are unsafe as global aliases.
     # Keep them local to event validation. UT is intentionally
     # Tennessee here because Barstool's Week 4 source uses UT for
