@@ -89,11 +89,15 @@ OFFICIAL_RESULT_STATE_KEY = (
     "official_result_threads_processed"
 )
 
+POST_VALIDATION_VERSIONS_KEY = (
+    "normal_post_validation_versions"
+)
+
 MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 11
+CURRENT_INGEST_VALIDATION_VERSION = 12
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -1772,12 +1776,20 @@ def preflight_normal_source(
 IMPORTANT RETRY INSTRUCTION:
 
 A previous independent inventory attempt was rejected because its output was
-structurally inconsistent or incomplete.
+structurally inconsistent, incomplete, OR because an image-bearing source was
+reported as containing zero tracked wagers and requires an independent zero
+confirmation.
 
 This is independent inventory attempt {attempt} of {max_attempts}.
 
 Re-read the ORIGINAL source material from scratch. Do NOT copy or repair the
 previous answer.
+
+If a prior attempt reported ZERO tracked wagers, treat zero as a HIGH-RISK
+classification. Zoom/reinspect every image specifically for betting-card
+content: team abbreviations, signed spreads (+/-), Over/Under or O/U labels,
+team totals/TT, quarter/half markets, or multiple rows of selections. Do not
+return zero merely because the image is graphical rather than plain text.
 
 Before responding, verify all of the following:
 
@@ -1985,6 +1997,25 @@ Untracked wagers are ignored for tracker completeness.
                 "untracked_wager_count": untracked_count,
                 "wagers": normalized_wagers,
             }
+
+            # Image-bearing sources that appear to contain zero tracked wagers
+            # are a high-risk false-negative class. Require all independent
+            # inventory attempts to agree on zero before allowing the structured
+            # extractor to classify the source as a non-pick. This prevents one
+            # missed vision read from permanently suppressing a real picks card.
+            if image_urls and count == 0 and attempt < max_attempts:
+                print(
+                    "ZERO-WAGER IMAGE INVENTORY RECHECK:",
+                    post_url,
+                    "| attempt:",
+                    attempt,
+                    "reported 0 tracked wagers",
+                    "| action: independent re-read",
+                )
+                last_error = ValueError(
+                    "Zero-wager image inventory requires independent confirmation"
+                )
+                continue
 
             if attempt > 1:
                 print(
@@ -4487,6 +4518,17 @@ def process_normal_posts(
         )
     )
 
+    raw_post_validation_versions = (
+        state.get(POST_VALIDATION_VERSIONS_KEY, {})
+        or {}
+    )
+
+    post_validation_versions = {
+        str(key): int(value or 0)
+        for key, value in raw_post_validation_versions.items()
+        if str(key)
+    }
+
     failed_ids = set(
         str(value)
         for value in (
@@ -4542,7 +4584,7 @@ def process_normal_posts(
             )
         ]
 
-        needs_validation_upgrade = any(
+        row_validation_upgrade = any(
             int(
                 pick.get(
                     "ingest_validation_version"
@@ -4550,6 +4592,22 @@ def process_normal_posts(
                 or 0
             ) < CURRENT_INGEST_VALIDATION_VERSION
             for pick in prior_rows_for_post
+        )
+
+        stored_post_validation_version = int(
+            post_validation_versions.get(post_id)
+            or 0
+        )
+
+        state_validation_upgrade = (
+            post_id in processed_ids
+            and stored_post_validation_version
+            < CURRENT_INGEST_VALIDATION_VERSION
+        )
+
+        needs_validation_upgrade = (
+            row_validation_upgrade
+            or state_validation_upgrade
         )
 
         if (
@@ -4564,6 +4622,10 @@ def process_normal_posts(
                 "REVALIDATING PRIOR SOURCE POST:",
                 post_id,
                 "| old validation generation detected",
+                "| stored post generation:",
+                stored_post_validation_version,
+                "| target:",
+                CURRENT_INGEST_VALIDATION_VERSION,
             )
 
         image_urls = (
@@ -4613,6 +4675,9 @@ def process_normal_posts(
             processed_ids.add(
                 post_id
             )
+            post_validation_versions[post_id] = (
+                CURRENT_INGEST_VALIDATION_VERSION
+            )
 
             failed_ids.discard(
                 post_id
@@ -4630,6 +4695,9 @@ def process_normal_posts(
         ):
             processed_ids.add(
                 post_id
+            )
+            post_validation_versions[post_id] = (
+                CURRENT_INGEST_VALIDATION_VERSION
             )
 
             failed_ids.discard(
@@ -4678,6 +4746,9 @@ def process_normal_posts(
                 last_official_week,
             )
             processed_ids.add(post_id)
+            post_validation_versions[post_id] = (
+                CURRENT_INGEST_VALIDATION_VERSION
+            )
             failed_ids.discard(post_id)
             continue
 
@@ -4742,6 +4813,7 @@ def process_normal_posts(
 
             failed_ids.add(post_id)
             processed_ids.discard(post_id)
+            post_validation_versions.pop(post_id, None)
             continue
 
         season_year = None
@@ -4846,6 +4918,7 @@ def process_normal_posts(
 
             failed_ids.add(post_id)
             processed_ids.discard(post_id)
+            post_validation_versions.pop(post_id, None)
             continue
 
         # ----------------------------------------------------
@@ -4864,6 +4937,9 @@ def process_normal_posts(
 
             processed_ids.add(
                 post_id
+            )
+            post_validation_versions[post_id] = (
+                CURRENT_INGEST_VALIDATION_VERSION
             )
 
             failed_ids.discard(
@@ -5117,6 +5193,9 @@ def process_normal_posts(
         processed_ids.add(
             post_id
         )
+        post_validation_versions[post_id] = (
+            CURRENT_INGEST_VALIDATION_VERSION
+        )
 
         failed_ids.discard(
             post_id
@@ -5146,6 +5225,22 @@ def process_normal_posts(
     )[
         -MAX_PROCESSED_POST_IDS:
     ]
+
+    # Persist the validation generation for processed posts, including
+    # validated non-pick posts that have no wager rows. Without this map a
+    # zero-wager false negative can be marked processed forever because there
+    # is no stored pick row carrying ingest_validation_version.
+    retained_processed_ids = set(
+        state["processed_post_ids"]
+    )
+    state[POST_VALIDATION_VERSIONS_KEY] = {
+        post_id: int(
+            post_validation_versions.get(post_id)
+            or CURRENT_INGEST_VALIDATION_VERSION
+        )
+        for post_id in retained_processed_ids
+        if post_id in post_validation_versions
+    }
 
     state[
         "failed_post_ids"
