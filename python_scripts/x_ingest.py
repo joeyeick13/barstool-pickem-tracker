@@ -98,7 +98,7 @@ MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 18
+CURRENT_INGEST_VALIDATION_VERSION = 19
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -1929,6 +1929,15 @@ def preflight_normal_source(
     max_attempts = 3
     last_error = None
 
+    # Dense multi-image cards are the highest-risk source class.  A single
+    # otherwise valid vision pass can omit one or two tiny rows while still
+    # returning a self-consistent JSON object.  Keep whole-attempt candidates
+    # separate, read dense sources three independent times, and later select
+    # the highest-coverage complete attempt.  Rows are NEVER merged across
+    # attempts.
+    dense_source = len(image_urls) >= 2
+    successful_results = []
+
     for attempt in range(1, max_attempts + 1):
         retry_instruction = ""
 
@@ -2087,11 +2096,24 @@ Untracked wagers are ignored for tracker completeness.
 
             actual_row_count = len(wagers)
 
+            # wager_count is redundant model arithmetic.  The row objects are
+            # the actual inventory evidence.  Do not throw away a complete 53-row
+            # transcription merely because the model typed 51 in the summary
+            # field.  We still log the disagreement loudly and deterministically
+            # recompute the count from the rows themselves.
             if actual_row_count != count:
-                raise ValueError(
-                    "Independent source inventory count does not match its rows "
-                    f"(reported {count}, rows {actual_row_count})"
+                print(
+                    "INDEPENDENT SOURCE INVENTORY COUNT FIELD CORRECTED:",
+                    post_url,
+                    "| attempt:",
+                    attempt,
+                    "| reported:",
+                    count,
+                    "| actual rows:",
+                    actual_row_count,
+                    "| action: trust row list and recompute count",
                 )
+                count = actual_row_count
 
             try:
                 images_read = int(
@@ -2198,7 +2220,10 @@ Untracked wagers are ignored for tracker completeness.
                 "wager_count": count,
                 "untracked_wager_count": untracked_count,
                 "wagers": normalized_wagers,
+                "inventory_attempt": attempt,
             }
+
+            successful_results.append(result)
 
             # Image-bearing sources that appear to contain zero tracked wagers
             # are a high-risk false-negative class. Require all independent
@@ -2219,19 +2244,38 @@ Untracked wagers are ignored for tracker completeness.
                 )
                 continue
 
-            if attempt > 1:
+            # For dense cards, do not trust one self-consistent pass.  Read the
+            # entire original source three times and choose ONE complete attempt
+            # afterward.  We never union rows from separate attempts.
+            if dense_source and attempt < max_attempts:
                 print(
-                    "INDEPENDENT SOURCE INVENTORY RETRY SUCCEEDED:",
+                    "DENSE SOURCE INVENTORY CONFIRMATION READ:",
                     post_url,
                     "| attempt:",
                     attempt,
                     "| tracked wagers:",
                     count,
-                    "| untracked ignored:",
-                    untracked_count,
+                    "| action: independent full-source reread",
                 )
+                continue
 
-            return result
+            if not dense_source:
+                if attempt > 1:
+                    print(
+                        "INDEPENDENT SOURCE INVENTORY RETRY SUCCEEDED:",
+                        post_url,
+                        "| attempt:",
+                        attempt,
+                        "| tracked wagers:",
+                        count,
+                        "| untracked ignored:",
+                        untracked_count,
+                    )
+
+                return result
+
+            # Dense source reaches here only on the final inventory attempt.
+            break
 
         except Exception as exc:
             last_error = exc
@@ -2248,6 +2292,59 @@ Untracked wagers are ignored for tracker completeness.
                 type(exc).__name__,
                 exc,
             )
+
+    if successful_results:
+        def inventory_quality(result):
+            rows = list(result.get("wagers") or [])
+            known_pickers = sum(
+                1
+                for row in rows
+                if normalize_picker_safe(row.get("picker"))
+            )
+            known_matchups = sum(
+                1
+                for row in rows
+                if len(split_matchup(row.get("matchup"))) == 2
+            )
+            return (
+                int(result.get("wager_count") or 0),
+                known_pickers,
+                known_matchups,
+            )
+
+        chosen = max(
+            successful_results,
+            key=inventory_quality,
+        )
+
+        counts = [
+            int(result.get("wager_count") or 0)
+            for result in successful_results
+        ]
+
+        if len(set(counts)) > 1:
+            print(
+                "DENSE SOURCE INVENTORY DISAGREEMENT:",
+                post_url,
+                "| complete attempt counts:",
+                counts,
+                "| selected whole attempt:",
+                chosen.get("inventory_attempt"),
+                "| selected wagers:",
+                chosen.get("wager_count"),
+                "| action: highest-coverage complete attempt; no cross-attempt row merge",
+            )
+        elif dense_source:
+            print(
+                "DENSE SOURCE INVENTORY CONSENSUS:",
+                post_url,
+                "| attempts:",
+                len(successful_results),
+                "| tracked wagers:",
+                chosen.get("wager_count"),
+            )
+
+        return chosen
 
     raise ValueError(
         "Independent source inventory failed after "
@@ -5485,38 +5582,10 @@ def process_normal_posts(
         # counts.
         #
         # We never merge rows across attempts or manufacture a missing wager.
-        # On a count/mapping mismatch, a fresh full-source extraction must map
-        # exactly one structured pick to every independently inventoried row
-        # before anything is committed.
-
-        try:
-            preflight_inventory = preflight_normal_source(
-                text=text,
-                image_urls=image_urls,
-                post_url=post_url,
-                picker_hint=picker_hint,
-            )
-
-            print(
-                "INDEPENDENT SOURCE INVENTORY:",
-                post_id,
-                "| wagers:",
-                preflight_inventory.get("wager_count"),
-            )
-
-        except Exception as exc:
-            print(
-                "EXTRACTION FAILED — "
-                "QUEUED FOR RETRY:",
-                post_id,
-                type(exc).__name__,
-                exc,
-            )
-
-            failed_ids.add(post_id)
-            processed_ids.discard(post_id)
-            post_validation_versions.pop(post_id, None)
-            continue
+        # Dense sources are independently inventoried multiple times; one whole
+        # highest-coverage attempt becomes the checklist.  If structured source
+        # verification proves that checklist incomplete, the entire inventory is
+        # discarded and reread from the original source before anything commits.
 
         season_year = None
         created_at = str(post.get("created_at") or "")
@@ -5526,87 +5595,187 @@ def process_normal_posts(
         if season_year is None:
             season_year = datetime.now(PACIFIC).year
 
+        # The structured verifier can discover that an otherwise-valid
+        # independent inventory omitted visible wagers.  When that happens,
+        # refreshing ONLY the structured extraction is useless because it is
+        # still constrained to the same incomplete checklist.  V19 therefore
+        # permits a bounded fresh inventory cycle against the ORIGINAL images.
+        max_inventory_cycles = 3 if image_urls else 1
         max_full_extraction_attempts = 3
         validated = None
         last_validation_error = None
+        preflight_inventory = None
 
-        for full_extraction_attempt in range(1, max_full_extraction_attempts + 1):
+        for inventory_cycle in range(1, max_inventory_cycles + 1):
+            if inventory_cycle > 1:
+                print(
+                    "REFRESHING INDEPENDENT SOURCE INVENTORY:",
+                    post_id,
+                    "| cycle:",
+                    inventory_cycle,
+                    "of",
+                    max_inventory_cycles,
+                    "| action: reread original source after reconciliation failure",
+                )
+
             try:
-                if full_extraction_attempt > 1:
-                    print(
-                        "RETRYING COMPLETE STRUCTURED EXTRACTION:",
-                        post_id,
-                        "| attempt:",
-                        full_extraction_attempt,
-                        "| independent inventory:",
-                        preflight_inventory.get("wager_count"),
-                    )
-
-                # parse_post_with_ai always performs a fresh model request
-                # against the original post text and original source images.
-                payload = parse_post_with_ai(
+                preflight_inventory = preflight_normal_source(
                     text=text,
                     image_urls=image_urls,
                     post_url=post_url,
-                    posted_at=post.get("created_at"),
-                    inferred_week=week,
                     picker_hint=picker_hint,
-                    reply_hint=reply_hint,
-                    parent_text=parent_text,
-                    preflight_inventory=preflight_inventory,
-                    reconciliation_attempt=full_extraction_attempt,
                 )
 
-                validated = validate_normal_post_payload(
-                    payload,
-                    image_urls=image_urls,
-                    default_week=week,
-                    season_year=season_year,
-                    picker_hint=picker_hint,
-                    preflight_inventory=preflight_inventory,
+                print(
+                    "INDEPENDENT SOURCE INVENTORY:",
+                    post_id,
+                    "| cycle:",
+                    inventory_cycle,
+                    "| wagers:",
+                    preflight_inventory.get("wager_count"),
+                    "| selected attempt:",
+                    preflight_inventory.get("inventory_attempt"),
                 )
-
-                if full_extraction_attempt > 1:
-                    print(
-                        "COMPLETE STRUCTURED EXTRACTION RETRY SUCCEEDED:",
-                        post_id,
-                        "| attempt:",
-                        full_extraction_attempt,
-                        "| validated wagers:",
-                        len(validated.get("picks") or []),
-                    )
-
-                last_validation_error = None
-                break
 
             except Exception as exc:
                 last_validation_error = exc
-                message = str(exc)
 
-                count_mismatch = (
-                    "Image wager-count reconciliation failed" in message
-                    or "Independent source inventory reconciliation failed" in message
-                    or "Tracked wager count reconciliation failed" in message
-                    or "Inventory row mapping failed" in message
-                )
-
-                if count_mismatch and full_extraction_attempt < max_full_extraction_attempts:
+                if inventory_cycle < max_inventory_cycles:
                     print(
-                        "COMPLETE STRUCTURED EXTRACTION COUNT MISMATCH:",
+                        "INDEPENDENT INVENTORY CYCLE FAILED:",
                         post_id,
-                        "| attempt:",
-                        full_extraction_attempt,
-                        "|",
-                        message,
-                        "| action: retry full original source",
+                        type(exc).__name__,
+                        exc,
+                        "| action: retry original source with fresh inventory cycle",
                     )
                     continue
 
                 break
 
+            # Every inventory cycle gets fresh structured reads against the
+            # original text/images.  No rows are committed until one cycle fully
+            # validates.
+            for full_extraction_attempt in range(
+                1,
+                max_full_extraction_attempts + 1,
+            ):
+                try:
+                    if full_extraction_attempt > 1:
+                        print(
+                            "RETRYING COMPLETE STRUCTURED EXTRACTION:",
+                            post_id,
+                            "| inventory cycle:",
+                            inventory_cycle,
+                            "| attempt:",
+                            full_extraction_attempt,
+                            "| independent inventory:",
+                            preflight_inventory.get("wager_count"),
+                        )
+
+                    payload = parse_post_with_ai(
+                        text=text,
+                        image_urls=image_urls,
+                        post_url=post_url,
+                        posted_at=post.get("created_at"),
+                        inferred_week=week,
+                        picker_hint=picker_hint,
+                        reply_hint=reply_hint,
+                        parent_text=parent_text,
+                        preflight_inventory=preflight_inventory,
+                        reconciliation_attempt=full_extraction_attempt,
+                    )
+
+                    validated = validate_normal_post_payload(
+                        payload,
+                        image_urls=image_urls,
+                        default_week=week,
+                        season_year=season_year,
+                        picker_hint=picker_hint,
+                        preflight_inventory=preflight_inventory,
+                    )
+
+                    if full_extraction_attempt > 1 or inventory_cycle > 1:
+                        print(
+                            "COMPLETE SOURCE RECONCILIATION SUCCEEDED:",
+                            post_id,
+                            "| inventory cycle:",
+                            inventory_cycle,
+                            "| structured attempt:",
+                            full_extraction_attempt,
+                            "| validated wagers:",
+                            len(validated.get("picks") or []),
+                        )
+
+                    last_validation_error = None
+                    break
+
+                except Exception as exc:
+                    last_validation_error = exc
+                    message = str(exc)
+                    lowered = message.lower()
+
+                    structured_retryable = (
+                        "image wager-count reconciliation failed" in lowered
+                        or "independent source inventory reconciliation failed" in lowered
+                        or "tracked wager count reconciliation failed" in lowered
+                        or "inventory row mapping failed" in lowered
+                    )
+
+                    if (
+                        structured_retryable
+                        and full_extraction_attempt < max_full_extraction_attempts
+                    ):
+                        print(
+                            "COMPLETE STRUCTURED EXTRACTION COUNT MISMATCH:",
+                            post_id,
+                            "| inventory cycle:",
+                            inventory_cycle,
+                            "| attempt:",
+                            full_extraction_attempt,
+                            "|",
+                            message,
+                            "| action: retry structured read against same inventory",
+                        )
+                        continue
+
+                    break
+
+            if validated is not None:
+                break
+
+            failure_text = str(last_validation_error or "").lower()
+
+            # If the structured verifier says visible wagers are absent from
+            # the inventory, the checklist itself is suspect.  Throw away that
+            # WHOLE inventory attempt and reread the original source; never
+            # synthesize or manually inject the missing row.
+            inventory_refresh_needed = bool(image_urls) and (
+                "inventory" in failure_text
+                or "tracked wager count reconciliation failed" in failure_text
+                or "image wager-count reconciliation failed" in failure_text
+                or "ai marked source extraction incomplete" in failure_text
+            )
+
+            if (
+                inventory_refresh_needed
+                and inventory_cycle < max_inventory_cycles
+            ):
+                print(
+                    "SOURCE INVENTORY RECONCILIATION FAILED:",
+                    post_id,
+                    "| cycle:",
+                    inventory_cycle,
+                    "|",
+                    last_validation_error,
+                    "| action: discard checklist and reread original source",
+                )
+                continue
+
+            break
+
         if validated is None:
             exc = last_validation_error or ValueError(
-                "Complete structured extraction did not validate"
+                "Complete source reconciliation did not validate"
             )
 
             print(
