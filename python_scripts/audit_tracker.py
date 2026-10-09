@@ -47,6 +47,12 @@ AMBIGUOUS_CONTEXT_GROUPS = {
         "oklahoma state",
         "oregon state",
     },
+    # GSU can mean Georgia State or Georgia Southern.  It is intentionally
+    # contextual so an opponent (for example JMU) must disambiguate it.
+    "gsu": {
+        "georgia state",
+        "georgia southern",
+    },
     # Context-only source-card abbreviations. These are deliberately
     # NOT global aliases; they are only accepted while comparing a
     # complete two-team matchup.
