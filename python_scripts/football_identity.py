@@ -189,7 +189,7 @@ def team_name_variants(value):
 # ============================================================
 
 ALIASES = {
-    "air force": {"air force", "afa", "af"},
+    "air force": {"air force", "afa"},
     "akron": {"akron", "akr"},
     "alabama": {"alabama", "bama", "ala"},
     "appalachian state": {
@@ -395,6 +395,7 @@ ALIASES = {
         "jax st",
         "jville",
         "jsu",
+        "jax",
     },
     "james madison": {
         "james madison",
@@ -411,6 +412,7 @@ ALIASES = {
         "k-state",
         "kstate",
         "ksu",
+        "kst",
     },
     "kennesaw state": {
         "kennesaw state",
@@ -530,6 +532,7 @@ ALIASES = {
         "ncsu",
         "north carolina state",
         "north carolina st",
+        "ncst",
     },
     "nebraska": {
         "nebraska",
@@ -562,10 +565,6 @@ ALIASES = {
     },
     "north texas": {
         "north texas",
-        "north tex",
-        "n texas",
-        "n tex",
-        "ntex",
         "unt",
     },
     "northern illinois": {
@@ -793,6 +792,7 @@ ALIASES = {
     "wake forest": {
         "wake forest",
         "wake",
+        "wf",
     },
     "washington": {
         "washington",
@@ -838,6 +838,8 @@ ALIASES = {
 
 AMBIGUOUS_ALIASES = {
     "osu",
+    # KSU is ambiguous between Kansas State and Kennesaw State.
+    "ksu",
 }
 
 
