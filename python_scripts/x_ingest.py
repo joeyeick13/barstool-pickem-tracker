@@ -2227,7 +2227,10 @@ Untracked wagers are ignored for tracker completeness.
                 if spread_match and len(sides) == 2:
                     selected_token = clean_text(spread_match.group(1))
                     if selected_token and not any(
-                        teams_equivalent(selected_token, side)
+                        _source_literal_team_matches_matchup_side(
+                            selected_token,
+                            side,
+                        )
                         for side in sides
                     ):
                         raise ValueError(
@@ -3328,6 +3331,69 @@ def _source_total_single_team_anchor(pick):
     return teams_equivalent(source_team, selected)
 
 
+def _source_literal_team_matches_matchup_side(selected, side):
+    """
+    Compare two SOURCE-LITERAL team tokens without forcing a global school
+    identity for ambiguous abbreviations.
+
+    Why this exists:
+      * football_identity.teams_equivalent() intentionally fails closed for
+        ambiguous tokens such as OSU.
+      * inside one source row, however, literal equality is direct evidence:
+        ``OSU -14.5`` with ``SDSU @ OSU`` is internally consistent even though
+        OSU cannot yet be globally resolved to Ohio State/Oregon State.
+      * source cards also use tiny local abbreviations such as ``Jax`` vs
+        ``JAX ST`` and ``Sac St`` vs ``SAC``.  We may recognize only that
+        narrow spelling relationship here; ESPN schedule enrichment still owns
+        the eventual canonical school identity.
+
+    This helper NEVER maps one ambiguous school to another. It only answers
+    whether the selected literal could be the same literal side printed in the
+    same source matchup.
+    """
+    selected_text = clean_text(selected)
+    side_text = clean_text(side)
+
+    if not selected_text or not side_text:
+        return False
+
+    # Exact source-literal equality is authoritative even when the token is
+    # globally ambiguous (OSU, USC, MSU, etc.).
+    if norm(selected_text) == norm(side_text):
+        return True
+
+    # Use the shared identity system whenever it can resolve the pair safely.
+    if teams_equivalent(selected_text, side_text):
+        return True
+
+    def _short_state_abbreviation(value):
+        tokens = norm(value).split()
+        if not tokens:
+            return None
+
+        # Betting cards frequently print Jacksonville State / Sacramento State
+        # as JAX ST / SAC ST while the wager cell itself says Jax / Sac St.
+        # Strip a trailing State marker ONLY when what remains is a short
+        # abbreviation.  This deliberately does not collapse Michigan and
+        # Michigan State, Florida and Florida State, etc.
+        if tokens[-1] in {"st", "state"}:
+            tokens = tokens[:-1]
+
+        compact = "".join(tokens)
+        if 2 <= len(compact) <= 4:
+            return compact
+        return None
+
+    selected_short = _short_state_abbreviation(selected_text)
+    side_short = _short_state_abbreviation(side_text)
+
+    return bool(
+        selected_short
+        and side_short
+        and selected_short == side_short
+    )
+
+
 def _spread_selected_team_matches_source_matchup(pick):
     """Fail closed when a spread's selected team contradicts a full matchup."""
     matchup = clean_text(
@@ -3343,7 +3409,10 @@ def _spread_selected_team_matches_source_matchup(pick):
     if not selected:
         return False
 
-    return any(teams_equivalent(selected, side) for side in sides)
+    return any(
+        _source_literal_team_matches_matchup_side(selected, side)
+        for side in sides
+    )
 
 def validate_normal_pick(pick):
     """
