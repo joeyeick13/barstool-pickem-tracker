@@ -6,6 +6,7 @@ import time
 import requests
 
 from football_identity import (
+    ALIASES,
     alias_group,
     best_matchup_hints,
     canonical_game_identity,
@@ -691,56 +692,10 @@ AMBIGUOUS_CONTEXT_GROUPS = {
         "oklahoma state",
         "oregon state",
     },
-    # "Ohio" is a legitimate standalone school, but compact source text can
-    # also shorten "Miami (OH)" to just "Ohio". Keep this contextual only:
-    # the second matchup team must make exactly one ESPN event possible.
-    # Example: UMass + Ohio resolves to Miami (OH) @ UMass, while CMU + Ohio
-    # still resolves to Central Michigan @ Ohio. Single-team Ohio still means the Ohio Bobcats; the Miami (OH) interpretation
-    # is available only inside a complete two-team matchup.
-    "ohio": {
-        "ohio",
-        "miami ohio",
-    },
-    # GSU can mean Georgia State or Georgia Southern.  It is intentionally
-    # contextual so an opponent (for example JMU) must disambiguate it.
-    "gsu": {
-        "georgia state",
-        "georgia southern",
-    },
     "tu": {
         "temple",
         "tulane",
         "tulsa",
-    },
-    # Source cards also use TUL.  It is ambiguous between Tulane and Tulsa,
-    # so it is legal only inside a complete two-team matchup.
-    "tul": {
-        "tulane",
-        "tulsa",
-    },
-    # UH can mean Houston or Hawaii.  Keep it contextual and require the
-    # second matchup side to make the ESPN event unique.
-    "uh": {
-        "houston",
-        "hawaii",
-    },
-    # Common source-card abbreviations that are safe only in a complete
-    # two-team matchup.  They remain resolver-local instead of becoming
-    # global football aliases.
-    "wf": {
-        "wake forest",
-    },
-    "ncst": {
-        "nc state",
-    },
-    "kst": {
-        "kansas state",
-    },
-    # KSU is genuinely ambiguous in compact source cards: Kansas State and
-    # Kennesaw State both use it.  The second matchup side must disambiguate.
-    "ksu": {
-        "kansas state",
-        "kennesaw state",
     },
     "um": {
         "michigan",
@@ -869,19 +824,6 @@ def event_contains_team(
 
     if not hint:
         return False
-
-    # "Ohio" remains a safe exact one-team identity for the Ohio Bobcats.
-    # Its additional Miami (OH) interpretation is permitted ONLY inside
-    # complete two-team matching, where the counterpart disambiguates it.
-    if norm(hint) == "ohio":
-        hint_aliases = alias_group(hint)
-        return any(
-            bool(
-                competitor_aliases(competitor)
-                & hint_aliases
-            )
-            for competitor in competitors(event)
-        )
 
     if (
         is_ambiguous_hint(
@@ -1028,6 +970,118 @@ def canonical_event_game(
             canonical
         )
     )
+
+
+
+# ============================================================
+# CONTEXTUAL SOURCE-HINT STRENGTH
+# ============================================================
+
+_GENERIC_CONTEXT_TOKENS = {
+    "state", "st", "tech", "university", "college",
+    "southern", "northern", "eastern", "western", "central",
+}
+
+
+def contextual_identity_candidates(hint):
+    """Return canonical teams that could reasonably own a source hint.
+
+    This is intentionally broader than canonical_team() and is used ONLY inside
+    a two-team/source-context resolver.  It lets a literal location token such
+    as ``Ohio`` remain contextually ambiguous between ``Ohio``, ``Ohio State``
+    and ``Miami Ohio`` instead of incorrectly treating it as proof of the Ohio
+    Bobcats.  No global team identity is changed.
+    """
+    key = norm(hint)
+    if not key:
+        return set()
+
+    candidates = set()
+    tokens = key.split()
+    single_token = len(tokens) == 1
+    token = tokens[0] if single_token else None
+
+    for canonical, aliases in ALIASES.items():
+        values = set(aliases or set()) | {canonical}
+        for value in values:
+            value_key = norm(value)
+            if not value_key:
+                continue
+
+            if value_key == key:
+                candidates.add(canonical)
+                continue
+
+            # A one-word geographic/source shorthand can legitimately be only
+            # part of a school name.  Treat it as contextual evidence, never as
+            # a canonical global alias.  Generic modifier words are excluded.
+            if (
+                single_token
+                and len(token) >= 4
+                and token not in _GENERIC_CONTEXT_TOKENS
+                and token in value_key.split()
+            ):
+                candidates.add(canonical)
+
+    return candidates
+
+
+def source_hint_is_contextually_ambiguous(hint):
+    if not clean_text(hint):
+        return True
+
+    if is_ambiguous_hint(hint) or norm(hint) in AMBIGUOUS_CONTEXT_GROUPS:
+        return True
+
+    return len(contextual_identity_candidates(hint)) > 1
+
+
+def unique_matchup_anchor(events, pick, first, second):
+    """Resolve a game from one strong side of a source matchup.
+
+    Totals do not have a selected team, so historically a source string like
+    ``UMass/Ohio Under 45.5`` could fail even though UMass appears in exactly
+    one eligible game that week.  This helper treats each NON-ambiguous source
+    side as an independent anchor and accepts the result only when all strong
+    anchors point to the same ESPN event.
+
+    Ambiguous/contextual sides are deliberately ignored rather than allowed to
+    contradict a stronger anchor.  This is the same safety model already used
+    for selected-team resolution, generalized to game totals.
+    """
+    strong_hints = [
+        clean_text(hint)
+        for hint in (first, second)
+        if clean_text(hint)
+        and not source_hint_is_contextually_ambiguous(hint)
+    ]
+
+    if not strong_hints:
+        return None, None, []
+
+    anchored = []
+    for hint in strong_hints:
+        matches = team_matches(events, hint)
+        matches = filter_events_near_post_time(matches, pick)
+        unique = unique_event(matches)
+        if unique:
+            anchored.append((hint, unique))
+
+    if not anchored:
+        return None, None, []
+
+    event_ids = {
+        event_id(event)
+        for _, event in anchored
+        if event_id(event)
+    }
+
+    if len(event_ids) != 1:
+        return None, None, [event for _, event in anchored]
+
+    anchor_hint = anchored[0][0]
+    event = anchored[0][1]
+    return event, anchor_hint, [event]
 
 
 # ============================================================
@@ -1677,6 +1731,7 @@ def resolution_result(
     reason=None,
     candidates=None,
     confidence=None,
+    anchor_hint=None,
 ):
     candidate_ids = [
         event_id(
@@ -1716,6 +1771,9 @@ def resolution_result(
 
         "candidate_event_ids":
             candidate_ids,
+
+        "anchor_hint":
+            clean_text(anchor_hint) or None,
     }
 
 
@@ -1843,6 +1901,35 @@ def resolve_event_detailed(
                     matches,
                 confidence=0.0,
             )
+
+        # The literal two-side transcription can contain one contextual or
+        # location shorthand that is not a safe global alias.  When the other
+        # side is a strong team identity and appears in exactly one eligible
+        # event, use that side as the independent game anchor.
+        # Team-sided markets already have a stronger independent selected-team
+        # defense later in the resolver/schedule pipeline.  This fallback is for
+        # game totals, where no selected side exists.
+        if side_identity(pick) is None:
+            anchored_event, anchor_hint, anchor_candidates = unique_matchup_anchor(
+                events,
+                pick,
+                explicit[0],
+                explicit[1],
+            )
+
+            if anchored_event:
+                return resolution_result(
+                    event=anchored_event,
+                    method="UNIQUE_MATCHUP_ANCHOR",
+                    reason=(
+                        "One non-ambiguous source matchup team appears in exactly "
+                        "one eligible ESPN event; contextual counterpart was not "
+                        "used as global identity proof."
+                    ),
+                    candidates=anchor_candidates,
+                    confidence=0.97,
+                    anchor_hint=anchor_hint,
+                )
 
     # --------------------------------------------------------
     # 2. TEAM + OPPONENT
