@@ -353,6 +353,16 @@ AMBIGUOUS_CONTEXT_GROUPS = {
         "oklahoma state",
         "oregon state",
     },
+    # "Ohio" is a legitimate standalone school, but compact source text can
+    # also shorten "Miami (OH)" to just "Ohio". Keep this contextual only:
+    # the second matchup team must make exactly one ESPN event possible.
+    # Example: UMass + Ohio resolves to Miami (OH) @ UMass, while CMU + Ohio
+    # still resolves to Central Michigan @ Ohio. Single-team Ohio still means the Ohio Bobcats; the Miami (OH) interpretation
+    # is available only inside a complete two-team matchup.
+    "ohio": {
+        "ohio",
+        "miami ohio",
+    },
     # GSU is context-dependent between Georgia State and Georgia Southern.
     # A complete matchup (for example JMU @ GSU) can safely disambiguate it.
     "gsu": {
