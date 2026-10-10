@@ -98,7 +98,7 @@ MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 19
+CURRENT_INGEST_VALIDATION_VERSION = 20
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -2004,9 +2004,17 @@ IMPORTANT:
 - If the picker hint identifies one tracked picker for the whole source, you may
   use that hint for the wager rows in this source.
 
-For every TRACKED wager, transcribe a short exact wager label preserving the
-visible signed spread or total. If a matchup is explicitly attached to that
-wager, transcribe it; otherwise use null. Never invent an opponent or matchup.
+For every TRACKED wager, transcribe the COMPLETE literal wager label preserving
+all source identity context that is physically attached to the number. If the
+source says "Mizzou Over 50.5", selection MUST be "Mizzou Over 50.5" — never
+shorten it to "Over 50.5". If the source says "Notre Dame TT Over 47.5", keep
+the team and TT marker. If a matchup is explicitly attached to that wager,
+transcribe it; otherwise use null. Never invent an opponent or matchup.
+
+CRITICAL CONTEXT-PRESERVATION RULE:
+A team/school token immediately attached to a game total is source evidence,
+not decoration. Preserve it in selection even when matchup is null. Bare totals
+such as "Over 50.5" are allowed only when the source itself is actually bare.
 
 IMPORTANT COMPOUND-CELL RULE:
 If one visible source cell contains multiple independent wagers joined by a
@@ -2199,6 +2207,34 @@ Untracked wagers are ignored for tracker completeness.
                             ),
                         }
                     )
+
+            # Reject an inventory attempt that is internally impossible: a
+            # spread team cannot be absent from its own complete two-team
+            # matchup. This catches OCR/context corruption such as
+            # ``UofA -3`` being paired with ``UofSC @ UF`` before that bad
+            # checklist can overwrite a previously-correct row.
+            for row in normalized_wagers:
+                row_selection = clean_text(row.get("selection"))
+                row_matchup = clean_text(row.get("matchup"))
+                sides = split_matchup(row_matchup) if row_matchup else []
+
+                spread_match = re.match(
+                    r"^(.*?)\s*([+-])\s*(\d+(?:\.\d+)?)\s*$",
+                    row_selection,
+                    flags=re.I,
+                )
+
+                if spread_match and len(sides) == 2:
+                    selected_token = clean_text(spread_match.group(1))
+                    if selected_token and not any(
+                        teams_equivalent(selected_token, side)
+                        for side in sides
+                    ):
+                        raise ValueError(
+                            "Independent source inventory identity conflict: "
+                            f"{row_selection} is incompatible with matchup "
+                            f"{row_matchup}"
+                        )
 
             if compound_expansions:
                 for original, expanded in compound_expansions:
@@ -3052,8 +3088,44 @@ def restore_authoritative_inventory_literals(
     changed = False
 
     if inventory_selection:
+        prior_source_selection = clean_text(
+            pick.get("source_selection_text")
+        )
+        if prior_source_selection:
+            pick["structured_source_selection_text"] = prior_source_selection
+
+        # Independent inventory remains authoritative, but never discard a
+        # richer literal total label that contains a source-proven team anchor.
+        # This protects text posts such as "Mizzou Over 50.5" from being
+        # degraded to bare "Over 50.5" by one inventory read.
+        market = base_market(normalize_bet_type(pick.get("bet_type")))
+        richer_total_literal = False
+
+        if market == "TOTAL" and prior_source_selection:
+            bare_inventory_total = re.match(
+                r"^(?:over|under|o|u)\s*[0-9]+(?:\.[0-9]+)?\s*$",
+                inventory_selection,
+                flags=re.I,
+            )
+            structured_total = re.match(
+                r"^(.*?)\s+(?:over|under|o|u)\s*[0-9]+(?:\.[0-9]+)?\s*$",
+                prior_source_selection,
+                flags=re.I,
+            )
+
+            if bare_inventory_total and structured_total:
+                structured_team = clean_text(structured_total.group(1))
+                selected_team = clean_text(side_identity(pick))
+                richer_total_literal = bool(
+                    structured_team
+                    and selected_team
+                    and teams_equivalent(structured_team, selected_team)
+                )
+
         pick["source_selection_text"] = (
-            inventory_selection
+            prior_source_selection
+            if richer_total_literal
+            else inventory_selection
         )
 
     if (
@@ -3222,6 +3294,57 @@ def normalize_contextual_source_team(pick):
 # STRUCTURAL PICK VALIDATION
 # ============================================================
 
+def _source_total_single_team_anchor(pick):
+    """
+    Return True only when the literal source wager itself proves a one-team
+    anchor for a GAME TOTAL, e.g. ``Mizzou Over 50.5``.
+
+    This does not convert the wager into a team total. It only preserves enough
+    identity for the ESPN resolver's UNIQUE_SELECTED_TEAM fallback. Bare totals
+    such as ``Over 50.5`` still fail closed without a complete matchup.
+    """
+    if base_market(normalize_bet_type(pick.get("bet_type"))) != "TOTAL":
+        return False
+
+    literal = clean_text(pick.get("source_selection_text"))
+    selected = clean_text(side_identity(pick))
+
+    if not literal or not selected:
+        return False
+
+    match = re.match(
+        r"^(.*?)\s+(?:over|under|o|u)\s*([0-9]+(?:\.[0-9]+)?)\s*$",
+        literal,
+        flags=re.I,
+    )
+
+    if not match:
+        return False
+
+    source_team = clean_text(match.group(1))
+    if not source_team:
+        return False
+
+    return teams_equivalent(source_team, selected)
+
+
+def _spread_selected_team_matches_source_matchup(pick):
+    """Fail closed when a spread's selected team contradicts a full matchup."""
+    matchup = clean_text(
+        pick.get("source_matchup_text")
+        or pick.get("matchup")
+    )
+    sides = split_matchup(matchup) if matchup else []
+
+    if len(sides) != 2:
+        return True
+
+    selected = clean_text(side_identity(pick))
+    if not selected:
+        return False
+
+    return any(teams_equivalent(selected, side) for side in sides)
+
 def validate_normal_pick(pick):
     """
     Validate one normalized wager before the source post can be
@@ -3303,6 +3426,11 @@ def validate_normal_pick(pick):
         if visible_line is not None:
             pick["line"] = visible_line
 
+        if selected and not _spread_selected_team_matches_source_matchup(pick):
+            errors.append(
+                "spread selected team conflicts with complete source matchup"
+            )
+
     if market == "TOTAL":
         direction = total_direction(
             pick
@@ -3330,9 +3458,10 @@ def validate_normal_pick(pick):
         if (
             not game
             and len(hints) != 2
+            and not _source_total_single_team_anchor(pick)
         ):
             errors.append(
-                "total has no complete matchup identity"
+                "total has no complete matchup identity or source-proven team anchor"
             )
 
     if market == "TEAM_TOTAL":
@@ -5600,7 +5729,10 @@ def process_normal_posts(
         # refreshing ONLY the structured extraction is useless because it is
         # still constrained to the same incomplete checklist.  V19 therefore
         # permits a bounded fresh inventory cycle against the ORIGINAL images.
-        max_inventory_cycles = 3 if image_urls else 1
+        # Retry the ORIGINAL source for both image and text posts when
+        # validation proves the selected checklist lost or contradicted source
+        # identity. Text posts are not immune to lossy model transcription.
+        max_inventory_cycles = 3
         max_full_extraction_attempts = 3
         validated = None
         last_validation_error = None
@@ -5749,11 +5881,13 @@ def process_normal_posts(
             # the inventory, the checklist itself is suspect.  Throw away that
             # WHOLE inventory attempt and reread the original source; never
             # synthesize or manually inject the missing row.
-            inventory_refresh_needed = bool(image_urls) and (
+            inventory_refresh_needed = (
                 "inventory" in failure_text
                 or "tracked wager count reconciliation failed" in failure_text
                 or "image wager-count reconciliation failed" in failure_text
                 or "ai marked source extraction incomplete" in failure_text
+                or "source matchup" in failure_text
+                or "source-proven team anchor" in failure_text
             )
 
             if (
