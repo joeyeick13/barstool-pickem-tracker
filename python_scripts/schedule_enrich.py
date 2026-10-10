@@ -11,6 +11,7 @@ from common import (
 
 from espn_resolver import (
     build_complete_week_slate,
+    event_contains_team,
     event_date,
     event_matchup_text,
     find_event_by_id,
@@ -2466,6 +2467,34 @@ def enrich_schedule():
                 event,
             )
         )
+
+        # A game total may be resolved from one strong source-matchup team when
+        # the counterpart is contextually ambiguous (for example a location
+        # shorthand).  The resolver may use that path only after proving the
+        # anchor team appears in exactly one eligible weekly event.  Re-verify
+        # that anchor against the returned event before allowing the otherwise
+        # contradictory literal pair to canonicalize to ESPN identity.
+        anchor_hint = clean_text(result.get("anchor_hint"))
+        matchup_anchor_valid = (
+            method == "UNIQUE_MATCHUP_ANCHOR"
+            and bool(anchor_hint)
+            and event_contains_team(event, anchor_hint)
+        )
+
+        if compatibility is False and matchup_anchor_valid:
+            print(
+                "PREGAME MATCHUP ANCHOR OVERRIDE:",
+                pick.get("picker"),
+                "|",
+                pick.get("selection"),
+                "| source matchup:",
+                pick.get("matchup"),
+                "| proven anchor:",
+                anchor_hint,
+                "| ESPN:",
+                event_matchup_text(event),
+            )
+            compatibility = True
 
         if compatibility is False:
 
