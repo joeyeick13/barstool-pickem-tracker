@@ -3336,23 +3336,38 @@ def _source_literal_team_matches_matchup_side(selected, side):
     Compare two SOURCE-LITERAL team tokens without forcing a global school
     identity for ambiguous abbreviations.
 
-    Why this exists:
-      * football_identity.teams_equivalent() intentionally fails closed for
-        ambiguous tokens such as OSU.
-      * inside one source row, however, literal equality is direct evidence:
-        ``OSU -14.5`` with ``SDSU @ OSU`` is internally consistent even though
-        OSU cannot yet be globally resolved to Ohio State/Oregon State.
-      * source cards also use tiny local abbreviations such as ``Jax`` vs
-        ``JAX ST`` and ``Sac St`` vs ``SAC``.  We may recognize only that
-        narrow spelling relationship here; ESPN schedule enrichment still owns
-        the eventual canonical school identity.
+    This is an INTERNAL-CONSISTENCY check only. It never decides which school
+    an ambiguous token means; ESPN enrichment still owns canonical identity.
 
-    This helper NEVER maps one ambiguous school to another. It only answers
-    whether the selected literal could be the same literal side printed in the
-    same source matchup.
+    Safe source-card cases handled here include:
+      * exact ambiguous literals: OSU == OSU;
+      * full name vs source acronym: Air Force == AF;
+      * local State shorthand: Jax == JAX ST, Sac St == SAC;
+      * matchup headings with trailing schedule text:
+        ARK ST == "ARK ST 7:30pm THURS".
+
+    Contradictory source rows still fail closed, e.g. UofA vs UofSC/UF.
     """
-    selected_text = clean_text(selected)
-    side_text = clean_text(side)
+
+    def _strip_source_schedule_suffix(value):
+        text = clean_text(value)
+        if not text:
+            return ""
+
+        # Source-card matchup headings sometimes append kickoff/day metadata to
+        # the home-team cell.  Strip only an obvious clock token and everything
+        # after it.  Do not remove arbitrary words from team names.
+        text = re.sub(
+            r"\s+\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)\b.*$",
+            "",
+            text,
+            flags=re.I,
+        ).strip()
+
+        return text
+
+    selected_text = _strip_source_schedule_suffix(selected)
+    side_text = _strip_source_schedule_suffix(side)
 
     if not selected_text or not side_text:
         return False
@@ -3371,11 +3386,9 @@ def _source_literal_team_matches_matchup_side(selected, side):
         if not tokens:
             return None
 
-        # Betting cards frequently print Jacksonville State / Sacramento State
-        # as JAX ST / SAC ST while the wager cell itself says Jax / Sac St.
-        # Strip a trailing State marker ONLY when what remains is a short
-        # abbreviation.  This deliberately does not collapse Michigan and
-        # Michigan State, Florida and Florida State, etc.
+        # Strip a trailing State marker ONLY when what remains is short. This
+        # deliberately does not collapse Michigan and Michigan State, Florida
+        # and Florida State, etc.
         if tokens[-1] in {"st", "state"}:
             tokens = tokens[:-1]
 
@@ -3387,11 +3400,52 @@ def _source_literal_team_matches_matchup_side(selected, side):
     selected_short = _short_state_abbreviation(selected_text)
     side_short = _short_state_abbreviation(side_text)
 
-    return bool(
+    if (
         selected_short
         and side_short
         and selected_short == side_short
-    )
+    ):
+        return True
+
+    def _source_acronym(value):
+        """Return a conservative acronym for a multi-word literal team name."""
+        tokens = [
+            token
+            for token in norm(value).split()
+            if token
+        ]
+
+        if len(tokens) < 2:
+            return None
+
+        # Preserve meaningful source words.  A two-to-four character acronym
+        # such as AF for Air Force is useful as row-consistency evidence but is
+        # never promoted to canonical identity here.
+        acronym = "".join(token[0] for token in tokens if token)
+        if 2 <= len(acronym) <= 4:
+            return acronym
+        return None
+
+    selected_compact = "".join(norm(selected_text).split())
+    side_compact = "".join(norm(side_text).split())
+    selected_acronym = _source_acronym(selected_text)
+    side_acronym = _source_acronym(side_text)
+
+    if (
+        selected_acronym
+        and selected_acronym == side_compact
+        and 2 <= len(side_compact) <= 4
+    ):
+        return True
+
+    if (
+        side_acronym
+        and side_acronym == selected_compact
+        and 2 <= len(selected_compact) <= 4
+    ):
+        return True
+
+    return False
 
 
 def _spread_selected_team_matches_source_matchup(pick):
