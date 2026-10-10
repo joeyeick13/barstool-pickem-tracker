@@ -1090,25 +1090,27 @@ def apply_match(
         "game_matchup"
     ] = resolved_matchup
 
-    # A UNIQUE_SELECTED_TEAM resolution is independent evidence tying this
-    # wager to exactly one ESPN event.  When ingestion preserved only a team
-    # anchor (for example "Mizzou Over 50.5") and no complete two-team
-    # matchup, persist the canonical ESPN matchup so full-game totals satisfy
-    # the same identity invariant as every other wager.
+    # Once an ESPN event has been independently validated, canonical event
+    # identity becomes derived tracker metadata.  The source transcription is
+    # preserved separately in source_matchup_text/source_selection_text and may
+    # never overwrite the locked ESPN identity on a later ingestion run.
     #
-    # Do NOT do this for a bare total resolved only from a pre-existing event
-    # ID; those remain fail-closed because they have no independent source
-    # anchor.  Source selection/line/picker/week are never changed.
-    current_hints = best_matchup_hints(
-        pick
+    # The only exception is an explicitly UNVERIFIED legacy event_id: those
+    # locks are intentionally not allowed to manufacture matchup identity.
+    lock_is_independently_validated = (
+        "UNVERIFIED" not in clean_text(confidence).upper()
     )
 
-    if (
-        resolved_matchup
-        and len(current_hints) != 2
-        and "UNIQUE_SELECTED_TEAM" in clean_text(method).upper()
-    ):
-        if pick.get("matchup") is not None:
+    if resolved_matchup and lock_is_independently_validated:
+        current_matchup = clean_text(pick.get("matchup"))
+
+        # Preserve the original source-derived matchup before canonicalizing it.
+        # New ingestion already supplies source_matchup_text; this fallback
+        # upgrades historical rows without destroying provenance.
+        if current_matchup and not clean_text(pick.get("source_matchup_text")):
+            pick["source_matchup_text"] = current_matchup
+
+        if current_matchup and current_matchup != clean_text(resolved_matchup):
             preserve_original_value(
                 pick,
                 "pre_schedule_enrich_matchup",
@@ -1116,7 +1118,23 @@ def apply_match(
             )
 
         pick["matchup"] = resolved_matchup
+        pick["canonical_matchup_source"] = "ESPN_EVENT_LOCK"
+        pick["canonical_matchup_event_id"] = str(
+            pick.get("event_id") or event.get("id") or ""
+        ) or None
         pick["matchup_completed_from_event"] = True
+
+        # For team-sided markets, the same validated event also proves the
+        # opponent.  This keeps downstream identity stable without changing the
+        # literal wager selection.
+        anchor = selected_team_event_matches(pick, event)
+        if anchor.get("status") == "UNIQUE_MATCH":
+            opponent = opponent_from_event(
+                anchor.get("matched_team"),
+                event,
+            )
+            if opponent:
+                pick["opponent"] = opponent
 
     pick[
         "game_match_review_reason"
