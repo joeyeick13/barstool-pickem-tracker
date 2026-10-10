@@ -5170,6 +5170,13 @@ def register_source_evidence(pick, *, post, post_url, reply_hint):
         "is_reply": bool(reply_hint),
         "conversation_id": post.get("conversation_id"),
         "posted_at": post.get("created_at"),
+        # V21+ provenance marker. register_source_evidence is only persisted
+        # after a whole post transaction commits (new rows are still staged in
+        # memory; duplicate evidence is applied in phase 4), so this flag is a
+        # durable proof that the source evidence crossed the transaction
+        # boundary successfully.
+        "committed": True,
+        "validation_version": CURRENT_INGEST_VALIDATION_VERSION,
     }
 
     pick["source_post_evidence"] = evidence
@@ -5507,10 +5514,26 @@ def migrate_previously_committed_post(
         # corroboration is not enough because pre-V21 failed transactions could
         # leak source evidence before commit.
         if post_id not in processed_ids:
-            if not any(
+            primary_proof = any(
                 str(row.get("source_post_id") or "").strip() == post_id
                 for row in rows
-            ):
+            )
+
+            committed_evidence_proof = all(
+                bool(
+                    (_normalized_source_evidence(row).get(post_id) or {}).get(
+                        "committed"
+                    )
+                )
+                for row in rows
+            )
+
+            # A post can cease to be the legacy primary source after later
+            # dedupe/corroboration.  V21+ committed provenance is sufficient
+            # proof that it crossed the original transaction boundary and must
+            # never be reread by AI.  Pre-V21 leaked evidence has no committed
+            # marker and therefore cannot bootstrap itself here.
+            if not (primary_proof or committed_evidence_proof):
                 return False
 
         prior_snapshot = post_snapshots.get(post_id)
@@ -5600,15 +5623,26 @@ def initialize_processed_ids(
     # initialization flag.  This self-heals older failed revalidation runs that
     # removed a post from processed_post_ids while leaving its committed wagers
     # intact.
-    ids = {
-        str(pick.get("source_post_id"))
-        for pick in existing
-        if (
-            pick.get("source_post_id")
-            and not pick.get("official_reconciled")
-            and pick.get("ingest_validated")
-        )
-    }
+    ids = set()
+
+    for pick in existing:
+        if pick.get("official_reconciled") or not pick.get("ingest_validated"):
+            continue
+
+        primary_id = str(pick.get("source_post_id") or "").strip()
+        if primary_id:
+            ids.add(primary_id)
+
+        # V21+ source evidence that has crossed the transaction boundary is
+        # also part of the durable ledger even if dedupe later promoted a
+        # different post to the legacy primary source pointer.
+        for evidence_id, evidence_meta in _normalized_source_evidence(pick).items():
+            if (
+                evidence_id
+                and isinstance(evidence_meta, dict)
+                and evidence_meta.get("committed")
+            ):
+                ids.add(str(evidence_id))
 
     # Preserve prior processed state as well, including validated non-pick posts
     # that have no wager rows.
