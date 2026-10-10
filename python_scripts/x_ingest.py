@@ -94,11 +94,15 @@ POST_VALIDATION_VERSIONS_KEY = (
     "normal_post_validation_versions"
 )
 
+POST_SNAPSHOTS_KEY = (
+    "normal_post_snapshots_v21"
+)
+
 MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 20
+CURRENT_INGEST_VALIDATION_VERSION = 21
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -5385,6 +5389,205 @@ def dedupe_picks(picks):
 
 
 # ============================================================
+# DURABLE NORMAL-POST LEDGER
+# ============================================================
+
+def source_rows_for_post(existing, post_id):
+    """Return every provisional wager still supported by one source post.
+
+    This intentionally uses the full provenance map rather than only the
+    legacy primary source_post_id.  A corroborated wager can legitimately
+    promote another post to primary source without losing this post's evidence.
+    """
+    post_id = str(post_id or "").strip()
+    if not post_id:
+        return []
+
+    return [
+        pick
+        for pick in existing
+        if not pick.get("official_reconciled")
+        and wager_has_source_post(pick, post_id)
+    ]
+
+
+def _stored_row_is_migration_safe(pick, post_id):
+    """Deterministic safety gate for carrying a previously committed row forward.
+
+    Validation-generation upgrades must never depend on a fresh AI transcription.
+    The historical row already passed the ingestion transaction.  We therefore
+    require only durable invariants here and let schedule/audit validation own
+    canonical ESPN identity.
+    """
+    if not isinstance(pick, dict):
+        return False
+
+    if pick.get("official_reconciled"):
+        return False
+
+    if not pick.get("ingest_validated"):
+        return False
+
+    if not wager_has_source_post(pick, post_id):
+        return False
+
+    if not normalize_picker_safe(pick.get("picker")):
+        return False
+
+    if pick_week(pick) <= 0:
+        return False
+
+    bet_type = normalize_bet_type(pick.get("bet_type"))
+    if bet_type not in SUPPORTED_MARKETS:
+        return False
+
+    if not clean_text(pick.get("selection")):
+        return False
+
+    market = base_market(bet_type)
+    if market in {"SPREAD", "TOTAL", "TEAM_TOTAL"}:
+        if safe_float(pick.get("line")) is None:
+            return False
+
+    return True
+
+
+def _snapshot_for_post(existing, post_id, *, kind="PICK_POST"):
+    rows = source_rows_for_post(existing, post_id)
+
+    row_ids = []
+    for row in rows:
+        row_id = str(row.get("id") or "").strip()
+        if row_id:
+            row_ids.append(row_id)
+
+    return {
+        "validation_version": CURRENT_INGEST_VALIDATION_VERSION,
+        "kind": kind,
+        "wager_count": len(rows),
+        "row_ids": sorted(set(row_ids)),
+        "recorded_at": now_iso(),
+    }
+
+
+def migrate_previously_committed_post(
+    *,
+    existing,
+    post_id,
+    processed_ids,
+    failed_ids,
+    post_validation_versions,
+    post_snapshots,
+):
+    """Upgrade an already-committed source post WITHOUT rereading it with AI.
+
+    This is the permanent boundary between source ingestion and validation
+    migrations.  A model reread is nondeterministic and must never be allowed to
+    replace rows that already carry downstream ESPN locks, grading metadata, or
+    source corroboration.
+
+    Returns True when the post was safely migrated and should be skipped.
+    """
+    rows = source_rows_for_post(existing, post_id)
+
+    # A prior successful pick-post transaction is recoverable even if an older
+    # buggy revalidation run removed the post from processed_post_ids and added
+    # it to failed_post_ids.  Transactional ingestion never commits partial new
+    # rows, so durable ingest_validated rows are proof of an earlier success.
+    if rows:
+        if not all(
+            _stored_row_is_migration_safe(row, post_id)
+            for row in rows
+        ):
+            return False
+
+        # Recovering a post that an older buggy run removed from
+        # processed_post_ids requires proof that this post once owned at least
+        # one committed row as its PRIMARY source.  Merely having secondary
+        # corroboration is not enough because pre-V21 failed transactions could
+        # leak source evidence before commit.
+        if post_id not in processed_ids:
+            if not any(
+                str(row.get("source_post_id") or "").strip() == post_id
+                for row in rows
+            ):
+                return False
+
+        prior_snapshot = post_snapshots.get(post_id)
+        if isinstance(prior_snapshot, dict):
+            expected_ids = {
+                str(value)
+                for value in (prior_snapshot.get("row_ids") or [])
+                if str(value)
+            }
+            current_ids = {
+                str(row.get("id") or "")
+                for row in rows
+                if str(row.get("id") or "")
+            }
+
+            # If a durable V21 snapshot exists, never silently bless a different
+            # row set.  This catches external/manual mutation of picks.json.
+            if expected_ids and current_ids != expected_ids:
+                return False
+
+        for row in rows:
+            row["ingest_validation_version"] = (
+                CURRENT_INGEST_VALIDATION_VERSION
+            )
+            row["ingest_validated"] = True
+
+        processed_ids.add(post_id)
+        failed_ids.discard(post_id)
+        post_validation_versions[post_id] = (
+            CURRENT_INGEST_VALIDATION_VERSION
+        )
+        post_snapshots[post_id] = _snapshot_for_post(
+            existing,
+            post_id,
+            kind="PICK_POST",
+        )
+
+        print(
+            "MIGRATED PRIOR VALIDATED SOURCE POST WITHOUT AI REREAD:",
+            post_id,
+            "| preserved wagers:",
+            len(rows),
+            "| downstream locks/results preserved",
+        )
+
+        return True
+
+    # Previously processed zero-wager/non-pick posts have no row to carry a
+    # validation version.  If state proves they were successfully processed and
+    # they are not a true failed-new-post retry, migrate the state record only.
+    stored_version = int(post_validation_versions.get(post_id) or 0)
+    if (
+        post_id in processed_ids
+        and post_id not in failed_ids
+        and stored_version > 0
+    ):
+        post_validation_versions[post_id] = (
+            CURRENT_INGEST_VALIDATION_VERSION
+        )
+        post_snapshots[post_id] = {
+            "validation_version": CURRENT_INGEST_VALIDATION_VERSION,
+            "kind": "NO_WAGER_ROWS",
+            "wager_count": 0,
+            "row_ids": [],
+            "recorded_at": now_iso(),
+        }
+
+        print(
+            "MIGRATED PRIOR PROCESSED ZERO-ROW POST WITHOUT AI REREAD:",
+            post_id,
+        )
+        return True
+
+    return False
+
+
+# ============================================================
 # PROCESSED NORMAL POST STATE
 # ============================================================
 
@@ -5392,24 +5595,23 @@ def initialize_processed_ids(
     existing,
     state,
 ):
-    if state.get(
-        PROCESSED_IDS_FLAG
-    ):
-        return
-
+    # V21 treats committed primary source rows as the durable source ledger.
+    # Rebuild the processed-ID set on EVERY run rather than trusting a one-time
+    # initialization flag.  This self-heals older failed revalidation runs that
+    # removed a post from processed_post_ids while leaving its committed wagers
+    # intact.
     ids = {
-        str(
-            pick.get(
-                "source_post_id"
-            )
-        )
+        str(pick.get("source_post_id"))
         for pick in existing
-        if pick.get(
-            "source_post_id"
+        if (
+            pick.get("source_post_id")
+            and not pick.get("official_reconciled")
+            and pick.get("ingest_validated")
         )
     }
 
-    # Preserve any prior processed state as well.
+    # Preserve prior processed state as well, including validated non-pick posts
+    # that have no wager rows.
     ids.update(
         str(value)
         for value in (
@@ -5419,6 +5621,7 @@ def initialize_processed_ids(
             )
             or []
         )
+        if str(value)
     )
 
     state[
@@ -5435,7 +5638,7 @@ def initialize_processed_ids(
     ] = True
 
     print(
-        "Seeded/validated processed post IDs:",
+        "Durable source ledger processed post IDs:",
         len(ids),
     )
 
@@ -5555,6 +5758,16 @@ def process_normal_posts(
         if str(key)
     }
 
+    raw_post_snapshots = (
+        state.get(POST_SNAPSHOTS_KEY, {})
+        or {}
+    )
+    post_snapshots = {
+        str(key): dict(value)
+        for key, value in raw_post_snapshots.items()
+        if str(key) and isinstance(value, dict)
+    }
+
     failed_ids = set(
         str(value)
         for value in (
@@ -5564,6 +5777,20 @@ def process_normal_posts(
             )
             or []
         )
+        if str(value)
+    )
+
+    # fetch_retry_posts removes successfully fetched IDs from the persisted
+    # queue before validation.  Preserve the original retry intent for this run
+    # so a genuinely failed NEW post cannot be mistaken for a zero-row migrated
+    # post merely because the fetch itself succeeded.
+    failed_ids.update(
+        str(value)
+        for value in (
+            state.pop("_retry_post_ids_current_run", [])
+            or []
+        )
+        if str(value)
     )
 
     candidate_count = 0
@@ -5598,17 +5825,10 @@ def process_normal_posts(
         ):
             continue
 
-        prior_rows_for_post = [
-            pick
-            for pick in existing
-            if str(
-                pick.get("source_post_id")
-                or ""
-            ) == post_id
-            and not pick.get(
-                "official_reconciled"
-            )
-        ]
+        prior_rows_for_post = source_rows_for_post(
+            existing,
+            post_id,
+        )
 
         row_validation_upgrade = any(
             int(
@@ -5634,7 +5854,30 @@ def process_normal_posts(
         needs_validation_upgrade = (
             row_validation_upgrade
             or state_validation_upgrade
+            or post_id in failed_ids
+            # fetch_retry_posts removes successfully re-fetched IDs from the
+            # temporary retry list before this function runs.  A source that
+            # still has durable committed rows but lost processed_post_ids in
+            # an older failed revalidation must therefore self-heal here too.
+            or (prior_rows_for_post and post_id not in processed_ids)
         )
+
+        # ----------------------------------------------------
+        # V21 DURABLE LEDGER MIGRATION
+        # ----------------------------------------------------
+        # Never ask a stochastic model to redefine a post that already has a
+        # successfully committed ledger row.  Validation-version upgrades and
+        # stale retry-queue entries are deterministic metadata migrations.
+        if needs_validation_upgrade:
+            if migrate_previously_committed_post(
+                existing=existing,
+                post_id=post_id,
+                processed_ids=processed_ids,
+                failed_ids=failed_ids,
+                post_validation_versions=post_validation_versions,
+                post_snapshots=post_snapshots,
+            ):
+                continue
 
         if (
             post_id in processed_ids
@@ -6073,6 +6316,13 @@ def process_normal_posts(
             failed_ids.discard(
                 post_id
             )
+            post_snapshots[post_id] = {
+                "validation_version": CURRENT_INGEST_VALIDATION_VERSION,
+                "kind": "VALIDATED_NON_PICK",
+                "wager_count": 0,
+                "row_ids": [],
+                "recorded_at": now_iso(),
+            }
 
             validated_post_count += 1
             non_pick_candidate_count += 1
@@ -6086,48 +6336,10 @@ def process_normal_posts(
         # ----------------------------------------------------
         # VALIDATION-GENERATION UPGRADE
         # ----------------------------------------------------
-
-        if needs_validation_upgrade:
-            old_source_rows = []
-            rebuilt_existing = []
-            corroborated_rows_preserved = 0
-            source_only_rows_removed = 0
-
-            for old_pick in existing:
-                if (
-                    not old_pick.get("official_reconciled")
-                    and wager_has_source_post(old_pick, post_id)
-                ):
-                    old_source_rows.append(old_pick)
-
-                    if detach_source_evidence(old_pick, post_id):
-                        rebuilt_existing.append(old_pick)
-                        corroborated_rows_preserved += 1
-                    else:
-                        source_only_rows_removed += 1
-                    continue
-
-                rebuilt_existing.append(old_pick)
-
-            existing = rebuilt_existing
-
-            # Recompute from the rows that actually remain.  A corroborated row
-            # may retain the same canonical key after this source is detached.
-            seen_wagers = {
-                canonical_pick_key(pick)
-                for pick in existing
-            }
-
-            print(
-                "REBUILDING VALIDATED SOURCE POST:",
-                post_id,
-                "| prior provisional rows:",
-                len(old_source_rows),
-                "| corroborated rows preserved:",
-                corroborated_rows_preserved,
-                "| source-only rows removed:",
-                source_only_rows_removed,
-            )
+        # V21 is deliberately NON-DESTRUCTIVE.  Previously committed rows are
+        # migrated above and never deleted/rebuilt from a fresh model read.  If
+        # execution reaches here, this source had no trustworthy prior ledger
+        # snapshot and is being treated like a new transaction.
 
         # ----------------------------------------------------
         # PHASE 3: BUILD THE TRANSACTION IN MEMORY
@@ -6137,6 +6349,7 @@ def process_normal_posts(
 
         pending_rows = []
         pending_keys = set()
+        pending_source_evidence = []
 
         transaction_failed = False
 
@@ -6177,12 +6390,7 @@ def process_normal_posts(
                     )
 
                     if exact_existing is not None:
-                        register_source_evidence(
-                            exact_existing,
-                            post=post,
-                            post_url=post_url,
-                            reply_hint=reply_hint,
-                        )
+                        pending_source_evidence.append(exact_existing)
 
                     duplicate_count += 1
 
@@ -6203,7 +6411,7 @@ def process_normal_posts(
                         extracted.get(
                             "matchup"
                         ),
-                        "| source corroboration recorded",
+                        "| source corroboration staged",
                     )
 
                     continue
@@ -6221,12 +6429,7 @@ def process_normal_posts(
                 )
 
                 if relaxed_existing is not None:
-                    register_source_evidence(
-                        relaxed_existing,
-                        post=post,
-                        post_url=post_url,
-                        reply_hint=reply_hint,
-                    )
+                    pending_source_evidence.append(relaxed_existing)
 
                     duplicate_count += 1
 
@@ -6241,7 +6444,7 @@ def process_normal_posts(
                         relaxed_existing.get("selection"),
                         "| existing matchup:",
                         relaxed_existing.get("matchup"),
-                        "| source corroboration recorded",
+                        "| source corroboration staged",
                     )
 
                     continue
@@ -6320,6 +6523,22 @@ def process_normal_posts(
         # ONLY NOW may the post become processed.
         # ----------------------------------------------------
 
+        # Duplicate/corroborating source evidence is committed only after the
+        # whole post transaction has validated.  A failed row can no longer
+        # leave partial provenance behind.
+        evidence_seen = set()
+        for existing_pick in pending_source_evidence:
+            marker = id(existing_pick)
+            if marker in evidence_seen:
+                continue
+            evidence_seen.add(marker)
+            register_source_evidence(
+                existing_pick,
+                post=post,
+                post_url=post_url,
+                reply_hint=reply_hint,
+            )
+
         for key, stored in pending_rows:
             existing.append(
                 stored
@@ -6359,6 +6578,11 @@ def process_normal_posts(
 
         failed_ids.discard(
             post_id
+        )
+        post_snapshots[post_id] = _snapshot_for_post(
+            existing,
+            post_id,
+            kind="PICK_POST",
         )
 
         validated_post_count += 1
@@ -6400,6 +6624,12 @@ def process_normal_posts(
         )
         for post_id in retained_processed_ids
         if post_id in post_validation_versions
+    }
+
+    state[POST_SNAPSHOTS_KEY] = {
+        post_id: post_snapshots[post_id]
+        for post_id in retained_processed_ids
+        if post_id in post_snapshots
     }
 
     state[
@@ -8664,6 +8894,15 @@ def ingest():
     # --------------------------------------------------------
     # 3. Retry previously failed posts.
     # --------------------------------------------------------
+
+    # Preserve the queue membership for process_normal_posts.  The fetch layer
+    # removes successfully fetched IDs from failed_post_ids before validation;
+    # V21 keeps this ephemeral copy so only a successful transaction/migration
+    # can actually clear the retry condition.
+    state["_retry_post_ids_current_run"] = list(
+        state.get("failed_post_ids", [])
+        or []
+    )
 
     retry_posts, retry_media = (
         fetch_retry_posts(
