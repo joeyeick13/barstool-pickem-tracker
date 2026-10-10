@@ -691,6 +691,16 @@ AMBIGUOUS_CONTEXT_GROUPS = {
         "oklahoma state",
         "oregon state",
     },
+    # "Ohio" is a legitimate standalone school, but compact source text can
+    # also shorten "Miami (OH)" to just "Ohio". Keep this contextual only:
+    # the second matchup team must make exactly one ESPN event possible.
+    # Example: UMass + Ohio resolves to Miami (OH) @ UMass, while CMU + Ohio
+    # still resolves to Central Michigan @ Ohio. Single-team Ohio still means the Ohio Bobcats; the Miami (OH) interpretation
+    # is available only inside a complete two-team matchup.
+    "ohio": {
+        "ohio",
+        "miami ohio",
+    },
     # GSU can mean Georgia State or Georgia Southern.  It is intentionally
     # contextual so an opponent (for example JMU) must disambiguate it.
     "gsu": {
@@ -859,6 +869,19 @@ def event_contains_team(
 
     if not hint:
         return False
+
+    # "Ohio" remains a safe exact one-team identity for the Ohio Bobcats.
+    # Its additional Miami (OH) interpretation is permitted ONLY inside
+    # complete two-team matching, where the counterpart disambiguates it.
+    if norm(hint) == "ohio":
+        hint_aliases = alias_group(hint)
+        return any(
+            bool(
+                competitor_aliases(competitor)
+                & hint_aliases
+            )
+            for competitor in competitors(event)
+        )
 
     if (
         is_ambiguous_hint(
