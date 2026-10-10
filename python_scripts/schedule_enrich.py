@@ -353,16 +353,6 @@ AMBIGUOUS_CONTEXT_GROUPS = {
         "oklahoma state",
         "oregon state",
     },
-    # "Ohio" is a legitimate standalone school, but compact source text can
-    # also shorten "Miami (OH)" to just "Ohio". Keep this contextual only:
-    # the second matchup team must make exactly one ESPN event possible.
-    # Example: UMass + Ohio resolves to Miami (OH) @ UMass, while CMU + Ohio
-    # still resolves to Central Michigan @ Ohio. Single-team Ohio still means the Ohio Bobcats; the Miami (OH) interpretation
-    # is available only inside a complete two-team matchup.
-    "ohio": {
-        "ohio",
-        "miami ohio",
-    },
     # GSU is context-dependent between Georgia State and Georgia Southern.
     # A complete matchup (for example JMU @ GSU) can safely disambiguate it.
     "gsu": {
@@ -1092,11 +1082,41 @@ def apply_match(
         "game_match_confidence"
     ] = confidence
 
-    pick[
-        "game_matchup"
-    ] = event_matchup_text(
+    resolved_matchup = event_matchup_text(
         event
     )
+
+    pick[
+        "game_matchup"
+    ] = resolved_matchup
+
+    # A UNIQUE_SELECTED_TEAM resolution is independent evidence tying this
+    # wager to exactly one ESPN event.  When ingestion preserved only a team
+    # anchor (for example "Mizzou Over 50.5") and no complete two-team
+    # matchup, persist the canonical ESPN matchup so full-game totals satisfy
+    # the same identity invariant as every other wager.
+    #
+    # Do NOT do this for a bare total resolved only from a pre-existing event
+    # ID; those remain fail-closed because they have no independent source
+    # anchor.  Source selection/line/picker/week are never changed.
+    current_hints = best_matchup_hints(
+        pick
+    )
+
+    if (
+        resolved_matchup
+        and len(current_hints) != 2
+        and "UNIQUE_SELECTED_TEAM" in clean_text(method).upper()
+    ):
+        if pick.get("matchup") is not None:
+            preserve_original_value(
+                pick,
+                "pre_schedule_enrich_matchup",
+                "matchup",
+            )
+
+        pick["matchup"] = resolved_matchup
+        pick["matchup_completed_from_event"] = True
 
     pick[
         "game_match_review_reason"
