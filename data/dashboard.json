@@ -1,26 +1,26 @@
 {
-  "updated_at": "2026-10-11T03:06:46.359896+00:00",
+  "updated_at": "2026-10-12T00:10:54.560038+00:00",
   "cappers": [
     {
       "picker": "Big Cat",
-      "wins": 110,
-      "losses": 93,
+      "wins": 113,
+      "losses": 97,
       "pushes": 3,
-      "win_pct": 54.2
+      "win_pct": 53.8
     },
     {
       "picker": "Stool Presidente",
-      "wins": 32,
+      "wins": 34,
       "losses": 32,
       "pushes": 1,
-      "win_pct": 50.0
+      "win_pct": 51.5
     },
     {
       "picker": "Rico Bosco",
       "wins": 54,
-      "losses": 34,
+      "losses": 36,
       "pushes": 0,
-      "win_pct": 61.4
+      "win_pct": 60.0
     }
   ],
   "win_pct_history": {
@@ -47,7 +47,7 @@
       },
       {
         "week": 6,
-        "win_pct": 54.2
+        "win_pct": 53.8
       }
     ],
     "Stool Presidente": [
@@ -73,7 +73,7 @@
       },
       {
         "week": 6,
-        "win_pct": 50.0
+        "win_pct": 51.5
       }
     ],
     "Rico Bosco": [
@@ -99,7 +99,7 @@
       },
       {
         "week": 6,
-        "win_pct": 61.4
+        "win_pct": 60.0
       }
     ]
   },
@@ -160,7 +160,7 @@
       "competition_id": "401869949",
       "game_time": "2026-10-11T00:10Z",
       "event_matchup": "James Madison @ GA Southern",
-      "event_status": "STATUS_IN_PROGRESS",
+      "event_status": "STATUS_FINAL",
       "event_resolution_method": "EXISTING_EVENT_ID",
       "game_match_status": "MATCHED",
       "game_match_source": "ESPN",
@@ -172,10 +172,14 @@
       "matchup_completed_from_event": true,
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.018219+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.251965+00:00",
       "event_resolution_reason": null,
-      "status": "OPEN",
-      "result": null
+      "result": "LOSS",
+      "status": "FINAL",
+      "final_score": "GASO 24 - JMU 27",
+      "profit": -1.0,
+      "graded_at": "2026-10-12T00:10:53.907939+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Big Cat",
@@ -236,13 +240,13 @@
       "matchup_completed_from_event": true,
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.019029+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.253076+00:00",
       "event_resolution_reason": null,
       "result": "LOSS",
       "status": "FINAL",
       "final_score": "PSU 23 - USC 31",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:46.239244+00:00",
+      "graded_at": "2026-10-12T00:10:54.082645+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -293,7 +297,7 @@
       "competition_id": "401856712",
       "game_time": "2026-10-10T23:30Z",
       "event_matchup": "Georgia @ Alabama",
-      "event_status": "STATUS_IN_PROGRESS",
+      "event_status": "STATUS_FINAL",
       "event_resolution_method": "EXISTING_EVENT_ID",
       "game_match_status": "MATCHED",
       "game_match_source": "ESPN",
@@ -305,10 +309,14 @@
       "matchup_completed_from_event": true,
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.019313+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.253480+00:00",
       "event_resolution_reason": null,
-      "status": "OPEN",
-      "result": null
+      "result": "LOSS",
+      "status": "FINAL",
+      "final_score": "ALA 17 - UGA 20",
+      "profit": -1.0,
+      "graded_at": "2026-10-12T00:10:54.238801+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Big Cat",
@@ -358,7 +366,7 @@
       "competition_id": "401856808",
       "game_time": "2026-10-11T02:30Z",
       "event_matchup": "Hawai'i @ Arizona St",
-      "event_status": "STATUS_IN_PROGRESS",
+      "event_status": "STATUS_FINAL",
       "event_resolution_method": "EXISTING_EVENT_ID",
       "game_match_status": "MATCHED",
       "game_match_source": "ESPN",
@@ -369,10 +377,14 @@
       "matchup_completed_from_event": true,
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.020132+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.254672+00:00",
       "event_resolution_reason": null,
-      "status": "OPEN",
-      "result": null
+      "result": "LOSS",
+      "status": "FINAL",
+      "final_score": "ASU 30 - HAW 12",
+      "profit": -1.0,
+      "graded_at": "2026-10-12T00:10:54.402044+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Big Cat",
@@ -433,13 +445,13 @@
       "matchup_completed_from_event": true,
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.016147+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.249031+00:00",
       "event_resolution_reason": null,
       "result": "LOSS",
       "status": "FINAL",
       "final_score": "MIZ 27 - TA&M 6",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:45.819439+00:00",
+      "graded_at": "2026-10-12T00:10:53.453236+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -502,13 +514,13 @@
       "matchup_completed_from_event": true,
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.016476+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.249489+00:00",
       "event_resolution_reason": null,
       "result": "WIN",
       "status": "FINAL",
       "final_score": "OKST 42 - UCF 28",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:45.943972+00:00",
+      "graded_at": "2026-10-12T00:10:53.536071+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -570,13 +582,13 @@
       "matchup_completed_from_event": true,
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.017195+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.250503+00:00",
       "event_resolution_reason": null,
       "result": "WIN",
       "status": "FINAL",
       "final_score": "ND 58 - STAN 7",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:46.000641+00:00",
+      "graded_at": "2026-10-12T00:10:53.702482+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -638,13 +650,13 @@
       "matchup_completed_from_event": true,
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.017887+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.251479+00:00",
       "event_resolution_reason": null,
       "result": "LOSS",
       "status": "FINAL",
       "final_score": "ARK 17 - TENN 24",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:46.116968+00:00",
+      "graded_at": "2026-10-12T00:10:53.805832+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -706,13 +718,13 @@
       "matchup_completed_from_event": true,
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.012611+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.244127+00:00",
       "event_resolution_reason": null,
       "result": "LOSS",
       "status": "FINAL",
       "final_score": "LOU 44 - FSU 20",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:45.068046+00:00",
+      "graded_at": "2026-10-12T00:10:52.702065+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -774,13 +786,13 @@
       "matchup_completed_from_event": true,
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.013344+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.245161+00:00",
       "event_resolution_reason": null,
       "result": "LOSS",
       "status": "FINAL",
       "final_score": "BYU 24 - ISU 10",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:45.214273+00:00",
+      "graded_at": "2026-10-12T00:10:52.752427+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -842,13 +854,13 @@
       "matchup_completed_from_event": true,
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.014029+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.246118+00:00",
       "event_resolution_reason": null,
       "result": "LOSS",
       "status": "FINAL",
       "final_score": "WASH 24 - IOWA 41",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:45.317567+00:00",
+      "graded_at": "2026-10-12T00:10:52.841155+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -911,13 +923,13 @@
       "matchup_completed_from_event": true,
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.014347+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.246572+00:00",
       "event_resolution_reason": null,
       "result": "WIN",
       "status": "FINAL",
       "final_score": "MASS 19 - M-OH 20",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:45.424481+00:00",
+      "graded_at": "2026-10-12T00:10:53.037313+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -980,13 +992,13 @@
       "matchup_completed_from_event": true,
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.014649+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.247015+00:00",
       "event_resolution_reason": null,
       "result": "LOSS",
       "status": "FINAL",
       "final_score": "VAN 17 - MISS 52",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:45.507149+00:00",
+      "graded_at": "2026-10-12T00:10:53.124816+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -1049,13 +1061,13 @@
       "matchup_completed_from_event": true,
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.015014+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.247443+00:00",
       "event_resolution_reason": null,
       "result": "LOSS",
       "status": "FINAL",
       "final_score": "GT 28 - DUKE 25",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:45.626952+00:00",
+      "graded_at": "2026-10-12T00:10:53.247759+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -1117,13 +1129,13 @@
       "matchup_completed_from_event": true,
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.015754+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.248472+00:00",
       "event_resolution_reason": null,
       "result": "WIN",
       "status": "FINAL",
       "final_score": "PITT 17 - UNC 21",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:45.704072+00:00",
+      "graded_at": "2026-10-12T00:10:53.348926+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -1180,7 +1192,7 @@
       "competition_id": "401869949",
       "game_time": "2026-10-11T00:10Z",
       "event_matchup": "James Madison @ GA Southern",
-      "event_status": "STATUS_IN_PROGRESS",
+      "event_status": "STATUS_FINAL",
       "event_resolution_method": "EXISTING_EVENT_ID",
       "game_match_status": "MATCHED",
       "game_match_source": "ESPN",
@@ -1188,7 +1200,7 @@
       "game_matchup": "James Madison @ GA Southern",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:33.067910+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:14.452624+00:00",
       "pre_espn_repair_team": "Georgia Southern",
       "matchup_metadata_repaired": true,
       "matchup_metadata_repair_source": "ESPN_LOCKED_EVENT",
@@ -1200,8 +1212,12 @@
       "canonical_matchup_event_id": "401869949",
       "matchup_completed_from_event": true,
       "event_resolution_reason": null,
-      "status": "OPEN",
-      "result": null
+      "result": "WIN",
+      "status": "FINAL",
+      "final_score": "GASO 24 - JMU 27",
+      "profit": 0.909,
+      "graded_at": "2026-10-12T00:10:46.401211+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Stool Presidente",
@@ -1257,7 +1273,7 @@
       "game_matchup": "Indiana @ Nebraska",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.005228+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.233482+00:00",
       "pre_schedule_enrich_matchup": "IU @ NEB",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401858481",
@@ -1267,7 +1283,7 @@
       "status": "FINAL",
       "final_score": "NEB 17 - IU 20",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:43.889644+00:00",
+      "graded_at": "2026-10-12T00:10:51.590746+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -1324,7 +1340,7 @@
       "game_matchup": "North Carolina @ Pitt",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.005963+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.234508+00:00",
       "pre_schedule_enrich_matchup": "UNC @ PITT",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401858256",
@@ -1334,7 +1350,7 @@
       "status": "FINAL",
       "final_score": "PITT 17 - UNC 21",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:44.054329+00:00",
+      "graded_at": "2026-10-12T00:10:51.702594+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -1391,7 +1407,7 @@
       "game_matchup": "Ball State @ Northwestern",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.006704+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.235723+00:00",
       "pre_schedule_enrich_matchup": "BALL @ NW",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401858482",
@@ -1401,7 +1417,7 @@
       "status": "FINAL",
       "final_score": "NU 45 - BALL 14",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:44.162200+00:00",
+      "graded_at": "2026-10-12T00:10:51.781020+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -1458,7 +1474,7 @@
       "game_matchup": "UCLA @ Oregon",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.007363+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.236691+00:00",
       "pre_schedule_enrich_matchup": "UCLA @ UO",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401858484",
@@ -1468,7 +1484,7 @@
       "status": "FINAL",
       "final_score": "ORE 15 - UCLA 17",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:44.348289+00:00",
+      "graded_at": "2026-10-12T00:10:51.924336+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -1525,7 +1541,7 @@
       "game_matchup": "Texas @ Oklahoma",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.008044+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.237647+00:00",
       "pre_schedule_enrich_matchup": "Tex @ OU",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401856717",
@@ -1535,7 +1551,7 @@
       "status": "FINAL",
       "final_score": "OU 27 - TEX 24",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:44.460294+00:00",
+      "graded_at": "2026-10-12T00:10:52.020712+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -1592,7 +1608,7 @@
       "game_matchup": "Stanford @ Notre Dame",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.008767+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.238654+00:00",
       "pre_schedule_enrich_matchup": "STAN @ ND",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401858257",
@@ -1602,7 +1618,7 @@
       "status": "FINAL",
       "final_score": "ND 58 - STAN 7",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:44.567512+00:00",
+      "graded_at": "2026-10-12T00:10:52.348530+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -1659,7 +1675,7 @@
       "game_matchup": "Maryland @ Ohio State",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.009530+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.239734+00:00",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401858483",
       "matchup_completed_from_event": true,
@@ -1668,7 +1684,7 @@
       "status": "FINAL",
       "final_score": "OSU 45 - MD 16",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:44.680002+00:00",
+      "graded_at": "2026-10-12T00:10:52.438934+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -1725,7 +1741,7 @@
       "game_matchup": "San Diego St @ Oregon St",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.010408+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.240973+00:00",
       "pre_schedule_enrich_matchup": "SDSU @ ORE ST",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401860902",
@@ -1735,7 +1751,7 @@
       "status": "FINAL",
       "final_score": "ORST 66 - SDSU 14",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:44.735551+00:00",
+      "graded_at": "2026-10-12T00:10:52.507766+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -1792,7 +1808,7 @@
       "game_matchup": "LSU @ Kentucky",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.011103+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.241953+00:00",
       "pre_schedule_enrich_matchup": "LSU @ UK",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401856715",
@@ -1802,7 +1818,7 @@
       "status": "FINAL",
       "final_score": "UK 35 - LSU 34",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:44.874904+00:00",
+      "graded_at": "2026-10-12T00:10:52.575199+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -1851,7 +1867,7 @@
       "competition_id": "401856712",
       "game_time": "2026-10-10T23:30Z",
       "event_matchup": "Georgia @ Alabama",
-      "event_status": "STATUS_IN_PROGRESS",
+      "event_status": "STATUS_FINAL",
       "event_resolution_method": "EXISTING_EVENT_ID",
       "game_match_status": "MATCHED",
       "game_match_source": "ESPN",
@@ -1859,14 +1875,18 @@
       "game_matchup": "Georgia @ Alabama",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.011814+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.242954+00:00",
       "pre_schedule_enrich_matchup": "UGA @ Bama",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401856712",
       "matchup_completed_from_event": true,
       "event_resolution_reason": null,
-      "status": "OPEN",
-      "result": null
+      "result": "WIN",
+      "status": "FINAL",
+      "final_score": "ALA 17 - UGA 20",
+      "profit": 0.909,
+      "graded_at": "2026-10-12T00:10:52.648925+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Rico Bosco",
@@ -1930,7 +1950,7 @@
       "game_matchup": "Air Force @ N Illinois",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:33.069610+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:14.455039+00:00",
       "pre_espn_repair_team": "Air Force",
       "matchup_metadata_repaired": true,
       "matchup_metadata_repair_source": "ESPN_LOCKED_EVENT",
@@ -1946,7 +1966,7 @@
       "status": "FINAL",
       "final_score": "NIU 7 - AFA 28",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:39.400972+00:00",
+      "graded_at": "2026-10-12T00:10:46.571079+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -2003,7 +2023,7 @@
       "game_matchup": "Sam Houston @ Liberty",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:37.234539+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:20.163312+00:00",
       "pre_schedule_enrich_matchup": "SHSU @ Lib",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401870766",
@@ -2013,7 +2033,7 @@
       "status": "FINAL",
       "final_score": "LIB 35 - SHSU 3",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:42.938120+00:00",
+      "graded_at": "2026-10-12T00:10:49.210076+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -2064,7 +2084,7 @@
       "canonical_matchup_event_id": "401858481",
       "matchup_completed_from_event": true,
       "matchup_source": "ATOMIC_INGEST_SOURCE_MATCHUP",
-      "matchup_source_verified_at": "2026-10-11T03:05:18.350143+00:00",
+      "matchup_source_verified_at": "2026-10-12T00:08:56.688046+00:00",
       "event_id": "401858481",
       "competition_id": "401858481",
       "game_time": "2026-10-10T16:00Z",
@@ -2077,12 +2097,12 @@
       "game_matchup": "Indiana @ Nebraska",
       "game_match_review_reason": null,
       "event_resolution_reason": null,
-      "schedule_checked_at": "2026-10-11T03:05:37.428909+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:20.434500+00:00",
       "result": "WIN",
       "status": "FINAL",
       "final_score": "NEB 17 - IU 20",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:43.006601+00:00",
+      "graded_at": "2026-10-12T00:10:49.267134+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -2133,7 +2153,7 @@
       "canonical_matchup_event_id": "401858260",
       "matchup_completed_from_event": true,
       "matchup_source": "ATOMIC_INGEST_SOURCE_MATCHUP",
-      "matchup_source_verified_at": "2026-10-11T03:05:18.350156+00:00",
+      "matchup_source_verified_at": "2026-10-12T00:08:56.688063+00:00",
       "event_id": "401858260",
       "competition_id": "401858260",
       "game_time": "2026-10-10T16:00Z",
@@ -2146,12 +2166,12 @@
       "game_matchup": "Wake Forest @ NC State",
       "game_match_review_reason": null,
       "event_resolution_reason": null,
-      "schedule_checked_at": "2026-10-11T03:05:37.616894+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:20.695487+00:00",
       "result": "LOSS",
       "status": "FINAL",
       "final_score": "NCSU 14 - WAKE 38",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:43.153174+00:00",
+      "graded_at": "2026-10-12T00:10:49.410876+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -2208,7 +2228,7 @@
       "game_matchup": "UCLA @ Oregon",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:37.617616+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:20.696473+00:00",
       "pre_schedule_enrich_matchup": "UCLA @ UO",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401858484",
@@ -2218,7 +2238,7 @@
       "status": "FINAL",
       "final_score": "ORE 15 - UCLA 17",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:43.309381+00:00",
+      "graded_at": "2026-10-12T00:10:49.491769+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -2275,7 +2295,7 @@
       "game_matchup": "Texas @ Oklahoma",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:37.618310+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:20.697445+00:00",
       "pre_schedule_enrich_matchup": "Tex @ OU",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401856717",
@@ -2285,7 +2305,7 @@
       "status": "FINAL",
       "final_score": "OU 27 - TEX 24",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:43.443031+00:00",
+      "graded_at": "2026-10-12T00:10:49.547628+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -2336,7 +2356,7 @@
       "canonical_matchup_event_id": "401862796",
       "matchup_completed_from_event": true,
       "matchup_source": "ATOMIC_INGEST_SOURCE_MATCHUP",
-      "matchup_source_verified_at": "2026-10-11T03:05:18.350169+00:00",
+      "matchup_source_verified_at": "2026-10-12T00:08:56.688081+00:00",
       "event_id": "401862796",
       "competition_id": "401862796",
       "game_time": "2026-10-10T19:30Z",
@@ -2349,12 +2369,12 @@
       "game_matchup": "Charlotte @ North Texas",
       "game_match_review_reason": null,
       "event_resolution_reason": null,
-      "schedule_checked_at": "2026-10-11T03:05:37.806567+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:20.957791+00:00",
       "result": "WIN",
       "status": "FINAL",
       "final_score": "UNT 50 - CLT 10",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:43.552090+00:00",
+      "graded_at": "2026-10-12T00:10:50.943481+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -2411,7 +2431,7 @@
       "game_matchup": "Illinois @ Michigan St",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:37.807506+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:20.959028+00:00",
       "pre_schedule_enrich_matchup": "ILL @ MSU",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401858480",
@@ -2421,7 +2441,7 @@
       "status": "FINAL",
       "final_score": "MSU 37 - ILL 38",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:43.679043+00:00",
+      "graded_at": "2026-10-12T00:10:51.067213+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -2478,7 +2498,7 @@
       "game_matchup": "Buffalo @ Toledo",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:37.808229+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:20.960043+00:00",
       "pre_schedule_enrich_matchup": "BUFF @ TOL",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401866437",
@@ -2488,7 +2508,7 @@
       "status": "FINAL",
       "final_score": "TOL 8 - BUFF 23",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:43.787081+00:00",
+      "graded_at": "2026-10-12T00:10:51.136179+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -2539,7 +2559,7 @@
       "canonical_matchup_event_id": "401856715",
       "matchup_completed_from_event": true,
       "matchup_source": "ATOMIC_INGEST_SOURCE_MATCHUP",
-      "matchup_source_verified_at": "2026-10-11T03:05:18.350182+00:00",
+      "matchup_source_verified_at": "2026-10-12T00:08:56.688098+00:00",
       "event_id": "401856715",
       "competition_id": "401856715",
       "game_time": "2026-10-10T23:00Z",
@@ -2552,12 +2572,12 @@
       "game_matchup": "LSU @ Kentucky",
       "game_match_review_reason": null,
       "event_resolution_reason": null,
-      "schedule_checked_at": "2026-10-11T03:05:38.003046+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.230446+00:00",
       "result": "WIN",
       "status": "FINAL",
       "final_score": "UK 35 - LSU 34",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:43.838169+00:00",
+      "graded_at": "2026-10-12T00:10:51.306321+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -2606,7 +2626,7 @@
       "competition_id": "401858486",
       "game_time": "2026-10-11T00:00Z",
       "event_matchup": "Minnesota @ Purdue",
-      "event_status": "STATUS_IN_PROGRESS",
+      "event_status": "STATUS_FINAL",
       "event_resolution_method": "EXISTING_EVENT_ID",
       "game_match_status": "MATCHED",
       "game_match_source": "ESPN",
@@ -2614,14 +2634,18 @@
       "game_matchup": "Minnesota @ Purdue",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.003838+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.231519+00:00",
       "pre_schedule_enrich_matchup": "MINN @ PUR",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401858486",
       "matchup_completed_from_event": true,
       "event_resolution_reason": null,
-      "status": "OPEN",
-      "result": null
+      "result": "LOSS",
+      "status": "FINAL",
+      "final_score": "PUR 41 - MINN 13",
+      "profit": -1.0,
+      "graded_at": "2026-10-12T00:10:51.433994+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Rico Bosco",
@@ -2669,7 +2693,7 @@
       "competition_id": "401856712",
       "game_time": "2026-10-10T23:30Z",
       "event_matchup": "Georgia @ Alabama",
-      "event_status": "STATUS_IN_PROGRESS",
+      "event_status": "STATUS_FINAL",
       "event_resolution_method": "EXISTING_EVENT_ID",
       "game_match_status": "MATCHED",
       "game_match_source": "ESPN",
@@ -2677,14 +2701,18 @@
       "game_matchup": "Georgia @ Alabama",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:38.004516+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:21.232494+00:00",
       "pre_schedule_enrich_matchup": "UGA @ Bama",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401856712",
       "matchup_completed_from_event": true,
       "event_resolution_reason": null,
-      "status": "OPEN",
-      "result": null
+      "result": "LOSS",
+      "status": "FINAL",
+      "final_score": "ALA 17 - UGA 20",
+      "profit": -1.0,
+      "graded_at": "2026-10-12T00:10:51.537218+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Big Cat",
@@ -2748,7 +2776,7 @@
       "game_matchup": "South Carolina @ Florida",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:33.068735+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:14.453787+00:00",
       "pre_espn_repair_team": "Florida",
       "matchup_metadata_repaired": true,
       "matchup_metadata_repair_source": "ESPN_LOCKED_EVENT",
@@ -2764,7 +2792,7 @@
       "status": "FINAL",
       "final_score": "FLA 19 - SC 38",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:39.289952+00:00",
+      "graded_at": "2026-10-12T00:10:46.455342+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -2821,7 +2849,7 @@
       "game_matchup": "Jax State @ Kennesaw St",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:33.071368+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:14.457520+00:00",
       "pre_schedule_enrich_matchup": "JAX ST @ KSU",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401871051",
@@ -2831,7 +2859,7 @@
       "status": "FINAL",
       "final_score": "KENN 26 - JXST 27",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:39.637427+00:00",
+      "graded_at": "2026-10-12T00:10:46.690807+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -2888,7 +2916,7 @@
       "game_matchup": "New Mexico St @ FIU",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:33.072222+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:14.458844+00:00",
       "pre_schedule_enrich_matchup": "NMST @ FIU",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401871066",
@@ -2898,7 +2926,7 @@
       "status": "FINAL",
       "final_score": "FIU 22 - NMSU 3",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:39.907484+00:00",
+      "graded_at": "2026-10-12T00:10:46.784347+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -2955,7 +2983,7 @@
       "game_matchup": "Sam Houston @ Liberty",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:33.072978+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:14.459912+00:00",
       "pre_schedule_enrich_matchup": "SHSU @ LIB",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401870766",
@@ -2965,7 +2993,7 @@
       "status": "FINAL",
       "final_score": "LIB 35 - SHSU 3",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:40.065828+00:00",
+      "graded_at": "2026-10-12T00:10:46.851699+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -3022,7 +3050,7 @@
       "game_matchup": "South Florida @ UTSA",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:33.073658+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:14.460883+00:00",
       "pre_schedule_enrich_matchup": "USF @ UTSA",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401862794",
@@ -3032,7 +3060,7 @@
       "status": "FINAL",
       "final_score": "UTSA 31 - USF 24",
       "profit": 0.0,
-      "graded_at": "2026-10-11T03:06:40.215662+00:00",
+      "graded_at": "2026-10-12T00:10:46.967074+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -3089,7 +3117,7 @@
       "game_matchup": "South Alabama @ Arkansas St",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:33.074545+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:14.462089+00:00",
       "pre_schedule_enrich_matchup": "S. BAMA @ ARK ST",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401869933",
@@ -3099,7 +3127,7 @@
       "status": "FINAL",
       "final_score": "ARST 49 - USA 56",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:40.333798+00:00",
+      "graded_at": "2026-10-12T00:10:47.039504+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -3156,7 +3184,7 @@
       "game_matchup": "Wyoming @ San José St",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:33.075395+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:14.463211+00:00",
       "pre_schedule_enrich_matchup": "WYO @ SJSU",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401864519",
@@ -3166,7 +3194,7 @@
       "status": "FINAL",
       "final_score": "SJSU 13 - WYO 16",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:40.547545+00:00",
+      "graded_at": "2026-10-12T00:10:47.125665+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -3217,7 +3245,7 @@
       "canonical_matchup_event_id": "401858481",
       "matchup_completed_from_event": true,
       "matchup_source": "ATOMIC_INGEST_SOURCE_MATCHUP",
-      "matchup_source_verified_at": "2026-10-11T03:05:18.350063+00:00",
+      "matchup_source_verified_at": "2026-10-12T00:08:56.687938+00:00",
       "event_id": "401858481",
       "competition_id": "401858481",
       "game_time": "2026-10-10T16:00Z",
@@ -3230,12 +3258,12 @@
       "game_matchup": "Indiana @ Nebraska",
       "game_match_review_reason": null,
       "event_resolution_reason": null,
-      "schedule_checked_at": "2026-10-11T03:05:33.269190+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:14.734824+00:00",
       "result": "LOSS",
       "status": "FINAL",
       "final_score": "NEB 17 - IU 20",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:40.651393+00:00",
+      "graded_at": "2026-10-12T00:10:47.187712+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -3292,7 +3320,7 @@
       "game_matchup": "Sacramento St @ Bowling Green",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:33.270125+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:14.736058+00:00",
       "pre_schedule_enrich_matchup": "SAC @ BGSU",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401866436",
@@ -3302,7 +3330,7 @@
       "status": "FINAL",
       "final_score": "BGSU 38 - SAC 10",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:40.757031+00:00",
+      "graded_at": "2026-10-12T00:10:47.313057+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -3359,7 +3387,7 @@
       "game_matchup": "Tulane @ Army",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:33.270806+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:14.737013+00:00",
       "pre_schedule_enrich_matchup": "TUL @ Army",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401862795",
@@ -3369,7 +3397,7 @@
       "status": "FINAL",
       "final_score": "ARMY 20 - TULN 17",
       "profit": 0.0,
-      "graded_at": "2026-10-11T03:06:40.892210+00:00",
+      "graded_at": "2026-10-12T00:10:47.388687+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -3420,7 +3448,7 @@
       "canonical_matchup_event_id": "401862795",
       "matchup_completed_from_event": true,
       "matchup_source": "ATOMIC_INGEST_SOURCE_MATCHUP",
-      "matchup_source_verified_at": "2026-10-11T03:05:18.350088+00:00",
+      "matchup_source_verified_at": "2026-10-12T00:08:56.687970+00:00",
       "event_id": "401862795",
       "competition_id": "401862795",
       "game_time": "2026-10-10T16:00Z",
@@ -3433,12 +3461,12 @@
       "game_matchup": "Tulane @ Army",
       "game_match_review_reason": null,
       "event_resolution_reason": null,
-      "schedule_checked_at": "2026-10-11T03:05:35.044029+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:17.210569+00:00",
       "result": "LOSS",
       "status": "FINAL",
       "final_score": "ARMY 20 - TULN 17",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:40.983823+00:00",
+      "graded_at": "2026-10-12T00:10:47.459488+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -3495,7 +3523,7 @@
       "game_matchup": "Texas A&M @ Missouri",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:35.045048+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:17.211982+00:00",
       "pre_schedule_enrich_matchup": "A&M @ MIZZ",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401856716",
@@ -3505,7 +3533,7 @@
       "status": "FINAL",
       "final_score": "MIZ 27 - TA&M 6",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:41.086916+00:00",
+      "graded_at": "2026-10-12T00:10:47.540772+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -3562,7 +3590,7 @@
       "game_matchup": "UCF @ Oklahoma St",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:35.045878+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:17.213158+00:00",
       "pre_schedule_enrich_matchup": "UCF @ OKST",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401856824",
@@ -3572,7 +3600,7 @@
       "status": "FINAL",
       "final_score": "OKST 42 - UCF 28",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:41.265284+00:00",
+      "graded_at": "2026-10-12T00:10:47.600042+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -3629,7 +3657,7 @@
       "game_matchup": "Arizona @ West Virginia",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:35.046602+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:17.214206+00:00",
       "pre_schedule_enrich_matchup": "UofA @ WVU",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401856823",
@@ -3639,7 +3667,7 @@
       "status": "FINAL",
       "final_score": "WVU 31 - ARIZ 52",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:41.386033+00:00",
+      "graded_at": "2026-10-12T00:10:47.662096+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -3696,7 +3724,7 @@
       "game_matchup": "Duke @ Georgia Tech",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:35.047333+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:17.215230+00:00",
       "pre_schedule_enrich_matchup": "Duke @ GTech",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401858255",
@@ -3706,7 +3734,7 @@
       "status": "FINAL",
       "final_score": "GT 28 - DUKE 25",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:41.525823+00:00",
+      "graded_at": "2026-10-12T00:10:47.742950+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -3757,7 +3785,7 @@
       "canonical_matchup_event_id": "401858484",
       "matchup_completed_from_event": true,
       "matchup_source": "ATOMIC_INGEST_SOURCE_MATCHUP",
-      "matchup_source_verified_at": "2026-10-11T03:05:18.350103+00:00",
+      "matchup_source_verified_at": "2026-10-12T00:08:56.687991+00:00",
       "event_id": "401858484",
       "competition_id": "401858484",
       "game_time": "2026-10-10T19:30Z",
@@ -3770,12 +3798,12 @@
       "game_matchup": "UCLA @ Oregon",
       "game_match_review_reason": null,
       "event_resolution_reason": null,
-      "schedule_checked_at": "2026-10-11T03:05:35.232698+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:17.469512+00:00",
       "result": "LOSS",
       "status": "FINAL",
       "final_score": "ORE 15 - UCLA 17",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:41.689699+00:00",
+      "graded_at": "2026-10-12T00:10:47.908215+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -3832,7 +3860,7 @@
       "game_matchup": "Texas @ Oklahoma",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:35.233444+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:17.470497+00:00",
       "pre_schedule_enrich_matchup": "Tex @ OU",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401856717",
@@ -3842,7 +3870,7 @@
       "status": "FINAL",
       "final_score": "OU 27 - TEX 24",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:41.818483+00:00",
+      "graded_at": "2026-10-12T00:10:48.007362+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -3893,7 +3921,7 @@
       "canonical_matchup_event_id": "401856825",
       "matchup_completed_from_event": true,
       "matchup_source": "ATOMIC_INGEST_SOURCE_MATCHUP",
-      "matchup_source_verified_at": "2026-10-11T03:05:18.350118+00:00",
+      "matchup_source_verified_at": "2026-10-12T00:08:56.688011+00:00",
       "event_id": "401856825",
       "competition_id": "401856825",
       "game_time": "2026-10-10T19:30Z",
@@ -3906,12 +3934,12 @@
       "game_matchup": "Houston @ Kansas St",
       "game_match_review_reason": null,
       "event_resolution_reason": null,
-      "schedule_checked_at": "2026-10-11T03:05:37.026427+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:19.873504+00:00",
       "result": "LOSS",
       "status": "FINAL",
       "final_score": "KSU 16 - HOU 35",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:41.915828+00:00",
+      "graded_at": "2026-10-12T00:10:48.068919+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -3968,7 +3996,7 @@
       "game_matchup": "C Michigan @ Ohio",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:37.027344+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:19.874777+00:00",
       "pre_schedule_enrich_matchup": "CMU @ Ohio",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401866438",
@@ -3978,7 +4006,7 @@
       "status": "FINAL",
       "final_score": "OHIO 31 - CMU 14",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:42.092280+00:00",
+      "graded_at": "2026-10-12T00:10:48.140064+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -4035,7 +4063,7 @@
       "game_matchup": "Ole Miss @ Vanderbilt",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:37.028080+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:19.875826+00:00",
       "pre_schedule_enrich_matchup": "OLE @ Vandy",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401856718",
@@ -4045,7 +4073,7 @@
       "status": "FINAL",
       "final_score": "VAN 17 - MISS 52",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:42.208671+00:00",
+      "graded_at": "2026-10-12T00:10:48.202614+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -4102,7 +4130,7 @@
       "game_matchup": "UConn @ Temple",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:37.029310+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:19.877692+00:00",
       "pre_schedule_enrich_matchup": "UConn @ TEM",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401861964",
@@ -4112,7 +4140,7 @@
       "status": "FINAL",
       "final_score": "TEM 20 - CONN 34",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:42.354055+00:00",
+      "graded_at": "2026-10-12T00:10:48.253476+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -4169,7 +4197,7 @@
       "game_matchup": "San Diego St @ Oregon St",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:37.030539+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:19.879456+00:00",
       "pre_schedule_enrich_matchup": "SDSU @ OSU",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401860902",
@@ -4233,7 +4261,7 @@
       "game_matchup": "N Dakota St @ UNLV",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:37.032086+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:19.881752+00:00",
       "pre_schedule_enrich_matchup": "NDSU @ UNLV",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401864518",
@@ -4243,7 +4271,7 @@
       "status": "FINAL",
       "final_score": "UNLV 13 - NDSU 7",
       "profit": -1.0,
-      "graded_at": "2026-10-11T03:06:42.586976+00:00",
+      "graded_at": "2026-10-12T00:10:48.460914+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -4300,7 +4328,7 @@
       "game_matchup": "UAB @ Memphis",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:37.033244+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:19.883413+00:00",
       "pre_schedule_enrich_matchup": "UAB @ MEM",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401862798",
@@ -4310,7 +4338,7 @@
       "status": "FINAL",
       "final_score": "MEM 38 - UAB 13",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:42.714533+00:00",
+      "graded_at": "2026-10-12T00:10:48.540672+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -4367,7 +4395,7 @@
       "game_matchup": "LSU @ Kentucky",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:37.034410+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:19.885150+00:00",
       "pre_schedule_enrich_matchup": "LSU @ UK",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401856715",
@@ -4377,7 +4405,7 @@
       "status": "FINAL",
       "final_score": "UK 35 - LSU 34",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:42.815428+00:00",
+      "graded_at": "2026-10-12T00:10:48.630692+00:00",
       "grade_source": "ESPN"
     },
     {
@@ -4426,7 +4454,7 @@
       "competition_id": "401869949",
       "game_time": "2026-10-11T00:10Z",
       "event_matchup": "James Madison @ GA Southern",
-      "event_status": "STATUS_IN_PROGRESS",
+      "event_status": "STATUS_FINAL",
       "event_resolution_method": "EXISTING_EVENT_ID",
       "game_match_status": "MATCHED",
       "game_match_source": "ESPN",
@@ -4434,14 +4462,18 @@
       "game_matchup": "James Madison @ GA Southern",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:37.035672+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:19.886760+00:00",
       "pre_schedule_enrich_matchup": "JMU @ GSU",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401869949",
       "matchup_completed_from_event": true,
       "event_resolution_reason": null,
-      "status": "OPEN",
-      "result": null
+      "result": "LOSS",
+      "status": "FINAL",
+      "final_score": "GASO 24 - JMU 27",
+      "profit": -1.0,
+      "graded_at": "2026-10-12T00:10:48.709946+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Big Cat",
@@ -4489,7 +4521,7 @@
       "competition_id": "401856712",
       "game_time": "2026-10-10T23:30Z",
       "event_matchup": "Georgia @ Alabama",
-      "event_status": "STATUS_IN_PROGRESS",
+      "event_status": "STATUS_FINAL",
       "event_resolution_method": "EXISTING_EVENT_ID",
       "game_match_status": "MATCHED",
       "game_match_source": "ESPN",
@@ -4497,14 +4529,18 @@
       "game_matchup": "Georgia @ Alabama",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:37.036415+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:19.887788+00:00",
       "pre_schedule_enrich_matchup": "UGA @ Bama",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401856712",
       "matchup_completed_from_event": true,
       "event_resolution_reason": null,
-      "status": "OPEN",
-      "result": null
+      "result": "WIN",
+      "status": "FINAL",
+      "final_score": "ALA 17 - UGA 20",
+      "profit": 0.909,
+      "graded_at": "2026-10-12T00:10:48.765953+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Big Cat",
@@ -4554,12 +4590,12 @@
       "canonical_matchup_event_id": "401858486",
       "matchup_completed_from_event": true,
       "matchup_source": "ATOMIC_INGEST_SOURCE_MATCHUP",
-      "matchup_source_verified_at": "2026-10-11T03:05:18.350130+00:00",
+      "matchup_source_verified_at": "2026-10-12T00:08:56.688029+00:00",
       "event_id": "401858486",
       "competition_id": "401858486",
       "game_time": "2026-10-11T00:00Z",
       "event_matchup": "Minnesota @ Purdue",
-      "event_status": "STATUS_IN_PROGRESS",
+      "event_status": "STATUS_FINAL",
       "event_resolution_method": "EXPLICIT_MATCHUP",
       "game_match_status": "MATCHED",
       "game_match_source": "ESPN",
@@ -4567,9 +4603,13 @@
       "game_matchup": "Minnesota @ Purdue",
       "game_match_review_reason": null,
       "event_resolution_reason": null,
-      "schedule_checked_at": "2026-10-11T03:05:37.233034+00:00",
-      "status": "OPEN",
-      "result": null
+      "schedule_checked_at": "2026-10-12T00:09:20.161239+00:00",
+      "result": "WIN",
+      "status": "FINAL",
+      "final_score": "PUR 41 - MINN 13",
+      "profit": 0.909,
+      "graded_at": "2026-10-12T00:10:48.857514+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Big Cat",
@@ -4617,7 +4657,7 @@
       "competition_id": "401856827",
       "game_time": "2026-10-11T00:00Z",
       "event_matchup": "Kansas @ Utah",
-      "event_status": "STATUS_IN_PROGRESS",
+      "event_status": "STATUS_FINAL",
       "event_resolution_method": "EXISTING_EVENT_ID",
       "game_match_status": "MATCHED",
       "game_match_source": "ESPN",
@@ -4625,14 +4665,18 @@
       "game_matchup": "Kansas @ Utah",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:37.233766+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:20.162221+00:00",
       "pre_schedule_enrich_matchup": "KU @ Utah",
       "canonical_matchup_source": "ESPN_EVENT_LOCK",
       "canonical_matchup_event_id": "401856827",
       "matchup_completed_from_event": true,
       "event_resolution_reason": null,
-      "status": "OPEN",
-      "result": null
+      "result": "WIN",
+      "status": "FINAL",
+      "final_score": "UTAH 41 - KU 24",
+      "profit": 0.909,
+      "graded_at": "2026-10-12T00:10:49.069773+00:00",
+      "grade_source": "ESPN"
     },
     {
       "picker": "Big Cat",
@@ -4696,7 +4740,7 @@
       "game_matchup": "Southern Miss @ Troy",
       "game_match_review_reason": null,
       "event_resolution_candidates": [],
-      "schedule_checked_at": "2026-10-11T03:05:33.070422+00:00",
+      "schedule_checked_at": "2026-10-12T00:09:14.456190+00:00",
       "merged_duplicate_audit": [
         {
           "selection": "Troy -10",
@@ -4723,7 +4767,7 @@
       "status": "FINAL",
       "final_score": "TROY 55 - USM 34",
       "profit": 0.909,
-      "graded_at": "2026-10-11T03:06:39.517471+00:00",
+      "graded_at": "2026-10-12T00:10:46.637662+00:00",
       "grade_source": "ESPN"
     },
     {
