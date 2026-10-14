@@ -1,6 +1,6 @@
 {
-  "last_x_post_id": "2109033289927557445",
-  "updated_at": "2026-10-12T00:08:56.668391+00:00",
+  "last_x_post_id": "2110484283446247634",
+  "updated_at": "2026-10-14T22:56:58.873030+00:00",
   "backfill_complete": true,
   "reply_backfill_complete": false,
   "reply_recovery_complete": true,
@@ -107,7 +107,13 @@
     "2108674371141402859",
     "2108935596471415294",
     "2108943414343651359",
-    "2109033289927557445"
+    "2109033289927557445",
+    "2109741974672527608",
+    "2109741990308893018",
+    "2110023877531152537",
+    "2110118421144736170",
+    "2110154393865883843",
+    "2110484283446247634"
   ],
   "processed_ids_initialized_v2": true,
   "failed_post_ids": [],
@@ -126,53 +132,122 @@
   "processed_ids_initialized_v4": true,
   "processed_ids_initialized_v6": true,
   "normal_post_validation_versions": {
-    "2107984115421049061": 21,
-    "2105441419024388152": 21,
-    "2105321303221670211": 19,
-    "2108674371141402859": 21,
-    "2105438279026012547": 21,
-    "2107512821437067398": 21,
-    "2106228566002213086": 21,
-    "2107973156656816496": 21,
-    "2107569390036173195": 21,
+    "2110154393865883843": 21,
+    "2105724036982735016": 21,
+    "2106229127787516041": 21,
     "2107974693697282463": 21,
+    "2109033289927557445": 21,
+    "2110118421144736170": 21,
+    "2108381208594059670": 21,
+    "2108243359265706244": 21,
+    "2107968779699515613": 21,
+    "2109741990308893018": 21,
+    "2108674371141402859": 21,
+    "2105709457015488960": 21,
+    "2109741974672527608": 21,
+    "2106228566002213086": 21,
+    "2108943414343651359": 21,
     "2107983525760634935": 21,
     "2105432513543864811": 21,
-    "2108935596471415294": 21,
-    "2107968779699515613": 21,
-    "2107966700918308976": 21,
-    "2107851449996579226": 21,
-    "2106225598817501385": 21,
-    "2105724036982735016": 21,
-    "2105721986127397292": 21,
     "2107973213162746204": 21,
-    "2106402854898630999": 21,
+    "2105321303221670211": 19,
     "2107197461064265968": 21,
-    "2108943414343651359": 21,
-    "2108243359265706244": 21,
-    "2105709457015488960": 21,
+    "2105721986127397292": 21,
+    "2106402854898630999": 21,
+    "2108935596471415294": 21,
+    "2110023877531152537": 21,
+    "2107569390036173195": 21,
+    "2107512821437067398": 21,
+    "2105438279026012547": 21,
+    "2107984115421049061": 21,
+    "2107851449996579226": 21,
+    "2105441419024388152": 21,
     "2108292413085139120": 21,
+    "2105748653637857496": 21,
+    "2107973156656816496": 21,
+    "2106225598817501385": 21,
+    "2107966700918308976": 21,
+    "2110484283446247634": 21,
     "2108219326868107722": 21,
-    "2106229127787516041": 21,
-    "2107994029636161908": 21,
-    "2108381208594059670": 21,
-    "2109033289927557445": 21,
-    "2105748653637857496": 21
+    "2107994029636161908": 21
   },
   "normal_post_snapshots_v21": {
-    "2107984115421049061": {
+    "2110154393865883843": {
       "validation_version": 21,
-      "kind": "NO_WAGER_ROWS",
+      "kind": "VALIDATED_NON_PICK",
       "wager_count": 0,
       "row_ids": [],
-      "recorded_at": "2026-10-10T22:51:36.178121+00:00"
+      "recorded_at": "2026-10-14T22:54:03.027268+00:00"
     },
-    "2105441419024388152": {
+    "2105724036982735016": {
       "validation_version": 21,
       "kind": "NO_WAGER_ROWS",
       "wager_count": 0,
       "row_ids": [],
-      "recorded_at": "2026-10-10T22:51:36.175046+00:00"
+      "recorded_at": "2026-10-10T22:51:36.175495+00:00"
+    },
+    "2106229127787516041": {
+      "validation_version": 21,
+      "kind": "NO_WAGER_ROWS",
+      "wager_count": 0,
+      "row_ids": [],
+      "recorded_at": "2026-10-10T22:51:36.176096+00:00"
+    },
+    "2107974693697282463": {
+      "validation_version": 21,
+      "kind": "NO_WAGER_ROWS",
+      "wager_count": 0,
+      "row_ids": [],
+      "recorded_at": "2026-10-10T22:51:36.177817+00:00"
+    },
+    "2109033289927557445": {
+      "validation_version": 21,
+      "kind": "PICK_POST",
+      "wager_count": 4,
+      "row_ids": [
+        "75c2f3561f9d2ba4",
+        "8f839c3f64346023",
+        "ced2e42394de9ac4",
+        "e3c7791273b5c825"
+      ],
+      "recorded_at": "2026-10-10T22:52:27.059278+00:00"
+    },
+    "2110118421144736170": {
+      "validation_version": 21,
+      "kind": "PICK_POST",
+      "wager_count": 4,
+      "row_ids": [
+        "29812541e523fe14",
+        "3cf9ed033c61f09d",
+        "97ebaf94e9948c8c",
+        "c203d54bfbce3367"
+      ],
+      "recorded_at": "2026-10-14T22:53:54.876274+00:00"
+    },
+    "2108381208594059670": {
+      "validation_version": 21,
+      "kind": "PICK_POST",
+      "wager_count": 3,
+      "row_ids": [
+        "14d33d4963d3cf3e",
+        "7fc791ab40d120ac",
+        "827b4ff4a0d04376"
+      ],
+      "recorded_at": "2026-10-10T22:51:36.178961+00:00"
+    },
+    "2108243359265706244": {
+      "validation_version": 21,
+      "kind": "NO_WAGER_ROWS",
+      "wager_count": 0,
+      "row_ids": [],
+      "recorded_at": "2026-10-10T22:51:36.178558+00:00"
+    },
+    "2107968779699515613": {
+      "validation_version": 21,
+      "kind": "NO_WAGER_ROWS",
+      "wager_count": 0,
+      "row_ids": [],
+      "recorded_at": "2026-10-10T22:51:36.177359+00:00"
     },
     "2108674371141402859": {
       "validation_version": 21,
@@ -189,19 +264,12 @@
       ],
       "recorded_at": "2026-10-10T22:51:53.337002+00:00"
     },
-    "2105438279026012547": {
+    "2105709457015488960": {
       "validation_version": 21,
       "kind": "NO_WAGER_ROWS",
       "wager_count": 0,
       "row_ids": [],
-      "recorded_at": "2026-10-10T22:51:36.174893+00:00"
-    },
-    "2107512821437067398": {
-      "validation_version": 21,
-      "kind": "NO_WAGER_ROWS",
-      "wager_count": 0,
-      "row_ids": [],
-      "recorded_at": "2026-10-10T22:51:36.176539+00:00"
+      "recorded_at": "2026-10-10T22:51:36.175194+00:00"
     },
     "2106228566002213086": {
       "validation_version": 21,
@@ -210,28 +278,17 @@
       "row_ids": [],
       "recorded_at": "2026-10-10T22:51:36.175951+00:00"
     },
-    "2107973156656816496": {
-      "validation_version": 21,
-      "kind": "NO_WAGER_ROWS",
-      "wager_count": 0,
-      "row_ids": [],
-      "recorded_at": "2026-10-10T22:51:36.177507+00:00"
-    },
-    "2107569390036173195": {
+    "2108943414343651359": {
       "validation_version": 21,
       "kind": "PICK_POST",
-      "wager_count": 1,
+      "wager_count": 4,
       "row_ids": [
-        "7532b212d79b0f56"
+        "294ab832e1159eb1",
+        "515847c6cf437c74",
+        "9ba4f0b2be4ab3dc",
+        "ec73e5d7dd949f15"
       ],
-      "recorded_at": "2026-10-10T22:51:36.176806+00:00"
-    },
-    "2107974693697282463": {
-      "validation_version": 21,
-      "kind": "NO_WAGER_ROWS",
-      "wager_count": 0,
-      "row_ids": [],
-      "recorded_at": "2026-10-10T22:51:36.177817+00:00"
+      "recorded_at": "2026-10-10T22:52:14.979422+00:00"
     },
     "2107983525760634935": {
       "validation_version": 21,
@@ -247,6 +304,34 @@
       "row_ids": [],
       "recorded_at": "2026-10-10T22:51:36.174714+00:00"
     },
+    "2107973213162746204": {
+      "validation_version": 21,
+      "kind": "NO_WAGER_ROWS",
+      "wager_count": 0,
+      "row_ids": [],
+      "recorded_at": "2026-10-10T22:51:36.177652+00:00"
+    },
+    "2107197461064265968": {
+      "validation_version": 21,
+      "kind": "NO_WAGER_ROWS",
+      "wager_count": 0,
+      "row_ids": [],
+      "recorded_at": "2026-10-10T22:51:36.176388+00:00"
+    },
+    "2105721986127397292": {
+      "validation_version": 21,
+      "kind": "NO_WAGER_ROWS",
+      "wager_count": 0,
+      "row_ids": [],
+      "recorded_at": "2026-10-10T22:51:36.175349+00:00"
+    },
+    "2106402854898630999": {
+      "validation_version": 21,
+      "kind": "NO_WAGER_ROWS",
+      "wager_count": 0,
+      "row_ids": [],
+      "recorded_at": "2026-10-10T22:51:36.176242+00:00"
+    },
     "2108935596471415294": {
       "validation_version": 21,
       "kind": "VALIDATED_NON_PICK",
@@ -254,12 +339,77 @@
       "row_ids": [],
       "recorded_at": "2026-10-10T22:52:01.461788+00:00"
     },
-    "2107968779699515613": {
+    "2107569390036173195": {
+      "validation_version": 21,
+      "kind": "PICK_POST",
+      "wager_count": 1,
+      "row_ids": [
+        "7532b212d79b0f56"
+      ],
+      "recorded_at": "2026-10-10T22:51:36.176806+00:00"
+    },
+    "2107512821437067398": {
       "validation_version": 21,
       "kind": "NO_WAGER_ROWS",
       "wager_count": 0,
       "row_ids": [],
-      "recorded_at": "2026-10-10T22:51:36.177359+00:00"
+      "recorded_at": "2026-10-10T22:51:36.176539+00:00"
+    },
+    "2105438279026012547": {
+      "validation_version": 21,
+      "kind": "NO_WAGER_ROWS",
+      "wager_count": 0,
+      "row_ids": [],
+      "recorded_at": "2026-10-10T22:51:36.174893+00:00"
+    },
+    "2107984115421049061": {
+      "validation_version": 21,
+      "kind": "NO_WAGER_ROWS",
+      "wager_count": 0,
+      "row_ids": [],
+      "recorded_at": "2026-10-10T22:51:36.178121+00:00"
+    },
+    "2107851449996579226": {
+      "validation_version": 21,
+      "kind": "NO_WAGER_ROWS",
+      "wager_count": 0,
+      "row_ids": [],
+      "recorded_at": "2026-10-10T22:51:36.176963+00:00"
+    },
+    "2105441419024388152": {
+      "validation_version": 21,
+      "kind": "NO_WAGER_ROWS",
+      "wager_count": 0,
+      "row_ids": [],
+      "recorded_at": "2026-10-10T22:51:36.175046+00:00"
+    },
+    "2108292413085139120": {
+      "validation_version": 21,
+      "kind": "NO_WAGER_ROWS",
+      "wager_count": 0,
+      "row_ids": [],
+      "recorded_at": "2026-10-10T22:51:36.178716+00:00"
+    },
+    "2105748653637857496": {
+      "validation_version": 21,
+      "kind": "NO_WAGER_ROWS",
+      "wager_count": 0,
+      "row_ids": [],
+      "recorded_at": "2026-10-10T22:51:36.175640+00:00"
+    },
+    "2107973156656816496": {
+      "validation_version": 21,
+      "kind": "NO_WAGER_ROWS",
+      "wager_count": 0,
+      "row_ids": [],
+      "recorded_at": "2026-10-10T22:51:36.177507+00:00"
+    },
+    "2106225598817501385": {
+      "validation_version": 21,
+      "kind": "NO_WAGER_ROWS",
+      "wager_count": 0,
+      "row_ids": [],
+      "recorded_at": "2026-10-10T22:51:36.175802+00:00"
     },
     "2107966700918308976": {
       "validation_version": 21,
@@ -322,87 +472,15 @@
       ],
       "recorded_at": "2026-10-10T22:51:36.177202+00:00"
     },
-    "2107851449996579226": {
-      "validation_version": 21,
-      "kind": "NO_WAGER_ROWS",
-      "wager_count": 0,
-      "row_ids": [],
-      "recorded_at": "2026-10-10T22:51:36.176963+00:00"
-    },
-    "2106225598817501385": {
-      "validation_version": 21,
-      "kind": "NO_WAGER_ROWS",
-      "wager_count": 0,
-      "row_ids": [],
-      "recorded_at": "2026-10-10T22:51:36.175802+00:00"
-    },
-    "2105724036982735016": {
-      "validation_version": 21,
-      "kind": "NO_WAGER_ROWS",
-      "wager_count": 0,
-      "row_ids": [],
-      "recorded_at": "2026-10-10T22:51:36.175495+00:00"
-    },
-    "2105721986127397292": {
-      "validation_version": 21,
-      "kind": "NO_WAGER_ROWS",
-      "wager_count": 0,
-      "row_ids": [],
-      "recorded_at": "2026-10-10T22:51:36.175349+00:00"
-    },
-    "2107973213162746204": {
-      "validation_version": 21,
-      "kind": "NO_WAGER_ROWS",
-      "wager_count": 0,
-      "row_ids": [],
-      "recorded_at": "2026-10-10T22:51:36.177652+00:00"
-    },
-    "2106402854898630999": {
-      "validation_version": 21,
-      "kind": "NO_WAGER_ROWS",
-      "wager_count": 0,
-      "row_ids": [],
-      "recorded_at": "2026-10-10T22:51:36.176242+00:00"
-    },
-    "2107197461064265968": {
-      "validation_version": 21,
-      "kind": "NO_WAGER_ROWS",
-      "wager_count": 0,
-      "row_ids": [],
-      "recorded_at": "2026-10-10T22:51:36.176388+00:00"
-    },
-    "2108943414343651359": {
+    "2110484283446247634": {
       "validation_version": 21,
       "kind": "PICK_POST",
-      "wager_count": 4,
+      "wager_count": 2,
       "row_ids": [
-        "294ab832e1159eb1",
-        "515847c6cf437c74",
-        "9ba4f0b2be4ab3dc",
-        "ec73e5d7dd949f15"
+        "30073ff6236a2aba",
+        "487128c6d68cf6ab"
       ],
-      "recorded_at": "2026-10-10T22:52:14.979422+00:00"
-    },
-    "2108243359265706244": {
-      "validation_version": 21,
-      "kind": "NO_WAGER_ROWS",
-      "wager_count": 0,
-      "row_ids": [],
-      "recorded_at": "2026-10-10T22:51:36.178558+00:00"
-    },
-    "2105709457015488960": {
-      "validation_version": 21,
-      "kind": "NO_WAGER_ROWS",
-      "wager_count": 0,
-      "row_ids": [],
-      "recorded_at": "2026-10-10T22:51:36.175194+00:00"
-    },
-    "2108292413085139120": {
-      "validation_version": 21,
-      "kind": "NO_WAGER_ROWS",
-      "wager_count": 0,
-      "row_ids": [],
-      "recorded_at": "2026-10-10T22:51:36.178716+00:00"
+      "recorded_at": "2026-10-14T22:54:17.318548+00:00"
     },
     "2108219326868107722": {
       "validation_version": 21,
@@ -411,49 +489,12 @@
       "row_ids": [],
       "recorded_at": "2026-10-10T22:51:36.178414+00:00"
     },
-    "2106229127787516041": {
-      "validation_version": 21,
-      "kind": "NO_WAGER_ROWS",
-      "wager_count": 0,
-      "row_ids": [],
-      "recorded_at": "2026-10-10T22:51:36.176096+00:00"
-    },
     "2107994029636161908": {
       "validation_version": 21,
       "kind": "NO_WAGER_ROWS",
       "wager_count": 0,
       "row_ids": [],
       "recorded_at": "2026-10-10T22:51:36.178268+00:00"
-    },
-    "2108381208594059670": {
-      "validation_version": 21,
-      "kind": "PICK_POST",
-      "wager_count": 3,
-      "row_ids": [
-        "14d33d4963d3cf3e",
-        "7fc791ab40d120ac",
-        "827b4ff4a0d04376"
-      ],
-      "recorded_at": "2026-10-10T22:51:36.178961+00:00"
-    },
-    "2109033289927557445": {
-      "validation_version": 21,
-      "kind": "PICK_POST",
-      "wager_count": 4,
-      "row_ids": [
-        "75c2f3561f9d2ba4",
-        "8f839c3f64346023",
-        "ced2e42394de9ac4",
-        "e3c7791273b5c825"
-      ],
-      "recorded_at": "2026-10-10T22:52:27.059278+00:00"
-    },
-    "2105748653637857496": {
-      "validation_version": 21,
-      "kind": "NO_WAGER_ROWS",
-      "wager_count": 0,
-      "row_ids": [],
-      "recorded_at": "2026-10-10T22:51:36.175640+00:00"
     }
   }
 }
