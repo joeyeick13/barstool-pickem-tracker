@@ -7580,6 +7580,368 @@ No markdown. No commentary.
 
 
 # ============================================================
+# OFFICIAL RESULT CROSS-CHECK AGAINST VERIFIED ESPN GRADES
+# ============================================================
+
+OFFICIAL_RESULT_VALUES = {
+    "WIN",
+    "LOSS",
+    "PUSH",
+}
+
+
+def _stored_result_is_independently_verified(pick):
+    """Return True only for a finalized ESPN-graded provisional wager.
+
+    PAT HILL result cards are authoritative source material, but the vision
+    model can occasionally misread a green check/red X while still transcribing
+    the wager itself correctly.  We may use an existing tracker result as an
+    independent cross-check only when all of the following are already true:
+
+      * the wager has an ESPN event lock;
+      * schedule enrichment marked the event as MATCHED from ESPN;
+      * the lock confidence is not an UNVERIFIED legacy lock;
+      * the grader finalized the wager from ESPN;
+      * the stored result is WIN/LOSS/PUSH.
+
+    Anything weaker remains ineligible and reconciliation fails closed.
+    """
+    result = str(
+        pick.get("result")
+        or ""
+    ).upper()
+
+    if result not in OFFICIAL_RESULT_VALUES:
+        return False
+
+    if not str(
+        pick.get("event_id")
+        or ""
+    ).strip():
+        return False
+
+    if str(
+        pick.get("game_match_status")
+        or ""
+    ).upper() != "MATCHED":
+        return False
+
+    if str(
+        pick.get("game_match_source")
+        or ""
+    ).upper() != "ESPN":
+        return False
+
+    confidence = str(
+        pick.get("game_match_confidence")
+        or ""
+    ).upper()
+
+    if "UNVERIFIED" in confidence:
+        return False
+
+    if str(
+        pick.get("status")
+        or ""
+    ).upper() != "FINAL":
+        return False
+
+    if str(
+        pick.get("grade_source")
+        or ""
+    ).upper() != "ESPN":
+        return False
+
+    if not pick.get("graded_at"):
+        return False
+
+    return True
+
+
+def _official_result_probe(
+    source_pick,
+    *,
+    picker,
+    target_week,
+):
+    probe = dict(source_pick)
+    probe["picker"] = picker
+    probe["week"] = int(target_week)
+    return probe
+
+
+def _match_official_row_to_verified_existing(
+    source_pick,
+    *,
+    picker,
+    target_week,
+    existing_picks,
+):
+    """Return exactly one independently graded stored wager, or None.
+
+    Matching is deliberately deterministic. Exact canonical identity is tried
+    first.  The existing safe cross-post duplicate matcher is then allowed as a
+    fallback for source-card shorthand (for example a spread row that omits the
+    matchup while retaining the exact team and line).  Multiple candidates are
+    never guessed between.
+    """
+    probe = _official_result_probe(
+        source_pick,
+        picker=picker,
+        target_week=target_week,
+    )
+
+    eligible = [
+        pick
+        for pick in (existing_picks or [])
+        if (
+            normalize_picker_safe(
+                pick.get("picker")
+            ) == picker
+            and pick_week(pick) == int(target_week)
+            and not bool(
+                pick.get("official_reconciled")
+            )
+            and _stored_result_is_independently_verified(
+                pick
+            )
+        )
+    ]
+
+    if not eligible:
+        return None
+
+    probe_key = canonical_pick_key(
+        probe
+    )
+
+    exact = [
+        pick
+        for pick in eligible
+        if canonical_pick_key(pick) == probe_key
+    ]
+
+    if len(exact) == 1:
+        return exact[0]
+
+    if len(exact) > 1:
+        return None
+
+    relaxed = [
+        pick
+        for pick in eligible
+        if (
+            relaxed_duplicate_match(
+                probe,
+                pick,
+            )
+            or relaxed_duplicate_match(
+                pick,
+                probe,
+            )
+        )
+    ]
+
+    if len(relaxed) == 1:
+        return relaxed[0]
+
+    return None
+
+
+def _result_tuple_from_picks(picks):
+    counts = {
+        "WIN": 0,
+        "LOSS": 0,
+        "PUSH": 0,
+    }
+
+    for pick in picks:
+        result = str(
+            pick.get("result")
+            or ""
+        ).upper()
+
+        if result in counts:
+            counts[result] += 1
+
+    return (
+        counts["WIN"],
+        counts["LOSS"],
+        counts["PUSH"],
+    )
+
+
+def reconcile_official_result_markers_with_espn(
+    normalized_picks,
+    *,
+    picker,
+    target_week,
+    printed_record,
+    existing_picks,
+):
+    """Repair only provable PAT HILL result-marker vision errors.
+
+    The card still owns wager membership and literal selection identity.  ESPN
+    is used only to cross-check the WIN/LOSS/PUSH marker for a row that maps
+    1:1 to an already-finalized tracker wager.
+
+    Corrections are committed only when the complete corrected row set exactly
+    equals the printed weekly record.  If that invariant is not satisfied, the
+    original image extraction is returned unchanged and the caller's existing
+    fail-closed validation raises normally.
+    """
+    if not normalized_picks:
+        return normalized_picks, []
+
+    expected = (
+        int(printed_record[0]),
+        int(printed_record[1]),
+        int(printed_record[2]),
+    )
+
+    working = [
+        dict(pick)
+        for pick in normalized_picks
+    ]
+
+    corrections = []
+    used_existing_ids = set()
+
+    for index, source_pick in enumerate(
+        working
+    ):
+        existing = (
+            _match_official_row_to_verified_existing(
+                source_pick,
+                picker=picker,
+                target_week=target_week,
+                existing_picks=existing_picks,
+            )
+        )
+
+        if not existing:
+            continue
+
+        existing_identity = str(
+            existing.get("id")
+            or canonical_pick_key(existing)
+        )
+
+        # One stored wager may corroborate at most one result-card row.  A
+        # duplicate/ambiguous card extraction must never be silently repaired.
+        if existing_identity in used_existing_ids:
+            continue
+
+        used_existing_ids.add(
+            existing_identity
+        )
+
+        image_result = str(
+            source_pick.get("result")
+            or ""
+        ).upper()
+        espn_result = str(
+            existing.get("result")
+            or ""
+        ).upper()
+
+        if (
+            image_result not in OFFICIAL_RESULT_VALUES
+            or espn_result not in OFFICIAL_RESULT_VALUES
+            or image_result == espn_result
+        ):
+            continue
+
+        source_pick[
+            "pat_hill_image_result"
+        ] = image_result
+        source_pick[
+            "result"
+        ] = espn_result
+        source_pick[
+            "result_verification_source"
+        ] = "ESPN_FINAL_CROSSCHECK"
+        source_pick[
+            "result_verification_event_id"
+        ] = str(
+            existing.get("event_id")
+            or ""
+        ) or None
+        source_pick[
+            "result_verification_final_score"
+        ] = existing.get("final_score")
+        source_pick[
+            "result_verification_graded_at"
+        ] = existing.get("graded_at")
+
+        corrections.append(
+            {
+                "selection": clean_text(
+                    source_pick.get("selection")
+                ),
+                "from": image_result,
+                "to": espn_result,
+                "event_id": str(
+                    existing.get("event_id")
+                    or ""
+                ),
+                "final_score": existing.get(
+                    "final_score"
+                ),
+            }
+        )
+
+    if not corrections:
+        return normalized_picks, []
+
+    corrected_record = _result_tuple_from_picks(
+        working
+    )
+
+    if corrected_record != expected:
+        print(
+            "PAT HILL ESPN result-marker cross-check did not fully reconcile:",
+            picker,
+            "| printed:",
+            f"{expected[0]}-{expected[1]}-{expected[2]}",
+            "| corrected rows:",
+            f"{corrected_record[0]}-{corrected_record[1]}-{corrected_record[2]}",
+            "| candidate corrections:",
+            len(corrections),
+            "| action: preserve image extraction and fail closed",
+        )
+
+        return normalized_picks, []
+
+    print(
+        "PAT HILL ESPN RESULT-MARKER CROSS-CHECK PASSED:",
+        picker,
+        "| printed:",
+        f"{expected[0]}-{expected[1]}-{expected[2]}",
+        "| corrected rows:",
+        len(corrections),
+    )
+
+    for correction in corrections:
+        print(
+            "PAT HILL RESULT MARKER CORRECTED FROM VERIFIED ESPN FINAL:",
+            picker,
+            "|",
+            correction["selection"],
+            "|",
+            correction["from"],
+            "->",
+            correction["to"],
+            "| event:",
+            correction["event_id"],
+            "| final:",
+            correction["final_score"],
+        )
+
+    return working, corrections
+
+
+# ============================================================
 # VALIDATE OFFICIAL RESULT CARD EXTRACTION
 # ============================================================
 
@@ -7588,6 +7950,7 @@ def validate_official_results(
     *,
     printed_standings,
     target_week,
+    existing_picks=None,
 ):
     if not safe_bool(
         payload.get("complete")
@@ -7787,11 +8150,35 @@ def validate_official_results(
 
         if printed_total == row_total:
             if (wins, losses, pushes) != (row_wins, row_losses, row_pushes):
-                raise ValueError(
-                    f"{picker} weekly card record does not match row results: "
-                    f"{wins}-{losses}-{pushes} vs "
-                    f"{row_wins}-{row_losses}-{row_pushes}"
+                normalized_picks, result_corrections = (
+                    reconcile_official_result_markers_with_espn(
+                        normalized_picks,
+                        picker=picker,
+                        target_week=target_week,
+                        printed_record=(
+                            wins,
+                            losses,
+                            pushes,
+                        ),
+                        existing_picks=existing_picks,
+                    )
                 )
+
+                if result_corrections:
+                    (
+                        row_wins,
+                        row_losses,
+                        row_pushes,
+                    ) = _result_tuple_from_picks(
+                        normalized_picks
+                    )
+
+                if (wins, losses, pushes) != (row_wins, row_losses, row_pushes):
+                    raise ValueError(
+                        f"{picker} weekly card record does not match row results: "
+                        f"{wins}-{losses}-{pushes} vs "
+                        f"{row_wins}-{row_losses}-{row_pushes}"
+                    )
         else:
             print(
                 "PAT HILL card printed record appears cumulative/contextual:",
@@ -8607,6 +8994,8 @@ def reconcile_pat_hill_standings(
                         printed_standings,
                     target_week=
                         target_week,
+                    existing_picks=
+                        existing,
                 )
             )
 
