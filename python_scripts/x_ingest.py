@@ -102,7 +102,7 @@ MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 22
+CURRENT_INGEST_VALIDATION_VERSION = 23
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -2212,11 +2212,21 @@ Untracked wagers are ignored for tracker completeness.
                         }
                     )
 
-            # Reject an inventory attempt that is internally impossible: a
-            # spread team cannot be absent from its own complete two-team
-            # matchup. This catches OCR/context corruption such as
-            # ``UofA -3`` being paired with ``UofSC @ UF`` before that bad
-            # checklist can overwrite a previously-correct row.
+            # The independent inventory is a COMPLETENESS checklist, not the
+            # final authority on source-team identity. Vision can legitimately
+            # transcribe two different shorthands for the same school between a
+            # wager cell and its matchup heading (for example LTech vs LTU), or
+            # make a one-character OCR error (for example UH vs UK). Do not let
+            # that first-pass disagreement discard an otherwise complete dense
+            # card before the structured source read and ESPN schedule can
+            # independently verify the identity.
+            #
+            # We still record every disagreement explicitly. The later
+            # validate_normal_post_payload() transaction remains fail-closed:
+            # it must map the row, restore source evidence, resolve/repair the
+            # spread through unique ESPN game evidence when needed, and finally
+            # pass validate_normal_pick(). A real contradiction such as UofA
+            # against UofSC @ UF therefore still cannot commit.
             for row in normalized_wagers:
                 row_selection = clean_text(row.get("selection"))
                 row_matchup = clean_text(row.get("matchup"))
@@ -2237,10 +2247,18 @@ Untracked wagers are ignored for tracker completeness.
                         )
                         for side in sides
                     ):
-                        raise ValueError(
-                            "Independent source inventory identity conflict: "
-                            f"{row_selection} is incompatible with matchup "
-                            f"{row_matchup}"
+                        row["identity_needs_confirmation"] = True
+                        row["identity_confirmation_reason"] = (
+                            "SOURCE_TOKEN_MATCHUP_SHORTHAND_DISAGREEMENT"
+                        )
+                        print(
+                            "INDEPENDENT SOURCE INVENTORY IDENTITY DEFERRED:",
+                            post_url,
+                            "|",
+                            row_selection,
+                            "| matchup:",
+                            row_matchup,
+                            "| action: require structured + ESPN confirmation before commit",
                         )
 
             if compound_expansions:
@@ -3532,7 +3550,15 @@ def _source_literal_team_matches_matchup_side(selected, side):
 
 
 def _spread_selected_team_matches_source_matchup(pick):
-    """Fail closed when a spread's selected team contradicts a full matchup."""
+    """Fail closed when a spread's selected team contradicts a full matchup.
+
+    A canonical team repaired from unique ESPN schedule evidence may legitimately
+    no longer be text-equivalent to the untouched source heading (for example
+    Louisiana Tech after the literal source used ``LTU @ ULM``). In that narrow
+    case, accept the canonical identity only when the same transaction recorded
+    complete ESPN repair provenance and the preserved source anchor is still
+    present in the literal two-team matchup.
+    """
     matchup = clean_text(
         pick.get("source_matchup_text")
         or pick.get("matchup")
@@ -3546,10 +3572,44 @@ def _spread_selected_team_matches_source_matchup(pick):
     if not selected:
         return False
 
-    return any(
+    if any(
         _source_literal_team_matches_matchup_side(selected, side)
         for side in sides
+    ):
+        return True
+
+    if not safe_bool(pick.get("espn_ingest_identity_repaired")):
+        return False
+
+    repair_event_id = clean_text(
+        pick.get("espn_ingest_identity_repair_event_id")
     )
+    repair_method = clean_text(
+        pick.get("espn_ingest_identity_repair_method")
+    )
+    repair_anchor = clean_text(
+        pick.get("espn_ingest_identity_repair_source_anchor")
+    )
+    pre_repair_matchup = clean_text(
+        pick.get("pre_espn_ingest_repair_matchup")
+    )
+
+    if not repair_event_id or not repair_method or repair_method == "NONE":
+        return False
+
+    if pre_repair_matchup and norm(pre_repair_matchup) != norm(matchup):
+        return False
+
+    if not repair_anchor:
+        return False
+
+    if not any(
+        _source_literal_team_matches_matchup_side(repair_anchor, side)
+        for side in sides
+    ):
+        return False
+
+    return True
 
 def validate_normal_pick(pick):
     """
@@ -3726,35 +3786,37 @@ def repair_spread_identity_from_espn_schedule(
     slate_cache,
 ):
     """
-    Repair a narrowly defined OCR/transcription failure by using the ESPN
-    schedule as an independent identity check.
+    Repair a narrowly defined spread-team OCR/shorthand disagreement by using
+    the complete ESPN week slate as independent identity evidence.
 
-    This is intentionally limited to SPREAD wagers with a complete two-team
-    matchup. It is designed for cases where one side of the source graphic is
-    read correctly and the other side is visually misread (for example GSU as
-    ASU).
+    This function deliberately sits AFTER literal source preservation and BEFORE
+    final structural validation.  The independent inventory is only a
+    completeness checklist; it is allowed to contain a shorthand or one-character
+    OCR disagreement such as ``LTech`` vs ``LTU`` or ``UH`` vs ``UK``.  No row is
+    committed unless this function (when needed) and validate_normal_pick() can
+    prove a coherent selected team.
 
     Safety rules:
-      - never changes picker, week, market, line, odds, units, or result;
-      - requires the selected team to match one of the two extracted matchup
-        sides, so we know which side of the graphic the wager selected;
-      - uses the OTHER extracted matchup side as the independent anchor;
-      - the anchor must identify exactly one ESPN event in the complete week
-        slate;
-      - that event must contain exactly one team equivalent to the anchor;
-      - only then may the selected-team identity and matchup/opponent metadata
-        be repaired to the other ESPN team;
-      - ambiguous or missing schedule evidence fails closed and leaves the
-        source extraction unchanged.
-
-    Original source-derived identity fields are preserved in
-    pre_espn_ingest_repair_* metadata whenever a repair occurs.
+      - SPREAD only;
+      - never changes picker, week, market, signed line, odds, units, or result;
+      - requires a complete two-team source matchup;
+      - prefers direct/known source-side identity when available;
+      - otherwise one matchup side must independently anchor exactly one ESPN
+        event and the selected source token must plausibly identify the OTHER
+        ESPN team through an exact alias, a close short alias, or ESPN's own
+        abbreviation;
+      - zero or multiple candidate repairs fail closed;
+      - a true contradiction still reaches validate_normal_pick() and aborts the
+        post transaction.
     """
 
     if base_market(normalize_bet_type(pick.get("bet_type"))) != "SPREAD":
         return pick, False
 
-    matchup = clean_text(pick.get("matchup"))
+    matchup = clean_text(
+        pick.get("source_matchup_text")
+        or pick.get("matchup")
+    )
     sides = split_matchup(matchup) if matchup else None
 
     if not sides or len(sides) != 2:
@@ -3764,11 +3826,9 @@ def repair_spread_identity_from_espn_schedule(
     if not selected:
         return pick, False
 
-    selected_side_indexes = [
-        index
-        for index, side in enumerate(sides)
-        if teams_equivalent(selected, side)
-    ]
+    line = safe_float(pick.get("line"))
+    if line is None:
+        return pick, False
 
     def _short_token(value):
         return re.sub(r"[^a-z0-9]", "", norm(value))
@@ -3780,7 +3840,7 @@ def repair_spread_identity_from_espn_schedule(
         if not first or not second:
             return False
 
-        if not (2 <= len(first) <= 5 and 2 <= len(second) <= 5):
+        if not (2 <= len(first) <= 6 and 2 <= len(second) <= 6):
             return False
 
         if abs(len(first) - len(second)) > 1:
@@ -3792,7 +3852,6 @@ def repair_spread_identity_from_espn_schedule(
         if len(first) == len(second):
             return sum(a != b for a, b in zip(first, second)) <= 1
 
-        # One insertion/deletion.
         if len(first) > len(second):
             first, second = second, first
 
@@ -3810,164 +3869,19 @@ def repair_spread_identity_from_espn_schedule(
         return True
 
     def _short_alias_ocr_match(source_token, team_identity):
-        source_token = _short_token(source_token)
-        if not source_token or not (2 <= len(source_token) <= 5):
+        token = _short_token(source_token)
+        if not token or not (2 <= len(token) <= 6):
             return False
 
         aliases = set(alias_group(team_identity) or [])
         aliases.add(norm(team_identity))
 
         return any(
-            _edit_distance_at_most_one(source_token, alias)
+            _edit_distance_at_most_one(token, alias)
             for alias in aliases
-            if 2 <= len(_short_token(alias)) <= 5
+            if 2 <= len(_short_token(alias)) <= 6
         )
 
-    # Normally the selected spread team must match exactly one visible matchup
-    # side.  A narrow exception handles a one-character OCR error in a compact
-    # team abbreviation (for example NIU vs NWU).  The approximation is used
-    # only to identify which side of an already-complete matchup was selected;
-    # the opposite side must still uniquely anchor one ESPN event below.
-    selected_side_ocr = False
-
-    if len(selected_side_indexes) == 1:
-        selected_index = selected_side_indexes[0]
-    elif len(selected_side_indexes) == 0:
-        approximate_indexes = [
-            index
-            for index, side in enumerate(sides)
-            if _short_alias_ocr_match(selected, side)
-        ]
-
-        if len(approximate_indexes) != 1:
-            return pick, False
-
-        selected_index = approximate_indexes[0]
-        selected_side_ocr = True
-    else:
-        return pick, False
-    anchor_index = 1 - selected_index
-    anchor = clean_text(sides[anchor_index])
-
-    if not anchor:
-        return pick, False
-
-    cache_key = (int(season_year), int(week))
-
-    if cache_key not in slate_cache:
-        try:
-            slate_cache[cache_key] = build_complete_week_slate(
-                [pick],
-                int(season_year),
-                int(week),
-            )
-        except Exception as exc:
-            print(
-                "INGEST ESPN SOURCE IDENTITY CHECK UNAVAILABLE:",
-                pick.get("picker"),
-                "|",
-                pick.get("selection"),
-                "|",
-                type(exc).__name__,
-                exc,
-            )
-            slate_cache[cache_key] = None
-
-    events = slate_cache.get(cache_key)
-
-    if events is None:
-        return pick, False
-
-    anchored_events = []
-
-    for event in events:
-        event_matchup = clean_text(event_matchup_text(event))
-        event_sides = split_matchup(event_matchup) if event_matchup else None
-
-        if not event_sides or len(event_sides) != 2:
-            continue
-
-        anchor_matches = [
-            index
-            for index, event_side in enumerate(event_sides)
-            if teams_equivalent(anchor, event_side)
-        ]
-
-        if len(anchor_matches) != 1:
-            continue
-
-        anchored_events.append(
-            (
-                event,
-                event_matchup,
-                event_sides,
-                anchor_matches[0],
-            )
-        )
-
-    # One correctly read opponent must identify exactly one game that week.
-    if len(anchored_events) != 1:
-        return pick, False
-
-    event, resolved_matchup, event_sides, event_anchor_index = anchored_events[0]
-    resolved_anchor = clean_text(event_sides[event_anchor_index])
-    resolved_selected = clean_text(event_sides[1 - event_anchor_index])
-
-    if not resolved_selected or not resolved_anchor:
-        return pick, False
-
-    # If ESPN already agrees with the selected team, there is no selected-team
-    # OCR error to repair here. Later schedule enrichment may canonicalize stale
-    # opponent/matchup metadata without changing the wager identity.
-    if teams_equivalent(selected, resolved_selected):
-        return pick, False
-
-    # PRIMARY SOURCE-LITERAL SAFETY GATE:
-    #
-    # The vision extractor preserves the exact selected-team token in
-    # source_team_text before expanding school identities. If that literal token
-    # maps to the ESPN counterpart through football_identity aliases (for example
-    # GSU -> Georgia State), the source itself confirms the repair. This is
-    # stronger evidence than fuzzy similarity and does not rely on the opponent
-    # alone.
-    literal_source_team = clean_text(pick.get("source_team_text"))
-    literal_confirms_resolved = bool(
-        literal_source_team
-        and teams_equivalent(literal_source_team, resolved_selected)
-    )
-
-    # IMPORTANT SAFETY GATE:
-    #
-    # A unique game for the *other* extracted matchup side is not enough evidence
-    # to replace the selected spread team. The opponent/matchup text itself may be
-    # stale or misread (for example SMU paired with Mississippi State, or Minnesota
-    # paired with Northwestern). In those cases the selected wager identity must be
-    # preserved and schedule_enrich.py can repair only the stale game metadata.
-    #
-    # Ingest may replace the selected team only when the selected identity and the
-    # ESPN counterpart are themselves strongly text-similar, which is evidence of
-    # a narrow OCR/transcription error such as Arizona State vs Georgia State.
-    # This is deliberately conservative and generic; it contains no week/team rule.
-    from difflib import SequenceMatcher
-
-    selected_norm = norm(selected)
-    resolved_norm = norm(resolved_selected)
-
-    identity_similarity = SequenceMatcher(
-        None,
-        selected_norm,
-        resolved_norm,
-    ).ratio()
-
-    # A short source abbreviation can be a one-character OCR error even when
-    # comparing it with the full ESPN team name produces a low similarity score.
-    # Example shape: GSU misread as ASU.  Use ESPN's actual team abbreviation for the
-    # resolved counterpart and allow the repair only when the source token and that
-    # acronym have the same short length and differ by exactly one character.
-    #
-    # This remains safe because the OTHER matchup side already had to identify
-    # exactly one ESPN event above.  It does not allow arbitrary opponent-driven
-    # replacement such as SMU -> Missouri or MINN -> Indiana.
     def _resolved_espn_abbreviation(event, resolved_team):
         competitions = event.get("competitions") or []
         if not competitions:
@@ -3993,89 +3907,227 @@ def repair_spread_identity_from_espn_schedule(
                 if abbreviation:
                     matches.append(abbreviation)
 
-        if len(matches) != 1:
+        unique = list(dict.fromkeys(matches))
+        if len(unique) != 1:
             return ""
 
-        return re.sub(r"[^a-z0-9]", "", norm(matches[0]))
+        return _short_token(unique[0])
 
-    selected_token = re.sub(r"[^a-z0-9]", "", selected_norm)
-    resolved_acronym = _resolved_espn_abbreviation(event, resolved_selected)
+    def _source_token_plausibly_identifies(source_token, resolved_team, event):
+        """Conservative selected-token proof after the opponent anchored a game."""
+        source_token = clean_text(source_token)
+        resolved_team = clean_text(resolved_team)
 
-    one_char_acronym_ocr = (
-        2 <= len(selected_token) <= 5
-        and len(selected_token) == len(resolved_acronym)
-        and sum(a != b for a, b in zip(selected_token, resolved_acronym)) == 1
-    )
+        if not source_token or not resolved_team:
+            return False, "NONE"
 
-    # ESPN abbreviations are not always the same shorthand printed on betting
-    # cards (Northwestern may appear as NW/NWU, for example).  Compare the
-    # short source token against the complete alias family of the resolved ESPN
-    # team as a second OCR check.  This remains fail-closed: the opposite
-    # matchup side already had to identify exactly one event and the token must
-    # be within one edit of a known short alias.
-    one_char_alias_ocr = _short_alias_ocr_match(
-        selected,
-        resolved_selected,
-    )
+        if teams_equivalent(source_token, resolved_team):
+            return True, "DIRECT_IDENTITY"
 
-    if (
-        identity_similarity < 0.67
-        and not one_char_acronym_ocr
-        and not one_char_alias_ocr
-        and not literal_confirms_resolved
-    ):
-        print(
-            "INGEST ESPN IDENTITY CONFLICT PRESERVED:",
-            pick.get("picker"),
-            "|",
-            pick.get("selection"),
-            "| matchup:",
-            matchup,
-            "| ESPN counterpart:",
-            resolved_selected,
-            "| similarity:",
-            f"{identity_similarity:.3f}",
-            "| ESPN acronym:",
-            resolved_acronym or "NONE",
-            "| action: preserve selected wager; defer metadata repair",
-        )
+        if _short_alias_ocr_match(source_token, resolved_team):
+            return True, "SHORT_ALIAS_OCR"
+
+        espn_abbrev = _resolved_espn_abbreviation(event, resolved_team)
+        if espn_abbrev and _edit_distance_at_most_one(source_token, espn_abbrev):
+            return True, "ESPN_ABBREVIATION_OCR"
+
+        # Full-name transcription differences are allowed only when they are
+        # strongly similar.  This is intentionally NOT enough for unrelated
+        # short tokens.
+        from difflib import SequenceMatcher
+
+        source_norm = norm(source_token)
+        resolved_norm = norm(resolved_team)
+        similarity = SequenceMatcher(None, source_norm, resolved_norm).ratio()
+
+        if (
+            len(source_norm) >= 6
+            and len(resolved_norm) >= 6
+            and similarity >= 0.78
+        ):
+            return True, "FULL_NAME_SIMILARITY"
+
+        return False, "NONE"
+
+    cache_key = (int(season_year), int(week))
+
+    if cache_key not in slate_cache:
+        try:
+            slate_cache[cache_key] = build_complete_week_slate(
+                [pick],
+                int(season_year),
+                int(week),
+            )
+        except Exception as exc:
+            print(
+                "INGEST ESPN SOURCE IDENTITY CHECK UNAVAILABLE:",
+                pick.get("picker"),
+                "|",
+                pick.get("selection"),
+                "|",
+                type(exc).__name__,
+                exc,
+            )
+            slate_cache[cache_key] = None
+
+    events = slate_cache.get(cache_key)
+    if events is None:
         return pick, False
 
-    if literal_confirms_resolved and not teams_equivalent(selected, resolved_selected):
-        print(
-            "INGEST SOURCE-LITERAL IDENTITY CONFIRMED:",
-            pick.get("picker"),
-            "| source token:",
-            literal_source_team,
-            "| parsed team:",
-            selected,
-            "| ESPN team:",
-            resolved_selected,
-            "| anchor:",
-            anchor,
-        )
+    # Build a normalized event view once.  build_complete_week_slate() also
+    # registers ESPN's own display names/abbreviations with football_identity,
+    # which lets teams_equivalent() recognize safe provider-supplied shorthand.
+    event_views = []
 
-    if (
-        (one_char_acronym_ocr or one_char_alias_ocr or selected_side_ocr)
-        and identity_similarity < 0.67
-        and not literal_confirms_resolved
-    ):
-        print(
-            "INGEST ESPN SHORT-ALIAS OCR CONFIRMED:",
-            pick.get("picker"),
-            "| source team:",
-            selected,
-            "| ESPN team:",
-            resolved_selected,
-            "| ESPN acronym:",
-            resolved_acronym or "NONE",
-            "| anchor:",
-            anchor,
-        )
+    for event in events:
+        event_matchup = clean_text(event_matchup_text(event))
+        event_sides = split_matchup(event_matchup) if event_matchup else None
+        if not event_sides or len(event_sides) != 2:
+            continue
+        event_views.append((event, event_matchup, event_sides))
 
-    line = safe_float(pick.get("line"))
-    if line is None:
+    if not event_views:
         return pick, False
+
+    selected_side_indexes = [
+        index
+        for index, side in enumerate(sides)
+        if teams_equivalent(selected, side)
+    ]
+
+    selected_side_ocr = False
+
+    if len(selected_side_indexes) == 0:
+        approximate_indexes = [
+            index
+            for index, side in enumerate(sides)
+            if _short_alias_ocr_match(selected, side)
+        ]
+        if len(approximate_indexes) == 1:
+            selected_side_indexes = approximate_indexes
+            selected_side_ocr = True
+
+    candidate_repairs = []
+
+    def _append_candidates_for_anchor(anchor_index, *, selected_index_hint=None):
+        anchor = clean_text(sides[anchor_index])
+        if not anchor:
+            return
+
+        for event, resolved_matchup, event_sides in event_views:
+            anchor_matches = [
+                index
+                for index, event_side in enumerate(event_sides)
+                if teams_equivalent(anchor, event_side)
+            ]
+
+            if len(anchor_matches) != 1:
+                continue
+
+            event_anchor_index = anchor_matches[0]
+            resolved_anchor = clean_text(event_sides[event_anchor_index])
+            resolved_selected = clean_text(event_sides[1 - event_anchor_index])
+
+            if not resolved_selected or not resolved_anchor:
+                continue
+
+            # If we already know which source matchup side was selected, the
+            # anchor must be the opposite side.  This prevents a direct source
+            # identity from being silently flipped.
+            if selected_index_hint is not None and anchor_index == selected_index_hint:
+                continue
+
+            plausible, proof_method = _source_token_plausibly_identifies(
+                selected,
+                resolved_selected,
+                event,
+            )
+            if not plausible:
+                continue
+
+            candidate_repairs.append({
+                "event": event,
+                "resolved_matchup": resolved_matchup,
+                "resolved_selected": resolved_selected,
+                "resolved_anchor": resolved_anchor,
+                "source_anchor": anchor,
+                "source_anchor_index": anchor_index,
+                "proof_method": proof_method,
+            })
+
+    if len(selected_side_indexes) == 1:
+        selected_index = selected_side_indexes[0]
+        _append_candidates_for_anchor(
+            1 - selected_index,
+            selected_index_hint=selected_index,
+        )
+    elif len(selected_side_indexes) == 0:
+        # Neither source shorthand maps directly to the selected token.  Let
+        # each matchup side try to act as the independently readable opponent
+        # anchor.  A repair is accepted only if the complete week slate leaves
+        # exactly one event/team candidate AND the selected token plausibly
+        # identifies the opposite ESPN team.
+        _append_candidates_for_anchor(0)
+        _append_candidates_for_anchor(1)
+    else:
+        return pick, False
+
+    # Deduplicate repeated ESPN slate views.  Distinct candidate teams/events
+    # remain distinct and therefore fail closed below.
+    unique_candidates = {}
+    for candidate in candidate_repairs:
+        event_id = str(candidate["event"].get("id") or "")
+        key = (
+            event_id or candidate["resolved_matchup"],
+            norm(candidate["resolved_selected"]),
+        )
+        unique_candidates[key] = candidate
+
+    candidate_repairs = list(unique_candidates.values())
+
+    if len(candidate_repairs) != 1:
+        if candidate_repairs:
+            print(
+                "INGEST ESPN SOURCE IDENTITY AMBIGUOUS:",
+                pick.get("picker"),
+                "|",
+                pick.get("selection"),
+                "| matchup:",
+                matchup,
+                "| candidates:",
+                [
+                    {
+                        "event_id": str(c["event"].get("id") or ""),
+                        "team": c["resolved_selected"],
+                        "method": c["proof_method"],
+                    }
+                    for c in candidate_repairs
+                ],
+                "| action: fail closed",
+            )
+        return pick, False
+
+    candidate = candidate_repairs[0]
+    event = candidate["event"]
+    resolved_matchup = candidate["resolved_matchup"]
+    resolved_selected = candidate["resolved_selected"]
+    resolved_anchor = candidate["resolved_anchor"]
+    anchor = candidate["source_anchor"]
+    proof_method = candidate["proof_method"]
+
+    # Nothing to repair when the selected identity was already canonical.  The
+    # schedule layer may still canonicalize matchup/opponent metadata later.
+    if teams_equivalent(selected, resolved_selected):
+        return pick, False
+
+    literal_source_team = clean_text(pick.get("source_team_text"))
+    literal_confirms_resolved = bool(
+        literal_source_team
+        and teams_equivalent(literal_source_team, resolved_selected)
+    )
+
+    if literal_confirms_resolved:
+        proof_method = "SOURCE_LITERAL_DIRECT_IDENTITY"
 
     old_selection = clean_text(pick.get("selection"))
     old_team = clean_text(pick.get("team"))
@@ -4092,8 +4144,6 @@ def repair_spread_identity_from_espn_schedule(
     pick["selection"] = f"{resolved_selected} {line:+g}"
     pick["team"] = resolved_selected
 
-    # For spread markets, side may contain the selected team name. Preserve
-    # OVER/UNDER-style values defensively, though they should not occur here.
     if old_side and old_side.upper() not in {"OVER", "UNDER"}:
         pick["side"] = resolved_selected
 
@@ -4101,6 +4151,9 @@ def repair_spread_identity_from_espn_schedule(
     pick["matchup"] = resolved_matchup
     pick["espn_ingest_identity_repaired"] = True
     pick["espn_ingest_identity_repair_event_id"] = str(event.get("id") or "") or None
+    pick["espn_ingest_identity_repair_method"] = proof_method
+    pick["espn_ingest_identity_repair_source_anchor"] = anchor
+    pick["espn_ingest_identity_repair_selected_side_ocr"] = bool(selected_side_ocr)
 
     print(
         "INGEST ESPN SOURCE IDENTITY REPAIR:",
@@ -4115,6 +4168,8 @@ def repair_spread_identity_from_espn_schedule(
         resolved_matchup,
         "| anchor:",
         anchor,
+        "| proof:",
+        proof_method,
     )
 
     return pick, True
@@ -4534,6 +4589,31 @@ def validate_normal_post_payload(
                 inventory_side
                 and source_side
                 and teams_equivalent(inventory_side, source_side)
+            ):
+                return True
+
+            # Inventory and structured vision are two independent reads of the
+            # same source. Their literal team abbreviations may differ even when
+            # the signed spread and complete matchup context are identical. Do
+            # not guess which abbreviation is right here. Allow the transaction
+            # to continue ONLY when both reads retain the same complete matchup;
+            # restore_authoritative_inventory_literals() will preserve the
+            # inventory literal, repair_spread_identity_from_espn_schedule()
+            # will require unique schedule evidence, and validate_normal_pick()
+            # remains the final fail-closed identity gate.
+            inventory_matchup = clean_text(inventory_row.get("matchup"))
+            source_matchup = clean_text(
+                raw_pick.get("source_matchup_text")
+                or raw_pick.get("matchup")
+            )
+
+            inventory_sides = split_matchup(inventory_matchup) if inventory_matchup else []
+            source_sides = split_matchup(source_matchup) if source_matchup else []
+
+            if (
+                len(inventory_sides) == 2
+                and len(source_sides) == 2
+                and norm(inventory_matchup) == norm(source_matchup)
             ):
                 return True
 
