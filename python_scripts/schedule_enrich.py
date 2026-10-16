@@ -18,6 +18,7 @@ from espn_resolver import (
     find_event_by_id,
     lock_pick_to_event,
     resolve_event_detailed,
+    source_structural_event_evidence,
 )
 
 from football_identity import (
@@ -696,6 +697,125 @@ def selected_team_event_matches(
         "status": status,
     }
 
+
+
+def repair_from_structural_event_evidence(
+    pick,
+    event,
+    evidence,
+):
+    """
+    Apply only DERIVED identity from a resolver-proven source/event mapping.
+
+    Literal source_selection_text/source_team_text/source_matchup_text remain
+    untouched. This is the bridge that lets UW, MSU, UH, etc. stay literal in
+    source evidence while grading uses the exact ESPN school identity.
+    """
+    if not isinstance(evidence, dict):
+        return False, {}
+
+    selected_team = clean_text(
+        evidence.get("selected_team")
+    )
+    opponent_team = clean_text(
+        evidence.get("opponent_team")
+    )
+    resolved_matchup = clean_text(
+        event_matchup_text(event)
+    )
+
+    changed = False
+
+    if selected_team:
+        current_team = clean_text(
+            pick.get("team")
+        )
+        current_side = clean_text(
+            pick.get("side")
+        )
+
+        if current_team and not teams_equivalent(
+            current_team,
+            selected_team,
+        ):
+            preserve_original_value(
+                pick,
+                "pre_structural_team",
+                "team",
+            )
+
+        if (
+            current_side
+            and current_side.upper() not in {"OVER", "UNDER"}
+            and not teams_equivalent(current_side, selected_team)
+        ):
+            preserve_original_value(
+                pick,
+                "pre_structural_side",
+                "side",
+            )
+
+        if current_team != selected_team:
+            pick["team"] = selected_team
+            changed = True
+
+        if (
+            current_side
+            and current_side.upper() not in {"OVER", "UNDER"}
+            and current_side != selected_team
+        ):
+            pick["side"] = selected_team
+            changed = True
+
+    if opponent_team and clean_text(
+        pick.get("opponent")
+    ) != opponent_team:
+        preserve_original_value(
+            pick,
+            "pre_structural_opponent",
+            "opponent",
+        )
+        pick["opponent"] = opponent_team
+        changed = True
+
+    if resolved_matchup:
+        current_matchup = clean_text(
+            pick.get("matchup")
+        )
+
+        if (
+            current_matchup
+            and not clean_text(pick.get("source_matchup_text"))
+        ):
+            pick["source_matchup_text"] = current_matchup
+
+        if current_matchup != resolved_matchup:
+            preserve_original_value(
+                pick,
+                "pre_structural_matchup",
+                "matchup",
+            )
+            pick["matchup"] = resolved_matchup
+            changed = True
+
+    pick["structural_identity_validated"] = True
+    pick["structural_identity_event_id"] = str(
+        event.get("id") or ""
+    ) or None
+    pick["structural_identity_source_sides"] = (
+        evidence.get("source_sides")
+        or []
+    )
+    pick["structural_identity_scores"] = (
+        evidence.get("source_scores")
+        or {}
+    )
+
+    return changed, {
+        "selected_team": selected_team or None,
+        "opponent": opponent_team or None,
+        "matchup": resolved_matchup or None,
+    }
 
 
 def _literal_selected_team_token(pick):
@@ -1723,6 +1843,40 @@ def enrich_schedule():
                 )
             )
 
+            # A literal source pair may intentionally contain context-dependent
+            # shorthand that global aliases cannot validate (UW, MSU, UH, ...).
+            # Reuse the SAME structural resolver evidence that selected the
+            # event instead of creating another identity policy here.
+            if compatibility is False:
+                structural_evidence = source_structural_event_evidence(
+                    pick,
+                    event,
+                )
+
+                if structural_evidence:
+                    changed, details = repair_from_structural_event_evidence(
+                        pick,
+                        event,
+                        structural_evidence,
+                    )
+                    compatibility = True
+
+                    if changed:
+                        metadata_repairs += 1
+
+                    print(
+                        "PREGAME STRUCTURAL IDENTITY VALIDATED:",
+                        pick.get("picker"),
+                        "|",
+                        pick.get("selection"),
+                        "| event:",
+                        stored_event_id,
+                        "| selected:",
+                        details.get("selected_team"),
+                        "| matchup:",
+                        details.get("matchup"),
+                    )
+
             # ------------------------------------------------
             # EXISTING MATCHUP AGREES WITH EVENT
             # ------------------------------------------------
@@ -2554,6 +2708,48 @@ def enrich_schedule():
         else:
             confidence_label = (
                 "UNIQUE"
+            )
+
+        # ----------------------------------------------------
+        # SHARED STRUCTURAL IDENTITY APPLICATION
+        # ----------------------------------------------------
+        #
+        # If the resolver used source-structural evidence, canonicalize only
+        # DERIVED team/opponent/matchup fields before defensive validation.
+        # The literal source fields remain unchanged.
+
+        structural_evidence = None
+
+        if method == "SOURCE_STRUCTURAL_MATCHUP":
+            structural_evidence = (
+                result.get("details")
+                or source_structural_event_evidence(
+                    pick,
+                    event,
+                )
+            )
+
+        if structural_evidence:
+            changed, details = repair_from_structural_event_evidence(
+                pick,
+                event,
+                structural_evidence,
+            )
+
+            if changed:
+                metadata_repairs += 1
+
+            print(
+                "PREGAME STRUCTURAL EVENT REPAIR:",
+                pick.get("picker"),
+                "|",
+                pick.get("selection"),
+                "| event:",
+                str(event.get("id") or ""),
+                "| selected:",
+                details.get("selected_team"),
+                "| matchup:",
+                details.get("matchup"),
             )
 
         # ----------------------------------------------------
