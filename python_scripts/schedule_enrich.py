@@ -14,6 +14,7 @@ from espn_resolver import (
     event_contains_team,
     event_date,
     event_matchup_text,
+    event_team_identity_for_mascot,
     find_event_by_id,
     lock_pick_to_event,
     resolve_event_detailed,
@@ -361,11 +362,13 @@ AMBIGUOUS_CONTEXT_GROUPS = {
         "georgia southern",
     },
     # Source-card abbreviations that are unsafe as global aliases.
-    # Keep them local to event validation. UT is intentionally
-    # Tennessee here because Barstool's Week 4 source uses UT for
-    # Tennessee while spelling Texas as Texas/Tex.
+    # UT can mean Tennessee, Texas, or Utah on different cards.  A complete
+    # two-team matchup must disambiguate it; one-team resolution remains
+    # blocked for the bare token.
     "ut": {
         "tennessee",
+        "texas",
+        "utah",
     },
     "tu": {
         "temple",
@@ -1029,6 +1032,106 @@ def mark_existing_lock_conflict(
     ] = event_date(
         event
     )
+
+
+# ============================================================
+# SLATE-UNIQUE MASCOT SELECTED-TEAM REPAIR
+# ============================================================
+
+def repair_selected_team_from_unique_mascot(
+    pick,
+    event,
+    *,
+    method,
+):
+    """Convert a resolver-proven mascot token into ESPN school identity.
+
+    The resolver is allowed to return UNIQUE_SELECTED_MASCOT only when the
+    literal selected-team text exactly matches ESPN team["name"] on exactly one
+    eligible event in the complete weekly slate.  Mascot names are never added
+    to the global alias registry.  Here we independently re-check that the
+    returned event contains exactly one such mascot, then repair only derived
+    team/opponent metadata while preserving the visible source selection.
+    """
+    if method != "UNIQUE_SELECTED_MASCOT":
+        return False, {}
+
+    literal = _literal_selected_team_token(pick)
+    if not literal:
+        literal = clean_text(wager_selected_team(pick))
+
+    if not literal:
+        return False, {}
+
+    resolved_team = event_team_identity_for_mascot(
+        event,
+        literal,
+    )
+
+    if not resolved_team:
+        return False, {
+            "reason": "EVENT_MASCOT_NOT_UNIQUE",
+            "source_token": literal,
+        }
+
+    event_teams = event_team_names(event)
+    matched_event_teams = [
+        team
+        for team in event_teams
+        if teams_equivalent(resolved_team, team)
+    ]
+
+    if len(matched_event_teams) != 1:
+        return False, {
+            "reason": "MASCOT_SCHOOL_IDENTITY_NOT_UNIQUE_IN_EVENT",
+            "source_token": literal,
+            "resolved_team": resolved_team,
+            "event_teams": event_teams,
+        }
+
+    opponent_candidates = [
+        team
+        for team in event_teams
+        if not teams_equivalent(resolved_team, team)
+    ]
+
+    if len(opponent_candidates) != 1:
+        return False, {
+            "reason": "MASCOT_OPPONENT_NOT_UNIQUE",
+            "source_token": literal,
+            "resolved_team": resolved_team,
+            "event_teams": event_teams,
+        }
+
+    old_team = clean_text(pick.get("team"))
+    old_side = clean_text(pick.get("side"))
+    old_opponent = clean_text(pick.get("opponent"))
+
+    pick.setdefault("source_mascot_team_text", literal)
+    pick.setdefault("pre_mascot_resolver_team", old_team or None)
+    pick.setdefault("pre_mascot_resolver_side", old_side or None)
+    pick.setdefault("pre_mascot_resolver_opponent", old_opponent or None)
+
+    pick["team"] = resolved_team
+
+    if old_side and old_side.upper() not in {"OVER", "UNDER"}:
+        pick["side"] = resolved_team
+    elif base_market(normalize_bet_type(pick.get("bet_type"))) in {
+        "SPREAD",
+        "MONEYLINE",
+        "TEAM_TOTAL",
+    }:
+        pick["side"] = resolved_team
+
+    pick["opponent"] = clean_text(opponent_candidates[0]) or None
+    pick["mascot_identity_source"] = "ESPN_WEEKLY_SLATE_UNIQUE_MASCOT"
+    pick["mascot_identity_event_id"] = str(event.get("id") or "") or None
+
+    return True, {
+        "source_token": literal,
+        "resolved_team": resolved_team,
+        "opponent": pick.get("opponent"),
+    }
 
 
 # ============================================================
@@ -2590,6 +2693,43 @@ def enrich_schedule():
                 event,
             )
         )
+
+        # A mascot-only source selection such as "Badgers +2.5" may be
+        # resolved by espn_resolver only when that exact mascot appears in one
+        # and only one eligible weekly event. Re-check the mascot on the chosen
+        # event and convert only derived team identity to ESPN's school anchor.
+        if (
+            anchor.get("status") == "NO_MATCH"
+            and method == "UNIQUE_SELECTED_MASCOT"
+        ):
+            mascot_repaired, mascot_details = (
+                repair_selected_team_from_unique_mascot(
+                    pick,
+                    event,
+                    method=method,
+                )
+            )
+
+            if mascot_repaired:
+                anchor = selected_team_event_matches(
+                    pick,
+                    event,
+                )
+                metadata_repairs += 1
+                method = f"{method}_TEAM_REPAIR"
+
+                print(
+                    "PREGAME UNIQUE MASCOT TEAM REPAIRED:",
+                    pick.get("picker"),
+                    "|",
+                    pick.get("selection"),
+                    "| source mascot:",
+                    mascot_details.get("source_token"),
+                    "| ESPN team:",
+                    mascot_details.get("resolved_team"),
+                    "| event:",
+                    str(event.get("id") or ""),
+                )
 
         # A complete two-team matchup can safely disambiguate a literal
         # source token such as OSU after the resolver has uniquely selected the
