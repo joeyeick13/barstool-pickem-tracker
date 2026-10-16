@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
+import re
 import time
 
 import requests
@@ -1817,6 +1818,7 @@ def resolution_result(
     candidates=None,
     confidence=None,
     anchor_hint=None,
+    details=None,
 ):
     candidate_ids = [
         event_id(
@@ -1859,6 +1861,482 @@ def resolution_result(
 
         "anchor_hint":
             clean_text(anchor_hint) or None,
+
+        "details":
+            details if isinstance(details, dict) else None,
+    }
+
+
+
+# ============================================================
+# SOURCE-STRUCTURAL EVENT IDENTITY
+# ============================================================
+#
+# The source card is allowed to use ambiguous or non-standard abbreviations
+# (UW, MSU, UH, UT, OSU, etc.). Global alias tables cannot safely decide all
+# of those meanings. Resolve the *two-team structure* of the source row against
+# the exact ESPN weekly slate instead.
+#
+# Safety model:
+#   * source_matchup_text remains immutable evidence;
+#   * one exact/high-confidence source side may anchor an ESPN event;
+#   * the opposite source side is then the opposite ESPN competitor;
+#   * team-sided wagers must also identify which source side was selected, or
+#     independently match the selected token to exactly one event competitor;
+#   * competing events are ranked by evidence quality and ties fail closed;
+#   * short global aliases never win a one-sided match merely because they are
+#     present in a static alias table.
+#
+# This is the permanent replacement for week-specific alias patches.
+
+def _source_compact_token(value):
+    return re.sub(
+        r"[^a-z0-9]",
+        "",
+        norm(value),
+    )
+
+
+def _source_edit_distance_at_most_one(first, second):
+    first = _source_compact_token(first)
+    second = _source_compact_token(second)
+
+    if not first or not second:
+        return False
+
+    if not (2 <= len(first) <= 6 and 2 <= len(second) <= 6):
+        return False
+
+    if abs(len(first) - len(second)) > 1:
+        return False
+
+    if first == second:
+        return True
+
+    if len(first) == len(second):
+        return sum(a != b for a, b in zip(first, second)) <= 1
+
+    if len(first) > len(second):
+        first, second = second, first
+
+    i = j = mismatches = 0
+
+    while i < len(first) and j < len(second):
+        if first[i] == second[j]:
+            i += 1
+            j += 1
+            continue
+
+        mismatches += 1
+        if mismatches > 1:
+            return False
+
+        j += 1
+
+    return True
+
+
+def source_hint_competitor_score(
+    competitor,
+    hint,
+):
+    """
+    Score one literal source token against one ESPN competitor.
+
+    100 = exact ESPN-provided identity/abbreviation
+     90 = safe non-short shared identity
+     70 = contextual/short shared identity
+     55 = one-character OCR distance to ESPN abbreviation/known alias
+      0 = no evidence
+
+    A one-sided structural inference requires >= 85, so a bare short alias
+    such as UW/MSU can never anchor the wrong game by itself.
+    """
+    hint = clean_text(hint)
+
+    if not hint:
+        return 0
+
+    hint_norm = norm(hint)
+    hint_compact = _source_compact_token(hint)
+
+    values = competitor_identity_values(
+        competitor
+    )
+
+    for value in values:
+        if hint_norm == norm(value):
+            return 100
+
+    contextual = (
+        is_ambiguous_hint(hint)
+        or hint_norm in AMBIGUOUS_CONTEXT_GROUPS
+    )
+
+    if comp_matches_hint(
+        competitor,
+        hint,
+        allow_contextual_ambiguous=True,
+    ):
+        if contextual:
+            return 70
+
+        if len(hint_compact) <= 3:
+            return 70
+
+        return 90
+
+    if comp_matches_exact_mascot(
+        competitor,
+        hint,
+    ):
+        return 60
+
+    candidate_tokens = set()
+
+    for value in values:
+        compact = _source_compact_token(value)
+        if 2 <= len(compact) <= 6:
+            candidate_tokens.add(compact)
+
+        for alias in alias_group(value):
+            compact_alias = _source_compact_token(alias)
+            if 2 <= len(compact_alias) <= 6:
+                candidate_tokens.add(compact_alias)
+
+    if any(
+        _source_edit_distance_at_most_one(
+            hint_compact,
+            candidate,
+        )
+        for candidate in candidate_tokens
+    ):
+        return 55
+
+    return 0
+
+
+def _literal_selected_source_token(
+    pick,
+):
+    literal = clean_text(
+        pick.get("source_team_text")
+    )
+
+    if literal:
+        return literal
+
+    return clean_text(
+        side_identity(pick)
+    ) or None
+
+
+def _source_selected_side_index(
+    pick,
+    source_sides,
+):
+    if len(source_sides) != 2:
+        return None
+
+    literal = _literal_selected_source_token(
+        pick
+    )
+
+    if not literal:
+        return None
+
+    literal_norm = norm(literal)
+    literal_compact = _source_compact_token(literal)
+
+    matches = []
+
+    for index, side in enumerate(source_sides):
+        if literal_norm == norm(side):
+            matches.append(index)
+            continue
+
+        if (
+            literal_compact
+            and literal_compact == _source_compact_token(side)
+        ):
+            matches.append(index)
+
+    if len(matches) == 1:
+        return matches[0]
+
+    return None
+
+
+def _competitor_school_identity(
+    competitor,
+):
+    return (
+        competitor_identity_anchor(competitor)
+        or competitor_display_name(competitor)
+        or None
+    )
+
+
+def source_structural_event_evidence(
+    pick,
+    event,
+):
+    """
+    Return source-to-event mapping evidence for one ESPN event, or None.
+
+    At least one source matchup side must carry strong independent evidence,
+    unless both source sides have weaker-but-positive identity evidence.
+    """
+    matchup = clean_text(
+        pick.get("source_matchup_text")
+        or pick.get("matchup")
+    )
+
+    source_sides = (
+        split_matchup(matchup)
+        if matchup
+        else []
+    )
+
+    if len(source_sides) != 2:
+        return None
+
+    event_comps = competitors(event)
+
+    if len(event_comps) != 2:
+        return None
+
+    selected_token = _literal_selected_source_token(
+        pick
+    )
+    selected_source_index = _source_selected_side_index(
+        pick,
+        source_sides,
+    )
+
+    orientations = (
+        (0, 1),
+        (1, 0),
+    )
+
+    candidates = []
+
+    for comp_index_0, comp_index_1 in orientations:
+        mapped = {
+            0: event_comps[comp_index_0],
+            1: event_comps[comp_index_1],
+        }
+
+        scores = {
+            0: source_hint_competitor_score(
+                mapped[0],
+                source_sides[0],
+            ),
+            1: source_hint_competitor_score(
+                mapped[1],
+                source_sides[1],
+            ),
+        }
+
+        matched_count = sum(
+            1
+            for score in scores.values()
+            if score > 0
+        )
+
+        strong_count = sum(
+            1
+            for score in scores.values()
+            if score >= 85
+        )
+
+        if matched_count < 2 and strong_count < 1:
+            continue
+
+        selected_comp_index = None
+        selected_score = 0
+
+        if selected_token:
+            if selected_source_index is not None:
+                selected_comp_index = (
+                    comp_index_0
+                    if selected_source_index == 0
+                    else comp_index_1
+                )
+                selected_score = scores[
+                    selected_source_index
+                ]
+            else:
+                selected_comp_scores = [
+                    source_hint_competitor_score(
+                        event_comps[index],
+                        selected_token,
+                    )
+                    for index in (0, 1)
+                ]
+
+                positive = [
+                    index
+                    for index, score
+                    in enumerate(selected_comp_scores)
+                    if score > 0
+                ]
+
+                if len(positive) != 1:
+                    continue
+
+                selected_comp_index = positive[0]
+                selected_score = selected_comp_scores[
+                    selected_comp_index
+                ]
+
+                mapped_indexes = {
+                    comp_index_0: 0,
+                    comp_index_1: 1,
+                }
+                if selected_comp_index not in mapped_indexes:
+                    continue
+
+        selected_team = (
+            _competitor_school_identity(
+                event_comps[selected_comp_index]
+            )
+            if selected_comp_index is not None
+            else None
+        )
+
+        opponent_team = None
+        if selected_comp_index is not None:
+            opponent_team = _competitor_school_identity(
+                event_comps[1 - selected_comp_index]
+            )
+
+        rank = (
+            1 if selected_score >= 85 else 0,
+            strong_count,
+            1 if matched_count == 2 else 0,
+            selected_score,
+            max(scores.values()),
+            sum(scores.values()),
+        )
+
+        candidates.append({
+            "event": event,
+            "source_sides": list(source_sides),
+            "source_to_competitor": {
+                "0": comp_index_0,
+                "1": comp_index_1,
+            },
+            "source_scores": {
+                "0": scores[0],
+                "1": scores[1],
+            },
+            "selected_source_index": selected_source_index,
+            "selected_competitor_index": selected_comp_index,
+            "selected_team": selected_team,
+            "opponent_team": opponent_team,
+            "rank": rank,
+            "matched_source_sides": matched_count,
+            "strong_source_sides": strong_count,
+        })
+
+    if not candidates:
+        return None
+
+    candidates.sort(
+        key=lambda item: item["rank"],
+        reverse=True,
+    )
+
+    best = candidates[0]
+
+    if (
+        len(candidates) > 1
+        and candidates[1]["rank"] == best["rank"]
+        and candidates[1]["source_to_competitor"]
+            != best["source_to_competitor"]
+    ):
+        return None
+
+    return best
+
+
+def resolve_source_structural_event(
+    pick,
+    events,
+):
+    evidence_rows = []
+
+    for event in events:
+        evidence = source_structural_event_evidence(
+            pick,
+            event,
+        )
+
+        if evidence:
+            evidence_rows.append(evidence)
+
+    if not evidence_rows:
+        return {
+            "status": "NONE",
+            "event": None,
+            "evidence": None,
+            "candidates": [],
+        }
+
+    filtered_events = filter_events_near_post_time(
+        [row["event"] for row in evidence_rows],
+        pick,
+    )
+    filtered_ids = {
+        event_id(event)
+        for event in filtered_events
+    }
+
+    if filtered_ids:
+        evidence_rows = [
+            row
+            for row in evidence_rows
+            if event_id(row["event"]) in filtered_ids
+        ]
+
+    evidence_rows.sort(
+        key=lambda item: item["rank"],
+        reverse=True,
+    )
+
+    best_rank = evidence_rows[0]["rank"]
+    finalists = [
+        row
+        for row in evidence_rows
+        if row["rank"] == best_rank
+    ]
+
+    unique = {}
+    for row in finalists:
+        unique[
+            event_id(row["event"])
+            or event_matchup_text(row["event"])
+        ] = row
+
+    finalists = list(unique.values())
+
+    if len(finalists) == 1:
+        return {
+            "status": "UNIQUE",
+            "event": finalists[0]["event"],
+            "evidence": finalists[0],
+            "candidates": [finalists[0]["event"]],
+        }
+
+    return {
+        "status": "AMBIGUOUS",
+        "event": None,
+        "evidence": None,
+        "candidates": [
+            row["event"]
+            for row in finalists
+        ],
     }
 
 
@@ -1927,7 +2405,49 @@ def resolve_event_detailed(
         )
 
     # --------------------------------------------------------
-    # 1. EXPLICIT MATCHUP
+    # 1. SOURCE-STRUCTURAL MATCHUP
+    # --------------------------------------------------------
+    #
+    # Evaluate this before static explicit-matchup aliases. A compact source
+    # token such as UW or MSU may have a conventional global meaning that is
+    # wrong for this particular card. The complete source pair plus weekly
+    # ESPN slate is stronger evidence than a bare short alias.
+
+    structural = resolve_source_structural_event(
+        pick,
+        events,
+    )
+
+    if structural.get("status") == "UNIQUE":
+        evidence = structural.get("evidence") or {}
+        event = structural.get("event")
+
+        return resolution_result(
+            event=event,
+            method="SOURCE_STRUCTURAL_MATCHUP",
+            reason=(
+                "Complete source matchup resolved by event-local structural "
+                "identity against exactly one ESPN weekly event."
+            ),
+            candidates=structural.get("candidates") or [event],
+            confidence=0.985,
+            details=evidence,
+        )
+
+    if structural.get("status") == "AMBIGUOUS":
+        return resolution_result(
+            event=None,
+            method="SOURCE_STRUCTURAL_MATCHUP_AMBIGUOUS",
+            reason=(
+                "Source matchup produced multiple equally supported ESPN "
+                "events; automatic resolution blocked."
+            ),
+            candidates=structural.get("candidates") or [],
+            confidence=0.0,
+        )
+
+    # --------------------------------------------------------
+    # 2. EXPLICIT MATCHUP
     # --------------------------------------------------------
 
     explicit = split_matchup(
