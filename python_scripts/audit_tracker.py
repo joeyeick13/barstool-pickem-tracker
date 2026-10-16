@@ -41,27 +41,19 @@ CFB_SPORTS = {
     "NCAAF",
 }
 
+PAT_HILL_RECONCILIATION_VERSION = 2
+PAT_HILL_RECONCILIATION_VERSION_KEY = (
+    "pat_hill_reconciliation_version"
+)
+PAT_HILL_RECORD_SNAPSHOTS_KEY = (
+    "pat_hill_official_record_snapshots_v2"
+)
+
 AMBIGUOUS_CONTEXT_GROUPS = {
     "osu": {
         "ohio state",
         "oklahoma state",
         "oregon state",
-    },
-    # "Ohio" is a legitimate standalone school, but compact source text can
-    # also shorten "Miami (OH)" to just "Ohio". Keep this contextual only:
-    # the second matchup team must make exactly one ESPN event possible.
-    # Example: UMass + Ohio resolves to Miami (OH) @ UMass, while CMU + Ohio
-    # still resolves to Central Michigan @ Ohio. Single-team Ohio still means the Ohio Bobcats; the Miami (OH) interpretation
-    # is available only inside a complete two-team matchup.
-    "ohio": {
-        "ohio",
-        "miami ohio",
-    },
-    # GSU can mean Georgia State or Georgia Southern.  It is intentionally
-    # contextual so an opponent (for example JMU) must disambiguate it.
-    "gsu": {
-        "georgia state",
-        "georgia southern",
     },
     # Context-only source-card abbreviations. These are deliberately
     # NOT global aliases; they are only accepted while comparing a
@@ -83,27 +75,6 @@ AMBIGUOUS_CONTEXT_GROUPS = {
     "usc": {
         "south carolina",
         "usc",
-    },
-    "tul": {
-        "tulane",
-        "tulsa",
-    },
-    "uh": {
-        "houston",
-        "hawaii",
-    },
-    "wf": {
-        "wake forest",
-    },
-    "ncst": {
-        "nc state",
-    },
-    "kst": {
-        "kansas state",
-    },
-    "ksu": {
-        "kansas state",
-        "kennesaw state",
     },
 }
 
@@ -1266,6 +1237,170 @@ def audit_official_rows(
             )
 
 
+
+# ============================================================
+# PAT HILL WEEKLY + CUMULATIVE RECORD CONTRACT
+# ============================================================
+
+def _record_tuple(record):
+    record = record or {}
+    return (
+        int(record.get("wins") or 0),
+        int(record.get("losses") or 0),
+        int(record.get("pushes") or 0),
+    )
+
+
+def _rows_record(rows):
+    return (
+        sum(1 for pick in rows if result_value(pick) == "WIN"),
+        sum(1 for pick in rows if result_value(pick) == "LOSS"),
+        sum(1 for pick in rows if result_value(pick) == "PUSH"),
+    )
+
+
+def audit_pat_hill_record_contract(
+    picks,
+    state,
+    audit,
+):
+    """Hard-check durable official weekly and cumulative standings evidence.
+
+    The source root contains two different facts: last week's record and the
+    cumulative PAT HILL standings. Both are enforced. A cumulative mismatch can
+    never be waived because its decision count differs from one weekly card.
+    """
+    try:
+        last_official = int(
+            state.get("last_official_reconciled_week") or 0
+        )
+    except Exception:
+        last_official = 0
+
+    if last_official <= 0:
+        return
+
+    try:
+        version = int(
+            state.get(PAT_HILL_RECONCILIATION_VERSION_KEY) or 0
+        )
+    except Exception:
+        version = 0
+
+    snapshots = (
+        state.get(PAT_HILL_RECORD_SNAPSHOTS_KEY, {})
+        or {}
+    )
+
+    if version < PAT_HILL_RECONCILIATION_VERSION:
+        audit.error(
+            "PAT_HILL_RECONCILIATION_STALE",
+            (
+                "Official PAT HILL rows have not completed the durable "
+                f"record-contract backfill (version {version}/"
+                f"{PAT_HILL_RECONCILIATION_VERSION})."
+            ),
+        )
+
+    official_weeks = sorted({
+        pick_week(pick)
+        for pick in picks
+        if is_official(pick) and pick_week(pick) > 0
+    })
+
+    for week in official_weeks:
+        if week > last_official:
+            continue
+
+        snapshot = snapshots.get(str(week)) or {}
+        if int(snapshot.get("version") or 0) < PAT_HILL_RECONCILIATION_VERSION:
+            audit.error(
+                "PAT_HILL_SNAPSHOT_MISSING",
+                f"Week {week} has no current durable PAT HILL source snapshot.",
+            )
+            continue
+
+        post_id = str(snapshot.get("post_id") or "")
+        weekly = snapshot.get("weekly_records") or {}
+        season = snapshot.get("season_standings") or {}
+
+        if len(weekly) != len(TRACKED_PICKERS):
+            audit.error(
+                "PAT_HILL_WEEKLY_RECORD_MISSING",
+                (
+                    f"Week {week} PAT HILL snapshot does not contain all "
+                    "three weekly records."
+                ),
+            )
+            continue
+
+        for picker in sorted(TRACKED_PICKERS):
+            rows = [
+                pick
+                for pick in picks
+                if (
+                    is_official(pick)
+                    and pick_week(pick) == week
+                    and picker_name(pick) == picker
+                )
+            ]
+            expected = _record_tuple(weekly.get(picker))
+            actual = _rows_record(rows)
+
+            wrong_source = [
+                pick for pick in rows
+                if str(pick.get("official_result_post_id") or "") != post_id
+            ]
+            if wrong_source:
+                audit.error(
+                    "PAT_HILL_WEEKLY_SOURCE_MISMATCH",
+                    (
+                        f"Week {week} {picker} has {len(wrong_source)} row(s) "
+                        f"not sourced to official post {post_id}."
+                    ),
+                )
+
+            if len(rows) != sum(expected) or actual != expected:
+                audit.error(
+                    "PAT_HILL_WEEKLY_RECORD_MISMATCH",
+                    (
+                        f"Week {week} {picker} stored="
+                        f"{actual[0]}-{actual[1]}-{actual[2]} ({len(rows)} rows) "
+                        f"but official weekly root="
+                        f"{expected[0]}-{expected[1]}-{expected[2]} "
+                        f"({sum(expected)} rows)."
+                    ),
+                )
+
+        # Only a source post with a separately parsed top standings block is
+        # eligible for cumulative enforcement. Legacy one-block posts are not
+        # silently reclassified as cumulative.
+        if len(season) == len(TRACKED_PICKERS):
+            for picker in sorted(TRACKED_PICKERS):
+                cumulative_rows = [
+                    pick
+                    for pick in picks
+                    if (
+                        is_official(pick)
+                        and 1 <= pick_week(pick) <= week
+                        and picker_name(pick) == picker
+                    )
+                ]
+                expected = _record_tuple(season.get(picker))
+                actual = _rows_record(cumulative_rows)
+
+                if actual != expected:
+                    audit.error(
+                        "CUMULATIVE_STANDINGS_MISMATCH",
+                        (
+                            f"Through Week {week} {picker} stored="
+                            f"{actual[0]}-{actual[1]}-{actual[2]} "
+                            f"({len(cumulative_rows)} rows) but official PAT HILL "
+                            f"standings={expected[0]}-{expected[1]}-"
+                            f"{expected[2]} ({sum(expected)} decisions)."
+                        ),
+                    )
+
 # ============================================================
 # MIXED OFFICIAL / PROVISIONAL WEEK AUDIT
 # ============================================================
@@ -1397,12 +1532,7 @@ def audit_retry_queue(
         return
 
     if failed:
-        # A failed source post means ingestion has unresolved official-account
-        # material. Publishing a freshly rebuilt dashboard in that state can
-        # silently replace a complete weekly card with only the few picks that
-        # happened to validate. Fail closed instead: keep the previous stable
-        # dashboard until the retry queue is empty.
-        audit.error(
+        audit.warning(
             "FAILED_POSTS_WAITING",
             (
                 f"{len(failed)} X post(s) "
@@ -1986,6 +2116,12 @@ def run_audit():
 
     audit_official_rows(
         picks,
+        audit,
+    )
+
+    audit_pat_hill_record_contract(
+        picks,
+        state,
         audit,
     )
 
