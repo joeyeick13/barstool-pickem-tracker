@@ -93,6 +93,17 @@ OFFICIAL_RESULT_STATE_KEY = (
     "official_result_threads_processed"
 )
 
+# Durable official-results source ledger. This is intentionally separate
+# from the normal-post ingest generation: a PAT HILL source post is immutable
+# evidence and must not be sent back through vision on every code change.
+PAT_HILL_RECONCILIATION_VERSION = 2
+PAT_HILL_RECONCILIATION_VERSION_KEY = (
+    "pat_hill_reconciliation_version"
+)
+PAT_HILL_RECORD_SNAPSHOTS_KEY = (
+    "pat_hill_official_record_snapshots_v2"
+)
+
 POST_VALIDATION_VERSIONS_KEY = (
     "normal_post_validation_versions"
 )
@@ -567,6 +578,7 @@ def fetch_user_posts(
     *,
     since_id=None,
     start_time=None,
+    end_time=None,
     max_pages=1,
 ):
     params = {
@@ -606,6 +618,13 @@ def fetch_user_posts(
             "start_time"
         ] = iso_x_time(
             start_time
+        )
+
+    if end_time:
+        params[
+            "end_time"
+        ] = iso_x_time(
+            end_time
         )
 
     posts = []
@@ -945,10 +964,31 @@ def collect_pat_hill_thread(
         )
 
     try:
+        # For historical backfills do not scan from "now minus N days".
+        # Fetch the official account in a narrow window around this exact
+        # immutable standings root so old reply/media posts remain recoverable.
+        deep_start_time = standings_start_time
+        deep_end_time = None
+
+        if root_created_at is not None:
+            deep_start_time = (
+                root_created_at
+                - timedelta(
+                    hours=PAT_HILL_ADJACENT_HOURS_BEFORE
+                )
+            )
+            deep_end_time = (
+                root_created_at
+                + timedelta(
+                    hours=PAT_HILL_ADJACENT_HOURS_AFTER
+                )
+            )
+
         deep_posts, deep_media = (
             fetch_user_posts(
                 official_user_id,
-                start_time=standings_start_time,
+                start_time=deep_start_time,
+                end_time=deep_end_time,
                 max_pages=
                     PAT_HILL_THREAD_MAX_PAGES,
             )
@@ -1423,13 +1463,12 @@ def completed_week_now():
 
 
 def should_scan_standings(state):
-    """
-    Scan on every Tuesday, and on any later run while official
-    reconciliation is behind the latest completed week.
+    """Return True when official-result discovery/backfill is required.
 
-    This makes PAT HILL discovery independent of the normal X cursor
-    and self-heals a missed Monday/Tuesday standings post without a
-    manual state reset.
+    In addition to the normal Tuesday/missed-week schedule, a PAT HILL
+    reconciliation-version upgrade forces one controlled historical source
+    backfill. Once every already-official week has a durable source snapshot,
+    later code changes do not AI-reread those immutable result posts.
     """
 
     now_pt = datetime.now(
@@ -1446,14 +1485,43 @@ def should_scan_standings(state):
     except Exception:
         last_official = 0
 
+    try:
+        pat_hill_version = int(
+            state.get(
+                PAT_HILL_RECONCILIATION_VERSION_KEY
+            )
+            or 0
+        )
+    except Exception:
+        pat_hill_version = 0
+
+    snapshots = (
+        state.get(
+            PAT_HILL_RECORD_SNAPSHOTS_KEY,
+            {}
+        )
+        or {}
+    )
+
+    snapshot_backfill_needed = (
+        pat_hill_version
+        < PAT_HILL_RECONCILIATION_VERSION
+    )
+
+    if (
+        last_official > 0
+        and str(last_official) not in snapshots
+    ):
+        snapshot_backfill_needed = True
+
     expected_completed = (
         completed_week_now()
     )
 
     return (
-        now_pt.weekday() == 1
-        or last_official
-        < expected_completed
+        snapshot_backfill_needed
+        or now_pt.weekday() == 1
+        or last_official < expected_completed
     )
 
 
@@ -1461,77 +1529,29 @@ def should_scan_standings(state):
 # PRINTED STANDINGS PARSER
 # ============================================================
 
-def parse_printed_standings(
-    text,
-    target_week=None,
-):
-    """
-    Parse the WEEKLY records from a PAT HILL standings post.
+PAT_HILL_RECORD_PATTERNS = {
+    "Rico Bosco": [
+        r"@return_of_rb\s+(\d+)-(\d+)(?:-(\d+))?",
+        r"@returnofrb\s+(\d+)-(\d+)(?:-(\d+))?",
+    ],
+    "Big Cat": [
+        r"@barstoolbigcat\s+(\d+)-(\d+)(?:-(\d+))?",
+    ],
+    "Stool Presidente": [
+        r"@stoolpresidente\s+(\d+)-(\d+)(?:-(\d+))?",
+    ],
+}
 
-    PAT HILL posts can contain season standings first and a separate
-    "Week N records" section later. The weekly section is the only
-    valid reconciliation target for replacing one week's card.
-    """
 
-    source = str(
-        text or ""
-    )
-
-    weekly_text = source
-
-    if target_week is not None:
-        section = re.search(
-            (
-                rf"\bweek\s*#?\s*{int(target_week)}"
-                rf"\s+records?\s*:?\s*(.*)$"
-            ),
-            source,
-            flags=re.I | re.S,
-        )
-
-        if section:
-            weekly_text = (
-                section.group(1)
-            )
-        else:
-            # Fail closed when the post contains a weekly-records
-            # section, but not for the target week we intend to
-            # replace. This prevents season standings from being
-            # mistaken for one week's record.
-            any_week_section = re.search(
-                r"\bweek\s*#?\s*\d{1,2}\s+records?\b",
-                source,
-                flags=re.I,
-            )
-
-            if any_week_section:
-                return {}
-
-    patterns = {
-        "Rico Bosco": [
-            r"@return_of_rb\s+(\d+)-(\d+)(?:-(\d+))?",
-            r"@returnofrb\s+(\d+)-(\d+)(?:-(\d+))?",
-        ],
-
-        "Big Cat": [
-            r"@barstoolbigcat\s+(\d+)-(\d+)(?:-(\d+))?",
-        ],
-
-        "Stool Presidente": [
-            r"@stoolpresidente\s+(\d+)-(\d+)(?:-(\d+))?",
-        ],
-    }
-
-    lowered = weekly_text.lower()
+def _parse_pat_hill_record_block(text):
+    source = str(text or "")
     output = {}
 
-    for picker, picker_patterns in (
-        patterns.items()
-    ):
+    for picker, picker_patterns in PAT_HILL_RECORD_PATTERNS.items():
         for pattern in picker_patterns:
             match = re.search(
                 pattern,
-                lowered,
+                source,
                 flags=re.I,
             )
 
@@ -1539,21 +1559,112 @@ def parse_printed_standings(
                 continue
 
             output[picker] = {
-                "wins": int(
-                    match.group(1)
-                ),
-                "losses": int(
-                    match.group(2)
-                ),
-                "pushes": int(
-                    match.group(3)
-                    or 0
-                ),
+                "wins": int(match.group(1)),
+                "losses": int(match.group(2)),
+                "pushes": int(match.group(3) or 0),
             }
-
             break
 
     return output
+
+
+def parse_pat_hill_root_records(
+    text,
+    target_week=None,
+):
+    """Parse season standings and the separate weekly record block.
+
+    Official posts commonly use text such as ``Last weeks records:`` rather
+    than ``Week 6 records:``. The old parser missed that marker and silently
+    returned the first (season/cumulative) record for each picker. This parser
+    treats the two sections as different data types and never substitutes one
+    for the other.
+    """
+    source = str(text or "")
+
+    # Supported real-world headings include:
+    #   Last weeks records:
+    #   Last week's records:
+    #   Last week records:
+    #   Week 6 records:
+    #   Week #6 record:
+    weekly_marker = re.search(
+        r"\b(?:"
+        r"last\s+week(?:['’]s|s)?\s+records?"
+        r"|week\s*#?\s*(\d{1,2})\s+records?"
+        r")\s*:?",
+        source,
+        flags=re.I,
+    )
+
+    season_standings = {}
+    weekly_records = {}
+    single_block_records = {}
+    marker_kind = "NONE"
+
+    if weekly_marker:
+        explicit_week = weekly_marker.group(1)
+
+        if (
+            explicit_week is not None
+            and target_week is not None
+            and int(explicit_week) != int(target_week)
+        ):
+            return {
+                "season_standings": {},
+                "weekly_records": {},
+                "single_block_records": {},
+                "marker_kind": "WRONG_EXPLICIT_WEEK",
+            }
+
+        season_text = source[:weekly_marker.start()]
+        weekly_text = source[weekly_marker.end():]
+
+        season_standings = _parse_pat_hill_record_block(
+            season_text
+        )
+        weekly_records = _parse_pat_hill_record_block(
+            weekly_text
+        )
+        marker_kind = (
+            "EXPLICIT_WEEK"
+            if explicit_week is not None
+            else "LAST_WEEK"
+        )
+    else:
+        # Legacy posts may contain only one record block. Keep it explicitly
+        # ambiguous. The card row count may corroborate it as weekly later,
+        # but it is never treated as a cumulative season standing.
+        single_block_records = _parse_pat_hill_record_block(
+            source
+        )
+
+    return {
+        "season_standings": season_standings,
+        "weekly_records": weekly_records,
+        "single_block_records": single_block_records,
+        "marker_kind": marker_kind,
+    }
+
+
+def parse_printed_standings(
+    text,
+    target_week=None,
+):
+    """Compatibility wrapper returning only the weekly reconciliation record."""
+    parsed = parse_pat_hill_root_records(
+        text,
+        target_week=target_week,
+    )
+
+    weekly = parsed.get("weekly_records") or {}
+    if weekly:
+        return weekly
+
+    # A one-block legacy post can still be validated when its decision totals
+    # equal the extracted result-card rows. It is deliberately not exposed as
+    # a cumulative season standing.
+    return parsed.get("single_block_records") or {}
 
 
 # ============================================================
@@ -8483,290 +8594,190 @@ def validate_official_results(
     target_week,
     existing_picks=None,
 ):
-    if not safe_bool(
-        payload.get("complete")
-    ):
-        raise ValueError(
-            "AI marked result thread incomplete"
-        )
+    """Validate one official result-card extraction against root weekly text.
+
+    Authority order is intentional:
+      1. wager membership + visible row result markers from the result cards;
+      2. the root post's explicit weekly-record block;
+      3. independently verified ESPN grades only to repair a provable marker
+         vision error;
+      4. a printed record OCR'd from a card is corroboration only.
+
+    A card-level printed record can never override an explicit root weekly
+    record. This prevents the Week-6 24-21-1 OCR read from mutating rows when
+    the root post and visible row markers both say 23-22-1.
+    """
+    if not safe_bool(payload.get("complete")):
+        raise ValueError("AI marked result thread incomplete")
 
     try:
-        payload_week = int(
-            payload.get("week")
-        )
+        payload_week = int(payload.get("week"))
     except Exception:
-        raise ValueError(
-            "Official result payload "
-            "has no valid week"
-        )
+        raise ValueError("Official result payload has no valid week")
 
-    if payload_week != int(
-        target_week
-    ):
+    if payload_week != int(target_week):
         raise ValueError(
             "Official result week mismatch: "
             f"{payload_week} vs {target_week}"
         )
 
-    picker_rows = (
-        payload.get("pickers")
-        or []
-    )
-
-    if not isinstance(
-        picker_rows,
-        list,
-    ):
-        raise ValueError(
-            "Official pickers payload is not a list"
-        )
+    picker_rows = payload.get("pickers") or []
+    if not isinstance(picker_rows, list):
+        raise ValueError("Official pickers payload is not a list")
 
     by_picker = {}
-
     for row in picker_rows:
-        if not isinstance(
-            row,
-            dict,
-        ):
+        if not isinstance(row, dict):
             continue
 
-        picker = normalize_picker_safe(
-            row.get("picker")
-        )
-
+        picker = normalize_picker_safe(row.get("picker"))
         if not picker:
             continue
 
         if picker in by_picker:
-            raise ValueError(
-                f"Duplicate official card for {picker}"
-            )
+            raise ValueError(f"Duplicate official card for {picker}")
 
         by_picker[picker] = row
 
-    missing = (
-        TRACKED_PICKERS
-        - set(
-            by_picker.keys()
-        )
-    )
-
+    missing = TRACKED_PICKERS - set(by_picker.keys())
     if missing:
         raise ValueError(
             "Missing official result cards for: "
-            + ", ".join(
-                sorted(missing)
-            )
+            + ", ".join(sorted(missing))
         )
 
     validated = {}
 
-    for picker in sorted(
-        TRACKED_PICKERS
-    ):
+    for picker in sorted(TRACKED_PICKERS):
         row = by_picker[picker]
-
-        record = (
-            row.get(
-                "printed_record"
-            )
-            or {}
+        card_record = row.get("printed_record") or {}
+        card_tuple = (
+            int(card_record.get("wins") or 0),
+            int(card_record.get("losses") or 0),
+            int(card_record.get("pushes") or 0),
         )
 
-        wins = int(
-            record.get("wins")
-            or 0
-        )
-
-        losses = int(
-            record.get("losses")
-            or 0
-        )
-
-        pushes = int(
-            record.get("pushes")
-            or 0
-        )
-
-        picks = (
-            row.get("picks")
-            or []
-        )
-
-        if not isinstance(
-            picks,
-            list,
-        ):
-            raise ValueError(
-                f"{picker} official picks is not a list"
-            )
-
-        result_counts = {
-            "WIN": 0,
-            "LOSS": 0,
-            "PUSH": 0,
-        }
+        picks = row.get("picks") or []
+        if not isinstance(picks, list):
+            raise ValueError(f"{picker} official picks is not a list")
 
         normalized_picks = []
-
         for source_pick in picks:
-            if not isinstance(
-                source_pick,
-                dict,
-            ):
+            if not isinstance(source_pick, dict):
+                raise ValueError(f"{picker} official pick is not an object")
+
+            result = str(source_pick.get("result") or "").upper()
+            if result not in OFFICIAL_RESULT_VALUES:
                 raise ValueError(
-                    f"{picker} official pick is not an object"
+                    f"{picker} has invalid official result: {result}"
                 )
 
-            result = str(
-                source_pick.get(
-                    "result"
-                )
-                or ""
-            ).upper()
-
-            if result not in result_counts:
-                raise ValueError(
-                    f"{picker} has invalid "
-                    f"official result: {result}"
-                )
-
-            selection = clean_text(
-                source_pick.get(
-                    "selection"
-                )
-            )
-
+            selection = clean_text(source_pick.get("selection"))
             if not selection:
                 raise ValueError(
-                    f"{picker} has official "
-                    "pick with empty selection"
+                    f"{picker} has official pick with empty selection"
                 )
 
-            normalized = (
-                normalize_extracted_market(
-                    dict(source_pick)
-                )
-            )
+            normalized = normalize_extracted_market(dict(source_pick))
+            normalized["selection"] = selection
+            normalized["result"] = result
+            normalized_picks.append(normalized)
 
-            normalized[
-                "selection"
-            ] = selection
-
-            normalized[
-                "result"
-            ] = result
-
-            normalized_picks.append(
-                normalized
-            )
-
-            result_counts[
-                result
-            ] += 1
-
-        # ----------------------------------------------------
-        # ----------------------------------------------------
-        # CARD INTERNAL VALIDATION
-        # ----------------------------------------------------
-        # The row-level result markers are the weekly source of truth. A
-        # printed record is enforced only when its decision count equals the
-        # number of rows on this weekly card. If it is larger, it is a
-        # cumulative/season record and must not be compared to Week N rows.
-        row_wins = result_counts["WIN"]
-        row_losses = result_counts["LOSS"]
-        row_pushes = result_counts["PUSH"]
+        row_tuple = _result_tuple_from_picks(normalized_picks)
         row_total = len(normalized_picks)
-        printed_total = wins + losses + pushes
 
-        if printed_total == row_total:
-            if (wins, losses, pushes) != (row_wins, row_losses, row_pushes):
-                normalized_picks, result_corrections = (
+        root_record = (printed_standings or {}).get(picker) or {}
+        root_tuple = (
+            int(root_record.get("wins") or 0),
+            int(root_record.get("losses") or 0),
+            int(root_record.get("pushes") or 0),
+        )
+        root_total = sum(root_tuple)
+        card_total = sum(card_tuple)
+
+        # Explicit/parsed weekly root text is the aggregate invariant when its
+        # decision count matches this card. A mismatch is eligible for repair
+        # only from independently verified ESPN-final evidence.
+        if root_total == row_total and row_total > 0:
+            if row_tuple != root_tuple:
+                normalized_picks, corrections = (
                     reconcile_official_result_markers_with_espn(
                         normalized_picks,
                         picker=picker,
                         target_week=target_week,
-                        printed_record=(
-                            wins,
-                            losses,
-                            pushes,
-                        ),
+                        printed_record=root_tuple,
                         existing_picks=existing_picks,
                     )
                 )
 
-                if result_corrections:
-                    (
-                        row_wins,
-                        row_losses,
-                        row_pushes,
-                    ) = _result_tuple_from_picks(
-                        normalized_picks
-                    )
+                if corrections:
+                    row_tuple = _result_tuple_from_picks(normalized_picks)
 
-                if (wins, losses, pushes) != (row_wins, row_losses, row_pushes):
+                if row_tuple != root_tuple:
                     raise ValueError(
-                        f"{picker} weekly card record does not match row results: "
-                        f"{wins}-{losses}-{pushes} vs "
-                        f"{row_wins}-{row_losses}-{row_pushes}"
+                        f"{picker} root weekly record does not match row "
+                        f"results: {root_tuple[0]}-{root_tuple[1]}-"
+                        f"{root_tuple[2]} vs {row_tuple[0]}-"
+                        f"{row_tuple[1]}-{row_tuple[2]}"
                     )
-        else:
-            print(
-                "PAT HILL card printed record appears cumulative/contextual:",
-                picker,
-                "| printed:",
-                f"{wins}-{losses}-{pushes}",
-                "| weekly rows:",
-                f"{row_wins}-{row_losses}-{row_pushes}",
-                "| row count:",
-                row_total,
-            )
 
-        # Store the WEEKLY record derived from the individual verified rows.
-        wins = row_wins
-        losses = row_losses
-        pushes = row_pushes
-
-        # ----------------------------------------------------
-        # ROOT STANDINGS CORROBORATION
-        # ----------------------------------------------------
-        # Root text can contain cumulative/season standings. Compare it to
-        # the weekly card only when both describe the same number of wagers.
-        if picker in printed_standings:
-            tweet_record = printed_standings[picker]
-            expected_tuple = (
-                int(tweet_record.get("wins") or 0),
-                int(tweet_record.get("losses") or 0),
-                int(tweet_record.get("pushes") or 0),
-            )
-            image_tuple = (wins, losses, pushes)
-            expected_total = sum(expected_tuple)
-            image_total = len(normalized_picks)
-
-            if expected_total == image_total:
-                if expected_tuple != image_tuple:
-                    raise ValueError(
-                        f"{picker} weekly standings-text record "
-                        f"does not match card: {expected_tuple} vs {image_tuple}"
-                    )
-            else:
+            if card_total == row_total and card_tuple != root_tuple:
                 print(
-                    "PAT HILL cumulative/context standings detected:",
+                    "PAT HILL IMAGE PRINTED RECORD CONFLICT:",
                     picker,
-                    "| root:",
-                    f"{expected_tuple[0]}-{expected_tuple[1]}-{expected_tuple[2]}",
-                    "| weekly card:",
-                    f"{image_tuple[0]}-{image_tuple[1]}-{image_tuple[2]}",
-                    "| weekly rows:",
-                    image_total,
+                    "| root weekly:",
+                    f"{root_tuple[0]}-{root_tuple[1]}-{root_tuple[2]}",
+                    "| image printed:",
+                    f"{card_tuple[0]}-{card_tuple[1]}-{card_tuple[2]}",
+                    "| row markers:",
+                    f"{row_tuple[0]}-{row_tuple[1]}-{row_tuple[2]}",
+                    "| action: preserve root+row evidence",
                 )
 
+        # Legacy one-block roots can be ambiguous. If the parsed root total is
+        # not a weekly-card total, require the card's own printed record to be
+        # internally consistent; never silently call the root cumulative.
+        elif card_total == row_total and row_total > 0:
+            if row_tuple != card_tuple:
+                normalized_picks, corrections = (
+                    reconcile_official_result_markers_with_espn(
+                        normalized_picks,
+                        picker=picker,
+                        target_week=target_week,
+                        printed_record=card_tuple,
+                        existing_picks=existing_picks,
+                    )
+                )
+
+                if corrections:
+                    row_tuple = _result_tuple_from_picks(normalized_picks)
+
+                if row_tuple != card_tuple:
+                    raise ValueError(
+                        f"{picker} legacy card record does not match row "
+                        f"results: {card_tuple[0]}-{card_tuple[1]}-"
+                        f"{card_tuple[2]} vs {row_tuple[0]}-"
+                        f"{row_tuple[1]}-{row_tuple[2]}"
+                    )
+
+            print(
+                "PAT HILL ROOT WEEKLY RECORD UNAVAILABLE/AMBIGUOUS:",
+                picker,
+                "| accepted internally consistent card record:",
+                f"{row_tuple[0]}-{row_tuple[1]}-{row_tuple[2]}",
+            )
+        else:
+            raise ValueError(
+                f"{picker} has no trustworthy weekly aggregate: "
+                f"root_total={root_total}, card_total={card_total}, "
+                f"rows={row_total}"
+            )
+
         validated[picker] = {
-            "wins": wins,
-            "losses": losses,
-            "pushes": pushes,
-            "picks":
-                normalized_picks,
+            "wins": row_tuple[0],
+            "losses": row_tuple[1],
+            "pushes": row_tuple[2],
+            "picks": normalized_picks,
         }
 
     return validated
@@ -9081,11 +9092,14 @@ def official_week_is_healthy(
     printed_standings,
     result_post_id,
 ):
+    """Validate one stored official week against the root weekly record.
+
+    Cumulative/season standings are validated separately across all weeks and
+    must never be waived merely because their decision count differs from one
+    weekly card.
+    """
     print()
-    print(
-        "VALIDATING STORED OFFICIAL WEEK:",
-        target_week,
-    )
+    print("VALIDATING STORED OFFICIAL WEEK:", target_week)
 
     healthy = True
 
@@ -9094,19 +9108,12 @@ def official_week_is_healthy(
         "Big Cat",
         "Stool Presidente",
     ]:
-        expected = (
-            printed_standings.get(
-                picker
-            )
-        )
-
+        expected = (printed_standings or {}).get(picker)
         if not expected:
             print(
-                "OFFICIAL VALIDATION FAILED:",
-                picker,
-                "| printed standings missing",
+                "OFFICIAL VALIDATION FAILED:", picker,
+                "| weekly standings missing",
             )
-
             healthy = False
             continue
 
@@ -9114,176 +9121,157 @@ def official_week_is_healthy(
             pick
             for pick in existing
             if (
-                pick_week(pick)
-                == int(target_week)
-                and normalize_picker_safe(
-                    pick.get("picker")
-                )
-                == picker
+                pick_week(pick) == int(target_week)
+                and normalize_picker_safe(pick.get("picker")) == picker
             )
         ]
 
         non_official = [
-            pick
-            for pick in rows
-            if not pick.get(
-                "official_reconciled"
-            )
+            pick for pick in rows
+            if not pick.get("official_reconciled")
         ]
-
         if non_official:
             print(
-                "OFFICIAL VALIDATION FAILED:",
-                picker,
-                "| non-official rows:",
-                len(non_official),
+                "OFFICIAL VALIDATION FAILED:", picker,
+                "| non-official rows:", len(non_official),
             )
-
             healthy = False
 
         wrong_source = [
-            pick
-            for pick in rows
-            if str(
-                pick.get(
-                    "official_result_post_id"
-                )
-                or ""
-            )
-            != str(
-                result_post_id
-            )
+            pick for pick in rows
+            if str(pick.get("official_result_post_id") or "")
+            != str(result_post_id)
         ]
-
         if wrong_source:
             print(
-                "OFFICIAL VALIDATION FAILED:",
-                picker,
-                "| wrong result source rows:",
-                len(wrong_source),
+                "OFFICIAL VALIDATION FAILED:", picker,
+                "| wrong result source rows:", len(wrong_source),
             )
-
             healthy = False
 
         invalid_rows = [
-            pick
-            for pick in rows
+            pick for pick in rows
             if (
-                str(
-                    pick.get("result")
-                    or ""
-                ).upper()
-                not in {
-                    "WIN",
-                    "LOSS",
-                    "PUSH",
-                }
-                or str(
-                    pick.get("status")
-                    or ""
-                ).upper()
-                != "FINAL"
+                str(pick.get("result") or "").upper()
+                not in OFFICIAL_RESULT_VALUES
+                or str(pick.get("status") or "").upper() != "FINAL"
             )
         ]
-
         if invalid_rows:
             print(
-                "OFFICIAL VALIDATION FAILED:",
-                picker,
-                "| invalid/pending official rows:",
-                len(invalid_rows),
+                "OFFICIAL VALIDATION FAILED:", picker,
+                "| invalid/pending official rows:", len(invalid_rows),
             )
-
             healthy = False
 
-        wins = sum(
-            1
-            for pick in rows
-            if str(
-                pick.get("result")
-                or ""
-            ).upper()
-            == "WIN"
+        actual = _result_tuple_from_picks(rows)
+        expected_tuple = (
+            int(expected.get("wins") or 0),
+            int(expected.get("losses") or 0),
+            int(expected.get("pushes") or 0),
         )
-
-        losses = sum(
-            1
-            for pick in rows
-            if str(
-                pick.get("result")
-                or ""
-            ).upper()
-            == "LOSS"
-        )
-
-        pushes = sum(
-            1
-            for pick in rows
-            if str(
-                pick.get("result")
-                or ""
-            ).upper()
-            == "PUSH"
-        )
-
-        expected_wins = int(
-            expected.get("wins")
-            or 0
-        )
-
-        expected_losses = int(
-            expected.get("losses")
-            or 0
-        )
-
-        expected_pushes = int(
-            expected.get("pushes")
-            or 0
-        )
-
-        expected_total = (
-            expected_wins
-            + expected_losses
-            + expected_pushes
-        )
+        expected_total = sum(expected_tuple)
 
         print(
             picker,
             "| stored:",
-            f"{wins}-{losses}-{pushes}",
-            "| expected:",
-            f"{expected_wins}-"
-            f"{expected_losses}-"
-            f"{expected_pushes}",
-            "| rows:",
-            len(rows),
-            "/",
-            expected_total,
+            f"{actual[0]}-{actual[1]}-{actual[2]}",
+            "| weekly root:",
+            f"{expected_tuple[0]}-{expected_tuple[1]}-{expected_tuple[2]}",
+            "| rows:", len(rows), "/", expected_total,
         )
 
-        # Root standings can be cumulative. Enforce them only when their
-        # decision count equals this stored weekly card's row count.
-        if expected_total == len(rows):
-            if (
-                wins != expected_wins
-                or losses != expected_losses
-                or pushes != expected_pushes
-            ):
-                print(
-                    "OFFICIAL VALIDATION FAILED:",
-                    picker,
-                    "| weekly record mismatch",
-                )
-                healthy = False
-        else:
+        if len(rows) != expected_total or actual != expected_tuple:
             print(
-                "OFFICIAL VALIDATION NOTE:",
-                picker,
-                "| root standings appear cumulative/contextual; "
-                "stored weekly card retained",
+                "OFFICIAL VALIDATION FAILED:", picker,
+                "| weekly record mismatch",
             )
+            healthy = False
 
     return healthy
+
+
+def _record_snapshot_summary(validated):
+    output = {}
+    for picker in TRACKED_PICKERS:
+        data = (validated or {}).get(picker) or {}
+        output[picker] = {
+            "wins": int(data.get("wins") or 0),
+            "losses": int(data.get("losses") or 0),
+            "pushes": int(data.get("pushes") or 0),
+            "pick_count": len(data.get("picks") or []),
+        }
+    return output
+
+
+def _stored_week_snapshot_summary(existing, target_week):
+    output = {}
+    for picker in TRACKED_PICKERS:
+        rows = [
+            pick
+            for pick in existing
+            if (
+                bool(pick.get("official_reconciled"))
+                and pick_week(pick) == int(target_week)
+                and normalize_picker_safe(pick.get("picker")) == picker
+            )
+        ]
+        record = _result_tuple_from_picks(rows)
+        output[picker] = {
+            "wins": record[0],
+            "losses": record[1],
+            "pushes": record[2],
+            "pick_count": len(rows),
+        }
+    return output
+
+
+def _stored_cumulative_record(existing, picker, through_week):
+    rows = [
+        pick
+        for pick in existing
+        if (
+            bool(pick.get("official_reconciled"))
+            and 1 <= pick_week(pick) <= int(through_week)
+            and normalize_picker_safe(pick.get("picker")) == picker
+        )
+    ]
+    return _result_tuple_from_picks(rows), len(rows)
+
+
+def print_pat_hill_cumulative_validation(existing, snapshots):
+    """Print cumulative source-vs-row health; the integrity audit enforces it."""
+    for week_key in sorted(
+        snapshots,
+        key=lambda value: int(value) if str(value).isdigit() else 999,
+    ):
+        snapshot = snapshots.get(week_key) or {}
+        season = snapshot.get("season_standings") or {}
+        if len(season) != len(TRACKED_PICKERS):
+            continue
+
+        week = int(week_key)
+        for picker in sorted(TRACKED_PICKERS):
+            expected = season.get(picker) or {}
+            expected_tuple = (
+                int(expected.get("wins") or 0),
+                int(expected.get("losses") or 0),
+                int(expected.get("pushes") or 0),
+            )
+            actual, row_count = _stored_cumulative_record(
+                existing, picker, week
+            )
+            status = "PASS" if actual == expected_tuple else "MISMATCH"
+            print(
+                "PAT HILL CUMULATIVE",
+                status,
+                "| Week", week,
+                "|", picker,
+                "| stored:", f"{actual[0]}-{actual[1]}-{actual[2]}",
+                "| official:",
+                f"{expected_tuple[0]}-{expected_tuple[1]}-{expected_tuple[2]}",
+                "| rows:", row_count,
+            )
 
 
 # ============================================================
@@ -9295,396 +9283,387 @@ def reconcile_pat_hill_standings(
     state,
     official_user_id,
 ):
+    """Reconcile official result posts with durable weekly/season snapshots.
+
+    On a reconciliation-version upgrade this function performs a controlled
+    historical backfill by fetching the exact official result post IDs already
+    attached to stored official rows. That lets us repair old weekly records
+    without relying on the current 14-day timeline window. Successfully
+    snapshotted immutable posts are not vision-reread on later runs.
+    """
     print()
-    print(
-        "===================================="
-    )
-    print(
-        "PAT HILL STANDINGS SCAN"
-    )
-    print(
-        "===================================="
-    )
+    print("====================================")
+    print("PAT HILL STANDINGS SCAN")
+    print("====================================")
 
     start_time = (
-        datetime.now(
-            timezone.utc
-        )
-        - timedelta(
-            days=
-                STANDINGS_LOOKBACK_DAYS
-        )
+        datetime.now(timezone.utc)
+        - timedelta(days=STANDINGS_LOOKBACK_DAYS)
     )
 
-    posts, media_map = (
-        fetch_user_posts(
-            official_user_id,
-            start_time=start_time,
-            max_pages=
-                STANDINGS_MAX_PAGES,
-        )
+    posts, media_map = fetch_user_posts(
+        official_user_id,
+        start_time=start_time,
+        max_pages=STANDINGS_MAX_PAGES,
     )
 
-    root_candidates = [
-        post
+    # Recent discovery handles the newest week. Historical exact-ID discovery
+    # handles one-time snapshot backfills and source-grounded repairs.
+    roots_by_id = {
+        str(post.get("id")): post
         for post in posts
-        if is_pat_hill_text(
-            post.get("text")
-        )
-    ]
+        if post.get("id") and is_pat_hill_text(post.get("text"))
+    }
 
-    if not root_candidates:
-        print(
-            "No PAT HILL STANDINGS "
-            "root post found yet."
+    known_root_ids = sorted({
+        str(pick.get("official_result_post_id") or "")
+        for pick in existing
+        if (
+            bool(pick.get("official_reconciled"))
+            and str(pick.get("official_result_post_id") or "")
         )
+    }, key=post_numeric_sort)
 
+    exact_fetch_failures = []
+    for root_id in known_root_ids:
+        if root_id in roots_by_id:
+            continue
+        try:
+            root_post, root_media = fetch_post_by_id(root_id)
+        except Exception as exc:
+            exact_fetch_failures.append(root_id)
+            print(
+                "PAT HILL exact historical root fetch failed:",
+                root_id,
+                type(exc).__name__,
+                exc,
+            )
+            continue
+
+        if not root_post:
+            exact_fetch_failures.append(root_id)
+            continue
+
+        if str(root_post.get("author_id") or "") != str(official_user_id):
+            exact_fetch_failures.append(root_id)
+            print(
+                "PAT HILL exact historical root rejected: wrong author",
+                root_id,
+            )
+            continue
+
+        if not is_pat_hill_text(source_post_text(root_post)):
+            exact_fetch_failures.append(root_id)
+            print(
+                "PAT HILL exact historical root rejected: root text is not PAT HILL",
+                root_id,
+            )
+            continue
+
+        roots_by_id[root_id] = root_post
+        media_map.update(root_media or {})
+
+    if not roots_by_id:
+        print("No PAT HILL STANDINGS root post found yet.")
         return existing
 
     root_candidates = sorted(
-        root_candidates,
-        key=lambda post:
-            post_numeric_sort(
-                post.get("id")
-            ),
-        reverse=False,
+        roots_by_id.values(),
+        key=lambda post: post_numeric_sort(post.get("id")),
     )
 
     processed = set(
         str(value)
         for value in (
-            state.get(
-                OFFICIAL_RESULT_STATE_KEY,
-                [],
-            )
-            or []
+            state.get(OFFICIAL_RESULT_STATE_KEY, []) or []
         )
     )
 
-    for root_post in root_candidates:
-        root_id = str(
-            root_post.get("id")
-            or ""
-        )
+    snapshots = dict(
+        state.get(PAT_HILL_RECORD_SNAPSHOTS_KEY, {}) or {}
+    )
+    all_snapshot_backfills_current = not exact_fetch_failures
 
+    for root_post in root_candidates:
+        root_id = str(root_post.get("id") or "")
         if not root_id:
             continue
 
-        conversation_id = str(
-            root_post.get(
-                "conversation_id"
-            )
-            or root_id
-        )
-
-        # ----------------------------------------------------
-        # Exhaustive official PAT HILL source collection.
-        #
-        # Do not trust only the broad account-timeline page set.
-        # Collect the conversation again through targeted recent
-        # search plus an independent deeper timeline pass, merge
-        # all official posts/media, and let the existing strict
-        # result-card validation decide whether Week N is safe.
-        # ----------------------------------------------------
-
-        thread_posts, thread_media_map = (
-            collect_pat_hill_thread(
-                root_post=root_post,
-                discovery_posts=posts,
-                discovery_media_map=media_map,
-                official_user_id=official_user_id,
-                standings_start_time=start_time,
-            )
-        )
-
-        target_week = (
-            standings_target_week(
-                root_post
-            )
-        )
-
+        target_week = standings_target_week(root_post)
         if not target_week:
-            print(
-                "Could not determine standings week:",
-                root_id,
-            )
+            print("Could not determine standings week:", root_id)
+            all_snapshot_backfills_current = False
             continue
 
-        printed_standings = (
-            parse_printed_standings(
-                source_post_text(root_post),
-                target_week=target_week,
-            )
+        source_text = source_post_text(root_post)
+        parsed_records = parse_pat_hill_root_records(
+            source_text,
+            target_week=target_week,
         )
+        weekly_records = (
+            parsed_records.get("weekly_records")
+            or parsed_records.get("single_block_records")
+            or {}
+        )
+        season_standings = parsed_records.get("season_standings") or {}
 
-        if len(
-            printed_standings
-        ) != 3:
+        if len(weekly_records) != len(TRACKED_PICKERS):
             print(
-                "PAT HILL standings text "
-                "does not contain all 3 pickers yet."
+                "PAT HILL weekly record block does not contain all 3 pickers:",
+                root_id,
+                "| marker:", parsed_records.get("marker_kind"),
+                "| found:", weekly_records,
             )
-
-            print(
-                "Found:",
-                printed_standings,
-            )
-
+            all_snapshot_backfills_current = False
             continue
+
+        source_hash = hashlib.sha256(
+            str(source_text or "").encode("utf-8")
+        ).hexdigest()
+        week_key = str(int(target_week))
+        snapshot = snapshots.get(week_key) or {}
+        snapshot_current = (
+            int(snapshot.get("version") or 0)
+            >= PAT_HILL_RECONCILIATION_VERSION
+            and str(snapshot.get("post_id") or "") == root_id
+            and str(snapshot.get("source_text_sha256") or "") == source_hash
+            and snapshot.get("weekly_records") == weekly_records
+        )
 
         print()
-        print(
-            "PAT HILL STANDINGS FOUND"
-        )
+        print("PAT HILL STANDINGS FOUND")
+        print("Official result post:", root_id)
+        print("Reconciling Week:", target_week)
+        print("Weekly records:", weekly_records)
+        if season_standings:
+            print("Season standings:", season_standings)
 
-        print(
-            "Official result post:",
-            root_id,
-        )
-
-        print(
-            "Conversation:",
-            conversation_id,
-        )
-
-        print(
-            "Official thread posts found:",
-            len(thread_posts),
-        )
-
-        print(
-            "Reconciling Week:",
-            target_week,
-        )
-
-        print(
-            "Printed standings:",
-            printed_standings,
-        )
-
-        # ----------------------------------------------------
-        # Self-heal already-processed official threads.
-        # ----------------------------------------------------
-
-        if root_id in processed:
-            healthy = (
-                official_week_is_healthy(
-                    existing,
-                    target_week=
-                        target_week,
-                    printed_standings=
-                        printed_standings,
-                    result_post_id=
-                        root_id,
-                )
+        # Durable source contract: if this immutable official post already has
+        # a current snapshot and stored rows still match it, do not AI-reread.
+        if root_id in processed and snapshot_current:
+            healthy = official_week_is_healthy(
+                existing,
+                target_week=target_week,
+                printed_standings=weekly_records,
+                result_post_id=root_id,
             )
 
             if healthy:
                 print(
-                    "Already reconciled and "
-                    "validated standings thread:",
-                    root_id,
+                    "Already reconciled from durable PAT HILL snapshot; "
+                    "no AI reread:", root_id,
                 )
-
                 continue
 
-            print()
             print(
-                "****************************************"
-            )
-            print(
-                "OFFICIAL WEEK DATA IS NOT HEALTHY"
-            )
-            print(
-                "RE-RUNNING PAT HILL RECONCILIATION"
-            )
-            print(
-                "****************************************"
+                "PAT HILL snapshot is current but stored weekly rows are not; "
+                "performing controlled source recovery:", root_id,
             )
 
-        # ----------------------------------------------------
-        # Extract + validate all official result cards.
-        # ----------------------------------------------------
+        # One-time migration path: if existing official rows already satisfy
+        # the newly parsed root WEEKLY record and are sourced to this exact
+        # post, create the durable root-text snapshot without another vision
+        # reread. Only weeks whose stored rows actually conflict with the root
+        # weekly record are sent through controlled source-card recovery.
+        if not snapshot_current:
+            existing_week_healthy = official_week_is_healthy(
+                existing,
+                target_week=target_week,
+                printed_standings=weekly_records,
+                result_post_id=root_id,
+            )
+
+            if existing_week_healthy:
+                snapshots[week_key] = {
+                    "version": PAT_HILL_RECONCILIATION_VERSION,
+                    "week": int(target_week),
+                    "post_id": root_id,
+                    "conversation_id": str(
+                        root_post.get("conversation_id") or root_id
+                    ),
+                    "posted_at": root_post.get("created_at"),
+                    "source_text": source_text,
+                    "source_text_sha256": source_hash,
+                    "marker_kind": parsed_records.get("marker_kind"),
+                    "weekly_records": weekly_records,
+                    "season_standings": season_standings,
+                    "validated_weekly_records": (
+                        _stored_week_snapshot_summary(
+                            existing, target_week
+                        )
+                    ),
+                    "snapshot_origin": (
+                        "MIGRATED_EXISTING_OFFICIAL_ROWS_WITH_ROOT_WEEKLY_MATCH"
+                    ),
+                    "reconciled_at": now_iso(),
+                }
+                processed.add(root_id)
+                print(
+                    "PAT HILL durable snapshot migrated without AI reread:",
+                    root_id,
+                    "| Week", target_week,
+                )
+                continue
+
+        # Collect every source image only when a snapshot is missing/stale or
+        # stored official rows no longer satisfy the authoritative root weekly
+        # record.
+        thread_posts, thread_media_map = collect_pat_hill_thread(
+            root_post=root_post,
+            discovery_posts=posts + [root_post],
+            discovery_media_map=media_map,
+            official_user_id=official_user_id,
+            standings_start_time=start_time,
+        )
 
         try:
-            payload = (
-                parse_official_result_cards(
-                    root_post=root_post,
-                    thread_posts=
-                        thread_posts,
-                    media_map=thread_media_map,
-                    target_week=
-                        target_week,
-                )
+            payload = parse_official_result_cards(
+                root_post=root_post,
+                thread_posts=thread_posts,
+                media_map=thread_media_map,
+                target_week=target_week,
             )
 
-            validated = (
-                validate_official_results(
-                    payload,
-                    printed_standings=
-                        printed_standings,
-                    target_week=
-                        target_week,
-                    existing_picks=
-                        existing,
-                )
+            validated = validate_official_results(
+                payload,
+                printed_standings=weekly_records,
+                target_week=target_week,
+                existing_picks=existing,
             )
-
         except Exception as exc:
-            print(
-                "OFFICIAL RECONCILIATION "
-                "NOT READY / FAILED:"
-            )
-
-            print(
-                type(exc).__name__,
-                exc,
-            )
-
-            print(
-                "Existing database left unchanged."
-            )
-
-            print(
-                "Thread will be retried on "
-                "the next eligible pipeline run."
-            )
-
+            print("OFFICIAL RECONCILIATION NOT READY / FAILED:")
+            print(type(exc).__name__, exc)
+            print("Existing database left unchanged for this week.")
+            print("Thread will be retried on the next eligible pipeline run.")
+            all_snapshot_backfills_current = False
             continue
 
         print()
-        print(
-            "OFFICIAL CARD VALIDATION PASSED"
-        )
-
-        for picker in [
-            "Rico Bosco",
-            "Big Cat",
-            "Stool Presidente",
-        ]:
+        print("OFFICIAL CARD VALIDATION PASSED")
+        for picker in ["Rico Bosco", "Big Cat", "Stool Presidente"]:
             data = validated[picker]
-
             print(
                 picker,
                 "| Official:",
-                f"{data['wins']}-"
-                f"{data['losses']}-"
-                f"{data['pushes']}",
-                "| picks:",
-                len(data["picks"]),
+                f"{data['wins']}-{data['losses']}-{data['pushes']}",
+                "| picks:", len(data["picks"]),
             )
 
-        official_rows = (
-            build_official_week_rows(
-                validated=validated,
-                target_week=target_week,
-                root_post=root_post,
-            )
+        official_rows = build_official_week_rows(
+            validated=validated,
+            target_week=target_week,
+            root_post=root_post,
         )
 
         expected_total = sum(
-            (
-                data["wins"]
-                + data["losses"]
-                + data["pushes"]
-            )
-            for data in (
-                validated.values()
-            )
+            data["wins"] + data["losses"] + data["pushes"]
+            for data in validated.values()
         )
 
-        if len(
-            official_rows
-        ) != expected_total:
+        if len(official_rows) != expected_total:
             print(
-                "OFFICIAL RECONCILIATION ABORTED:"
-            )
-
-            print(
-                "Built",
+                "OFFICIAL RECONCILIATION ABORTED: built",
                 len(official_rows),
                 "rows but expected",
                 expected_total,
             )
-
+            all_snapshot_backfills_current = False
             continue
 
-        existing = (
-            replace_week_with_official(
-                existing,
-                official_rows=
-                    official_rows,
-                target_week=
-                    target_week,
-            )
+        candidate_existing = replace_week_with_official(
+            existing,
+            official_rows=official_rows,
+            target_week=target_week,
         )
 
-        post_replace_healthy = (
-            official_week_is_healthy(
-                existing,
-                target_week=
-                    target_week,
-                printed_standings=
-                    printed_standings,
-                result_post_id=
-                    root_id,
+        if not official_week_is_healthy(
+            candidate_existing,
+            target_week=target_week,
+            printed_standings=weekly_records,
+            result_post_id=root_id,
+        ):
+            print(
+                "OFFICIAL RECONCILIATION ABORTED: replacement failed "
+                "weekly root validation; existing database preserved."
             )
-        )
+            all_snapshot_backfills_current = False
+            continue
 
-        if not post_replace_healthy:
-            raise RuntimeError(
-                "Official rows failed "
-                "post-reconciliation validation."
-            )
+        # Transaction commit for this official week.
+        existing = candidate_existing
+        processed.add(root_id)
 
-        processed.add(
-            root_id
-        )
-
-        state[
-            OFFICIAL_RESULT_STATE_KEY
-        ] = sorted(
-            processed,
-            key=post_numeric_sort,
-        )[-100:]
+        snapshots[week_key] = {
+            "version": PAT_HILL_RECONCILIATION_VERSION,
+            "week": int(target_week),
+            "post_id": root_id,
+            "conversation_id": str(
+                root_post.get("conversation_id") or root_id
+            ),
+            "posted_at": root_post.get("created_at"),
+            "source_text": source_text,
+            "source_text_sha256": source_hash,
+            "marker_kind": parsed_records.get("marker_kind"),
+            "weekly_records": weekly_records,
+            "season_standings": season_standings,
+            "validated_weekly_records": _record_snapshot_summary(validated),
+            "reconciled_at": now_iso(),
+        }
 
         try:
             prior_official_week = int(
-                state.get(
-                    "last_official_reconciled_week"
-                )
-                or 0
+                state.get("last_official_reconciled_week") or 0
             )
         except Exception:
             prior_official_week = 0
 
-        state[
-            "last_official_reconciled_week"
-        ] = max(
+        state["last_official_reconciled_week"] = max(
             prior_official_week,
             int(target_week),
         )
-
-        state[
-            "last_official_result_post_id"
-        ] = root_id
-
-        state[
-            "last_official_reconciled_at"
-        ] = now_iso()
+        state["last_official_result_post_id"] = root_id
+        state["last_official_reconciled_at"] = now_iso()
 
         print()
+        print("====================================")
+        print("OFFICIAL WEEK", target_week, "RECONCILIATION COMPLETE")
+        print("====================================")
+
+    state[OFFICIAL_RESULT_STATE_KEY] = sorted(
+        processed,
+        key=post_numeric_sort,
+    )[-100:]
+    state[PAT_HILL_RECORD_SNAPSHOTS_KEY] = snapshots
+
+    # Mark the new durable contract current only when every historical root we
+    # already know about could be fetched and has a current week snapshot.
+    known_weeks = {
+        str(pick_week(pick))
+        for pick in existing
+        if bool(pick.get("official_reconciled")) and pick_week(pick) > 0
+    }
+    missing_snapshot_weeks = sorted(
+        week for week in known_weeks
+        if int((snapshots.get(week) or {}).get("version") or 0)
+        < PAT_HILL_RECONCILIATION_VERSION
+    )
+
+    if missing_snapshot_weeks:
+        all_snapshot_backfills_current = False
         print(
-            "===================================="
+            "PAT HILL durable snapshot backfill still incomplete; weeks:",
+            ", ".join(missing_snapshot_weeks),
         )
-        print(
-            "OFFICIAL WEEK",
-            target_week,
-            "RECONCILIATION COMPLETE"
+
+    if all_snapshot_backfills_current:
+        state[PAT_HILL_RECONCILIATION_VERSION_KEY] = (
+            PAT_HILL_RECONCILIATION_VERSION
         )
-        print(
-            "===================================="
-        )
+
+    print_pat_hill_cumulative_validation(
+        existing,
+        snapshots,
+    )
 
     return existing
 
