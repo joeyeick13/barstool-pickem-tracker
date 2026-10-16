@@ -41,13 +41,30 @@ CFB_SPORTS = {
     "NCAAF",
 }
 
-PAT_HILL_RECONCILIATION_VERSION = 2
+PAT_HILL_RECONCILIATION_VERSION = 3
 PAT_HILL_RECONCILIATION_VERSION_KEY = (
     "pat_hill_reconciliation_version"
 )
 PAT_HILL_RECORD_SNAPSHOTS_KEY = (
     "pat_hill_official_record_snapshots_v2"
 )
+
+OFFICIAL_ROW_VERIFICATION_VERSION = 1
+OFFICIAL_ROW_VERIFICATION_VERSION_KEY = (
+    "official_row_verification_version"
+)
+OFFICIAL_ROW_RECONCILIATION_REQUIRED_KEY = (
+    "official_row_reconciliation_required_weeks"
+)
+OFFICIAL_ROW_CUMULATIVE_FAILURES_KEY = (
+    "official_row_cumulative_contract_failures_v1"
+)
+
+RESULT_EMOJI = {
+    "WIN": "✅",
+    "LOSS": "❌",
+    "PUSH": "➖",
+}
 
 AMBIGUOUS_CONTEXT_GROUPS = {
     "osu": {
@@ -1239,6 +1256,209 @@ def audit_official_rows(
 
 
 # ============================================================
+# OFFICIAL ROW-BY-ROW ESPN FINAL VERIFICATION CONTRACT
+# ============================================================
+
+def audit_official_row_verification(
+    picks,
+    state,
+    audit,
+):
+    """Require every PAT HILL row to have an independent ESPN final grade.
+
+    The source emoji/marker is preserved as evidence. The tracker/display
+    result may differ only when the exact wager was independently graded from
+    its locked ESPN final and the correction provenance is durable.
+    """
+    official_rows = [
+        pick for pick in picks
+        if is_official(pick)
+    ]
+
+    if not official_rows:
+        return
+
+    try:
+        state_version = int(
+            state.get(OFFICIAL_ROW_VERIFICATION_VERSION_KEY) or 0
+        )
+    except Exception:
+        state_version = 0
+
+    if state_version < OFFICIAL_ROW_VERIFICATION_VERSION:
+        audit.error(
+            "OFFICIAL_ROW_VERIFICATION_STALE",
+            (
+                "Historical official rows have not completed the exact "
+                "ESPN row-by-row verification backfill "
+                f"({state_version}/{OFFICIAL_ROW_VERIFICATION_VERSION})."
+            ),
+        )
+
+    reconciliation_required = (
+        state.get(OFFICIAL_ROW_RECONCILIATION_REQUIRED_KEY, [])
+        or []
+    )
+    if reconciliation_required:
+        audit.error(
+            "OFFICIAL_ROW_SOURCE_RECONCILIATION_REQUIRED",
+            (
+                "Verified game-by-game ESPN grades do not yet reconcile "
+                "to official PAT HILL weekly source totals for week(s): "
+                + ", ".join(str(x) for x in reconciliation_required)
+            ),
+        )
+
+    cumulative_failures = (
+        state.get(OFFICIAL_ROW_CUMULATIVE_FAILURES_KEY, [])
+        or []
+    )
+    if cumulative_failures:
+        audit.error(
+            "OFFICIAL_ROW_CUMULATIVE_CONTRACT_FAILED",
+            (
+                "Independently verified game-by-game official results do "
+                "not reconcile to one or more published cumulative PAT HILL "
+                f"standings snapshots: {cumulative_failures}"
+            ),
+        )
+
+    for pick in official_rows:
+        label = row_label(pick)
+        result = result_value(pick)
+
+        try:
+            row_version = int(
+                pick.get("official_row_verification_version") or 0
+            )
+        except Exception:
+            row_version = 0
+
+        if row_version < OFFICIAL_ROW_VERIFICATION_VERSION:
+            audit.error(
+                "OFFICIAL_ROW_UNVERIFIED",
+                f"{label} has no current ESPN row verification.",
+            )
+            continue
+
+        if str(
+            pick.get("official_row_verification_status") or ""
+        ).upper() != "VERIFIED":
+            audit.error(
+                "OFFICIAL_ROW_UNVERIFIED",
+                (
+                    f"{label} verification status="
+                    f"{pick.get('official_row_verification_status')!r} "
+                    f"error={pick.get('official_row_verification_error')!r}."
+                ),
+            )
+            continue
+
+        if str(
+            pick.get("result_verification_source") or ""
+        ).upper() != "ESPN_FINAL_ROW_GRADE":
+            audit.error(
+                "OFFICIAL_ROW_BAD_VERIFICATION_SOURCE",
+                f"{label} is not independently graded from ESPN final data.",
+            )
+
+        event_id = str(pick.get("event_id") or "").strip()
+        if not event_id:
+            audit.error(
+                "OFFICIAL_ROW_NO_EVENT",
+                f"{label} has no verified ESPN event_id.",
+            )
+
+        if not str(pick.get("final_score") or "").strip():
+            audit.error(
+                "OFFICIAL_ROW_NO_FINAL_SCORE",
+                f"{label} has no preserved verified ESPN final score.",
+            )
+
+        verified_result = str(
+            pick.get("verified_result") or ""
+        ).upper()
+        if verified_result != result:
+            audit.error(
+                "OFFICIAL_ROW_RESULT_DRIFT",
+                (
+                    f"{label} stored result={result!r} but independently "
+                    f"verified result={verified_result!r}."
+                ),
+            )
+
+        expected_emoji = RESULT_EMOJI.get(result)
+        if expected_emoji is None:
+            continue
+
+        if pick.get("result_emoji") != expected_emoji:
+            audit.error(
+                "OFFICIAL_ROW_RESULT_EMOJI_MISMATCH",
+                (
+                    f"{label} result={result} must display {expected_emoji} "
+                    f"but result_emoji={pick.get('result_emoji')!r}."
+                ),
+            )
+
+        if pick.get("display_result_emoji") != expected_emoji:
+            audit.error(
+                "OFFICIAL_ROW_DISPLAY_EMOJI_MISMATCH",
+                (
+                    f"{label} result={result} must display {expected_emoji} "
+                    f"but display_result_emoji="
+                    f"{pick.get('display_result_emoji')!r}."
+                ),
+            )
+
+        source_marker = str(
+            pick.get("source_result_marker") or ""
+        ).upper()
+        if source_marker not in FINAL_RESULTS:
+            audit.error(
+                "OFFICIAL_ROW_SOURCE_MARKER_MISSING",
+                f"{label} does not preserve the original PAT HILL row marker.",
+            )
+        else:
+            expected_source_emoji = RESULT_EMOJI[source_marker]
+            if pick.get("source_result_emoji") != expected_source_emoji:
+                audit.error(
+                    "OFFICIAL_ROW_SOURCE_EMOJI_MISMATCH",
+                    (
+                        f"{label} source marker={source_marker} must preserve "
+                        f"{expected_source_emoji}, got "
+                        f"{pick.get('source_result_emoji')!r}."
+                    ),
+                )
+
+            if source_marker != result:
+                history = pick.get("result_correction_history")
+                if not (
+                    pick.get("official_result_corrected") is True
+                    and pick.get("source_marker_conflict") is True
+                    and pick.get("result_correction_reason")
+                    == "SOURCE_MARKER_CONFLICT_WITH_VERIFIED_ESPN_FINAL"
+                    and isinstance(history, list)
+                    and len(history) > 0
+                ):
+                    audit.error(
+                        "OFFICIAL_ROW_CORRECTION_PROVENANCE_MISSING",
+                        (
+                            f"{label} source marker={source_marker} differs "
+                            f"from verified result={result}, but durable ESPN "
+                            "correction provenance is incomplete."
+                        ),
+                    )
+
+        if not str(
+            pick.get("official_row_verification_fingerprint") or ""
+        ).strip():
+            audit.error(
+                "OFFICIAL_ROW_FINGERPRINT_MISSING",
+                f"{label} has no durable source-identity verification fingerprint.",
+            )
+
+
+# ============================================================
 # PAT HILL WEEKLY + CUMULATIVE RECORD CONTRACT
 # ============================================================
 
@@ -2116,6 +2336,12 @@ def run_audit():
 
     audit_official_rows(
         picks,
+        audit,
+    )
+
+    audit_official_row_verification(
+        picks,
+        state,
         audit,
     )
 
