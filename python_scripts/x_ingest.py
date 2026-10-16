@@ -102,7 +102,7 @@ MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 21
+CURRENT_INGEST_VALIDATION_VERSION = 22
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -3203,12 +3203,80 @@ def restore_authoritative_inventory_literals(
 # ============================================================
 
 # These are source-card conventions that are safe only when the complete
-# matchup independently contains the mapped team. They are intentionally NOT
-# global football aliases. This prevents a short token such as UT from being
-# interpreted outside the source matchup that proves its meaning.
-SOURCE_CONTEXT_TEAM_ALIASES = {
-    "ut": "Tennessee",
+# matchup independently disambiguates the literal token. They are intentionally
+# NOT global football aliases. A short source token such as UT may legitimately
+# refer to more than one school across different cards, so the matchup must
+# prove exactly one candidate before we derive a canonical team.
+SOURCE_CONTEXT_TEAM_CANDIDATES = {
+    "ut": (
+        "Tennessee",
+        "Texas",
+        "Utah",
+    ),
 }
+
+
+def contextual_source_team_for_matchup(literal_team, source_matchup):
+    """Resolve a source-only ambiguous team token inside one complete matchup.
+
+    The mapping is intentionally local to the source row.  It never changes the
+    global football alias registry.  Resolution succeeds only when exactly one
+    candidate school matches exactly one side of the supplied two-team matchup.
+
+    Examples:
+        UT +8.5 with Bama @ TENN -> Tennessee
+        UT -4.5 with Texas @ Oklahoma -> Texas
+        UT -7 with Utah @ Colorado -> Utah
+
+    Ambiguous cases such as Texas @ Tennessee or a matchup side that is itself
+    only the literal token UT remain unresolved and fail closed downstream.
+    """
+    literal_team = clean_text(literal_team)
+    source_matchup = clean_text(source_matchup)
+
+    if not literal_team or not source_matchup:
+        return None
+
+    candidate_names = SOURCE_CONTEXT_TEAM_CANDIDATES.get(norm(literal_team))
+    if not candidate_names:
+        return None
+
+    sides = split_matchup(source_matchup)
+    if len(sides) != 2:
+        return None
+
+    matches = []
+    literal_key = norm(literal_team)
+
+    for side_index, side in enumerate(sides):
+        # A matchup side that is itself only the same ambiguous token cannot
+        # disambiguate anything.  Require a more informative side label.
+        if norm(side) == literal_key:
+            continue
+
+        for candidate in candidate_names:
+            if teams_equivalent(candidate, side):
+                matches.append((side_index, candidate))
+
+    unique_matches = []
+    seen = set()
+    for side_index, candidate in matches:
+        key = (side_index, norm(candidate))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_matches.append((side_index, candidate))
+
+    if len(unique_matches) != 1:
+        return None
+
+    side_index, candidate = unique_matches[0]
+    return {
+        "team": candidate,
+        "side_index": side_index,
+        "opponent": clean_text(sides[1 - side_index]) or None,
+        "matchup": source_matchup,
+    }
 
 
 def normalize_contextual_source_team(pick):
@@ -3234,28 +3302,21 @@ def normalize_contextual_source_team(pick):
         return pick, False
 
     literal_team = clean_text(pick.get("source_team_text"))
-    mapped_team = SOURCE_CONTEXT_TEAM_ALIASES.get(norm(literal_team))
-
-    if not mapped_team:
-        return pick, False
 
     source_matchup = (
         clean_text(pick.get("source_matchup_text"))
         or clean_text(pick.get("matchup"))
     )
-    sides = split_matchup(source_matchup) if source_matchup else []
 
-    if len(sides) != 2:
+    contextual = contextual_source_team_for_matchup(
+        literal_team,
+        source_matchup,
+    )
+
+    if not contextual:
         return pick, False
 
-    mapped_indexes = [
-        index
-        for index, side in enumerate(sides)
-        if teams_equivalent(mapped_team, side)
-    ]
-
-    if len(mapped_indexes) != 1:
-        return pick, False
+    mapped_team = contextual["team"]
 
     line = safe_float(pick.get("line"))
     if line is None:
@@ -3277,9 +3338,11 @@ def normalize_contextual_source_team(pick):
 
     # Keep the source matchup itself intact. Schedule enrichment owns canonical
     # ESPN matchup/opponent metadata.
-    other_index = 1 - mapped_indexes[0]
-    pick["opponent"] = clean_text(sides[other_index]) or pick.get("opponent")
+    pick["opponent"] = contextual.get("opponent") or pick.get("opponent")
     pick["source_context_team_normalized"] = True
+    pick["source_context_team_candidates"] = list(
+        SOURCE_CONTEXT_TEAM_CANDIDATES.get(norm(literal_team), ())
+    )
 
     print(
         "INGEST SOURCE CONTEXT TEAM NORMALIZED:",
@@ -3379,6 +3442,22 @@ def _source_literal_team_matches_matchup_side(selected, side):
     # Exact source-literal equality is authoritative even when the token is
     # globally ambiguous (OSU, USC, MSU, etc.).
     if norm(selected_text) == norm(side_text):
+        return True
+
+    # A source-only ambiguous token may have several legitimate school meanings.
+    # For this INTERNAL-CONSISTENCY check, allow the token to match a matchup
+    # side when that side is equivalent to one of the explicit candidates.
+    # This does not choose the canonical school; normalize_contextual_source_team
+    # performs that derivation later only when the full two-team matchup proves
+    # exactly one candidate.
+    contextual_candidates = SOURCE_CONTEXT_TEAM_CANDIDATES.get(
+        norm(selected_text),
+        (),
+    )
+    if contextual_candidates and any(
+        teams_equivalent(candidate, side_text)
+        for candidate in contextual_candidates
+    ):
         return True
 
     # Use the shared identity system whenever it can resolve the pair safely.
