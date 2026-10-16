@@ -7,6 +7,7 @@ import requests
 
 from common import (
     PICKS_FILE,
+    STATE_FILE,
     american_profit,
     load_json,
     now_iso,
@@ -2199,6 +2200,74 @@ def grade_open():
             final_score_text(event),
             "| event:",
             event_value,
+        )
+
+    # --------------------------------------------------------
+    # FINAL OFFICIAL ROW VERIFICATION AFTER ALL DOWNSTREAM GRADES
+    # --------------------------------------------------------
+    # sportsbook_validate.py may legitimately correct an official spread sign
+    # and this grader may then re-grade that row. Re-run the idempotent
+    # official-row contract here so the final result emoji/provenance is current
+    # in the SAME workflow before audit/dashboard publication. Already-current
+    # official rows are skipped without ESPN calls.
+    try:
+        from official_result_verify import verify_all_official_rows
+
+        state = load_json(
+            STATE_FILE,
+            {},
+        )
+        if not isinstance(state, dict):
+            state = {}
+
+        picks, official_row_verify_summary = (
+            verify_all_official_rows(
+                picks,
+                state,
+            )
+        )
+
+        save_json(
+            STATE_FILE,
+            state,
+        )
+
+        print(
+            "POST-GRADER OFFICIAL ROW CONTRACT:",
+            "verified",
+            official_row_verify_summary.get("verified"),
+            "| unverified",
+            official_row_verify_summary.get("unverified"),
+            "| corrections",
+            official_row_verify_summary.get("corrected"),
+            "| cumulative",
+            (
+                "PASS"
+                if official_row_verify_summary.get("cumulative_contract_ok")
+                else "FAIL"
+            ),
+        )
+
+    except Exception as exc:
+        # Fail closed explicitly. If the verifier itself cannot run, invalidate
+        # the global verification generation so the downstream audit cannot
+        # publish a row whose market identity may have changed downstream.
+        try:
+            state = load_json(STATE_FILE, {})
+            if not isinstance(state, dict):
+                state = {}
+            state["official_row_verification_version"] = 0
+            state["official_row_post_grader_error"] = (
+                f"{type(exc).__name__}: {exc}"
+            )
+            save_json(STATE_FILE, state)
+        except Exception:
+            pass
+
+        print(
+            "POST-GRADER OFFICIAL ROW VERIFICATION FAILED:",
+            type(exc).__name__,
+            exc,
         )
 
     # --------------------------------------------------------
