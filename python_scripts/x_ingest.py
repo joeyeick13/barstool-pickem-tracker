@@ -102,7 +102,7 @@ MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 23
+CURRENT_INGEST_VALIDATION_VERSION = 24
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -4115,9 +4115,35 @@ def repair_spread_identity_from_espn_schedule(
     anchor = candidate["source_anchor"]
     proof_method = candidate["proof_method"]
 
-    # Nothing to repair when the selected identity was already canonical.  The
-    # schedule layer may still canonicalize matchup/opponent metadata later.
-    if teams_equivalent(selected, resolved_selected):
+    # The selected team can already be canonical while the literal matchup side
+    # is still unresolved shorthand.  Example:
+    #
+    #     Houston -4.5 | OK ST @ UH
+    #
+    # ESPN can uniquely prove Oklahoma State @ Houston.  Returning early merely
+    # because selected == Houston would leave ``UH`` unresolved and the final
+    # fail-closed source-matchup validator would reject the row.
+    #
+    # Therefore repair when EITHER:
+    #   1) the selected team itself needs canonicalization, OR
+    #   2) the selected team is canonical but the literal two-team matchup does
+    #      not independently support that identity and the unique ESPN event does.
+    selected_identity_changed = not teams_equivalent(
+        selected,
+        resolved_selected,
+    )
+
+    selected_supported_by_literal_matchup = any(
+        _source_literal_team_matches_matchup_side(
+            selected,
+            source_side,
+        )
+        for source_side in sides
+    )
+
+    matchup_identity_needs_repair = not selected_supported_by_literal_matchup
+
+    if not selected_identity_changed and not matchup_identity_needs_repair:
         return pick, False
 
     literal_source_team = clean_text(pick.get("source_team_text"))
@@ -4141,22 +4167,36 @@ def repair_spread_identity_from_espn_schedule(
     pick.setdefault("pre_espn_ingest_repair_opponent", old_opponent or None)
     pick.setdefault("pre_espn_ingest_repair_matchup", old_matchup or None)
 
-    pick["selection"] = f"{resolved_selected} {line:+g}"
-    pick["team"] = resolved_selected
+    # Canonicalize the selected-team fields only when necessary.  For a
+    # matchup-only repair (Houston vs literal ``UH``), the visible selection
+    # remains semantically unchanged while derived matchup/opponent metadata is
+    # canonicalized from the uniquely proven ESPN event.
+    if selected_identity_changed:
+        pick["selection"] = f"{resolved_selected} {line:+g}"
+        pick["team"] = resolved_selected
 
-    if old_side and old_side.upper() not in {"OVER", "UNDER"}:
-        pick["side"] = resolved_selected
+        if old_side and old_side.upper() not in {"OVER", "UNDER"}:
+            pick["side"] = resolved_selected
 
     pick["opponent"] = resolved_anchor
     pick["matchup"] = resolved_matchup
     pick["espn_ingest_identity_repaired"] = True
+    pick["espn_ingest_matchup_repaired"] = bool(
+        matchup_identity_needs_repair
+    )
     pick["espn_ingest_identity_repair_event_id"] = str(event.get("id") or "") or None
     pick["espn_ingest_identity_repair_method"] = proof_method
     pick["espn_ingest_identity_repair_source_anchor"] = anchor
     pick["espn_ingest_identity_repair_selected_side_ocr"] = bool(selected_side_ocr)
 
+    repair_log_label = (
+        "INGEST ESPN SOURCE IDENTITY REPAIR:"
+        if selected_identity_changed
+        else "INGEST ESPN SOURCE MATCHUP REPAIR:"
+    )
+
     print(
-        "INGEST ESPN SOURCE IDENTITY REPAIR:",
+        repair_log_label,
         pick.get("picker"),
         "|",
         old_selection,
