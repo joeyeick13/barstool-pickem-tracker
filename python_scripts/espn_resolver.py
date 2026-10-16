@@ -584,6 +584,83 @@ def competitor_identity_anchor(
     return anchor or None
 
 
+def competitor_mascot_name(
+    competitor
+):
+    """Return ESPN's mascot-only team name without registering it globally.
+
+    Mascots are deliberately excluded from the shared identity registry because
+    names such as Tigers, Bulldogs, Wildcats, etc. are not globally unique.
+    They may still be useful as a final resolver fallback when the exact mascot
+    text appears on exactly one eligible ESPN event in the Pick Em week.
+    """
+    team = competitor_team(competitor)
+    return clean_text(team.get("name")) or None
+
+
+def comp_matches_exact_mascot(
+    competitor,
+    hint,
+):
+    hint_key = norm(hint)
+    mascot_key = norm(competitor_mascot_name(competitor))
+
+    if not hint_key or not mascot_key:
+        return False
+
+    # Mascot fallback is exact-only.  No fuzzy matching, stemming, or singular
+    # guessing is permitted.
+    return hint_key == mascot_key
+
+
+def event_contains_mascot(
+    event,
+    hint,
+):
+    return any(
+        comp_matches_exact_mascot(competitor, hint)
+        for competitor in competitors(event)
+    )
+
+
+def event_team_identity_for_mascot(
+    event,
+    hint,
+):
+    """Return the safe ESPN school identity for one exact mascot match.
+
+    Returns None unless exactly one competitor in the event has the mascot.
+    The returned identity is the ESPN location/school anchor, never the mascot.
+    """
+    matches = [
+        competitor
+        for competitor in competitors(event)
+        if comp_matches_exact_mascot(competitor, hint)
+    ]
+
+    if len(matches) != 1:
+        return None
+
+    return competitor_identity_anchor(matches[0])
+
+
+def mascot_team_matches(
+    events,
+    hint,
+):
+    """Return eligible events containing an exact ESPN mascot text match.
+
+    Uniqueness is evaluated by the caller across the complete weekly slate.
+    This keeps mascot-only terms out of the global alias system and fails closed
+    for shared mascots such as Tigers or Bulldogs.
+    """
+    return [
+        event
+        for event in events
+        if event_contains_mascot(event, hint)
+    ]
+
+
 def register_competitor_identity(
     competitor
 ):
@@ -706,6 +783,14 @@ AMBIGUOUS_CONTEXT_GROUPS = {
     "usc": {
         "south carolina",
         "usc",
+    },
+    # UT is intentionally contextual rather than global. Barstool source cards
+    # can use UT for Tennessee, Texas, or Utah; a complete matchup must prove
+    # which school is intended.
+    "ut": {
+        "tennessee",
+        "texas",
+        "utah",
     },
 }
 
@@ -2194,6 +2279,56 @@ def resolve_event_detailed(
                 candidates=
                     matches,
                 confidence=0.0,
+            )
+
+        # ----------------------------------------------------
+        # 6. EXACT MASCOT FALLBACK (SLATE-UNIQUE ONLY)
+        # ----------------------------------------------------
+        # ESPN exposes a mascot-only team["name"] value (e.g. Badgers).
+        # Mascots are intentionally NOT global aliases because many are shared.
+        # When the literal selected-team text exactly equals a mascot and that
+        # mascot occurs in exactly one eligible event in the complete week, the
+        # weekly slate itself provides a safe deterministic anchor.
+        mascot_matches = mascot_team_matches(
+            events,
+            selected,
+        )
+
+        mascot_matches = filter_events_near_post_time(
+            mascot_matches,
+            pick,
+        )
+
+        mascot_unique = unique_event(
+            mascot_matches
+        )
+
+        if mascot_unique:
+            return resolution_result(
+                event=mascot_unique,
+                method=
+                    "UNIQUE_SELECTED_MASCOT",
+                reason=(
+                    "Literal selected-team text exactly matches an ESPN mascot "
+                    "that appears in exactly one eligible weekly event."
+                ),
+                candidates=mascot_matches,
+                confidence=0.94,
+                anchor_hint=selected,
+            )
+
+        if len(mascot_matches) > 1:
+            return resolution_result(
+                event=None,
+                method=
+                    "SELECTED_MASCOT_AMBIGUOUS",
+                reason=(
+                    "Mascot-only selected-team text appears in multiple "
+                    "eligible ESPN events; automatic resolution blocked."
+                ),
+                candidates=mascot_matches,
+                confidence=0.0,
+                anchor_hint=selected,
             )
 
     return resolution_result(
