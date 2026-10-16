@@ -10393,7 +10393,7 @@
     "event_id": "401871067",
     "official_reconciled": false,
     "ingest_validated": true,
-    "ingest_validation_version": 22,
+    "ingest_validation_version": 23,
     "id": "c203d54bfbce3367",
     "source_post_evidence": {
       "2110118421144736170": {
@@ -10423,13 +10423,13 @@
     "matchup_completed_from_event": true,
     "game_match_review_reason": null,
     "event_resolution_candidates": [],
-    "schedule_checked_at": "2026-10-16T16:27:00.939297+00:00",
+    "schedule_checked_at": "2026-10-16T16:52:10.508883+00:00",
     "event_resolution_reason": null,
     "result": "LOSS",
     "status": "FINAL",
     "final_score": "MTSU 33 - DEL 30",
     "profit": -1.0,
-    "graded_at": "2026-10-16T16:28:08.515947+00:00",
+    "graded_at": "2026-10-16T16:53:26.800605+00:00",
     "grade_source": "ESPN"
   },
   {
@@ -10461,7 +10461,7 @@
     "event_id": "401871067",
     "official_reconciled": false,
     "ingest_validated": true,
-    "ingest_validation_version": 22,
+    "ingest_validation_version": 23,
     "id": "3cf9ed033c61f09d",
     "source_post_evidence": {
       "2110118421144736170": {
@@ -10492,13 +10492,13 @@
     "matchup_completed_from_event": true,
     "game_match_review_reason": null,
     "event_resolution_candidates": [],
-    "schedule_checked_at": "2026-10-16T16:27:00.939600+00:00",
+    "schedule_checked_at": "2026-10-16T16:52:10.509313+00:00",
     "event_resolution_reason": null,
     "result": "WIN",
     "status": "FINAL",
     "final_score": "MTSU 33 - DEL 30",
     "profit": 0.909,
-    "graded_at": "2026-10-16T16:28:08.680317+00:00",
+    "graded_at": "2026-10-16T16:53:26.917119+00:00",
     "grade_source": "ESPN"
   },
   {
@@ -10530,7 +10530,7 @@
     "event_id": "401871053",
     "official_reconciled": false,
     "ingest_validated": true,
-    "ingest_validation_version": 22,
+    "ingest_validation_version": 23,
     "id": "29812541e523fe14",
     "source_post_evidence": {
       "2110118421144736170": {
@@ -10560,13 +10560,13 @@
     "matchup_completed_from_event": true,
     "game_match_review_reason": null,
     "event_resolution_candidates": [],
-    "schedule_checked_at": "2026-10-16T16:27:00.940492+00:00",
+    "schedule_checked_at": "2026-10-16T16:52:10.510626+00:00",
     "event_resolution_reason": null,
     "result": "PUSH",
     "status": "FINAL",
     "final_score": "JXST 27 - FIU 24",
     "profit": 0.0,
-    "graded_at": "2026-10-16T16:28:08.815701+00:00",
+    "graded_at": "2026-10-16T16:53:27.077467+00:00",
     "grade_source": "ESPN"
   },
   {
@@ -10598,7 +10598,7 @@
     "event_id": "401871053",
     "official_reconciled": false,
     "ingest_validated": true,
-    "ingest_validation_version": 22,
+    "ingest_validation_version": 23,
     "id": "97ebaf94e9948c8c",
     "source_post_evidence": {
       "2110118421144736170": {
@@ -10629,13 +10629,13 @@
     "matchup_completed_from_event": true,
     "game_match_review_reason": null,
     "event_resolution_candidates": [],
-    "schedule_checked_at": "2026-10-16T16:27:00.940824+00:00",
+    "schedule_checked_at": "2026-10-16T16:52:10.511136+00:00",
     "event_resolution_reason": null,
     "result": "LOSS",
     "status": "FINAL",
     "final_score": "JXST 27 - FIU 24",
     "profit": -1.0,
-    "graded_at": "2026-10-16T16:28:08.938016+00:00",
+    "graded_at": "2026-10-16T16:53:27.168678+00:00",
     "grade_source": "ESPN"
   },
   {
@@ -10667,7 +10667,7 @@
     "event_id": "401871068",
     "official_reconciled": false,
     "ingest_validated": true,
-    "ingest_validation_version": 22,
+    "ingest_validation_version": 23,
     "id": "30073ff6236a2aba",
     "source_post_evidence": {
       "2110484283446247634": {
@@ -10697,13 +10697,13 @@
     "matchup_completed_from_event": true,
     "game_match_review_reason": null,
     "event_resolution_candidates": [],
-    "schedule_checked_at": "2026-10-16T16:27:00.941729+00:00",
+    "schedule_checked_at": "2026-10-16T16:52:10.512483+00:00",
     "event_resolution_reason": null,
     "result": "LOSS",
     "status": "FINAL",
     "final_score": "SHSU 3 - WKU 16",
     "profit": -1.0,
-    "graded_at": "2026-10-16T16:28:09.096580+00:00",
+    "graded_at": "2026-10-16T16:53:27.347804+00:00",
     "grade_source": "ESPN"
   },
   {
@@ -10735,7 +10735,7 @@
     "event_id": "401871054",
     "official_reconciled": false,
     "ingest_validated": true,
-    "ingest_validation_version": 22,
+    "ingest_validation_version": 23,
     "id": "487128c6d68cf6ab",
     "source_post_evidence": {
       "2110484283446247634": {
@@ -10765,13 +10765,13 @@
     "matchup_completed_from_event": true,
     "game_match_review_reason": null,
     "event_resolution_candidates": [],
-    "schedule_checked_at": "2026-10-16T16:27:00.942076+00:00",
+    "schedule_checked_at": "2026-10-16T16:52:10.513016+00:00",
     "event_resolution_reason": null,
     "result": "LOSS",
     "status": "FINAL",
     "final_score": "MOST 24 - KENN 21",
     "profit": -1.0,
-    "graded_at": "2026-10-16T16:28:09.291205+00:00",
+    "graded_at": "2026-10-16T16:53:27.482801+00:00",
     "grade_source": "ESPN"
   },
   {
@@ -13149,7 +13149,7 @@
     "event_id": "401856830",
     "official_reconciled": false,
     "ingest_validated": true,
-    "ingest_validation_version": 22,
+    "ingest_validation_version": 23,
     "id": "31db19675c9fb2d1",
     "source_post_evidence": {
       "2110858929919983847": {
@@ -13179,7 +13179,7 @@
     "matchup_completed_from_event": true,
     "game_match_review_reason": null,
     "event_resolution_candidates": [],
-    "schedule_checked_at": "2026-10-16T16:27:00.942879+00:00",
+    "schedule_checked_at": "2026-10-16T16:52:10.514214+00:00",
     "event_resolution_reason": null,
     "status": "OPEN",
     "result": null
@@ -13213,7 +13213,7 @@
     "event_id": "401860903",
     "official_reconciled": false,
     "ingest_validated": true,
-    "ingest_validation_version": 22,
+    "ingest_validation_version": 23,
     "id": "7b55a054814add63",
     "source_post_evidence": {
       "2110858929919983847": {
@@ -13243,7 +13243,7 @@
     "matchup_completed_from_event": true,
     "game_match_review_reason": null,
     "event_resolution_candidates": [],
-    "schedule_checked_at": "2026-10-16T16:27:00.943781+00:00",
+    "schedule_checked_at": "2026-10-16T16:52:10.515554+00:00",
     "event_resolution_reason": null,
     "status": "OPEN",
     "result": null
@@ -13254,7 +13254,7 @@
     "matchup": "Wisconsin @ UCLA",
     "source_selection_text": "Badgers +2.5",
     "source_team_text": "Badgers",
-    "source_matchup_text": null,
+    "source_matchup_text": "Wisconsin @ UCLA",
     "team": "Wisconsin",
     "opponent": "UCLA Bruins",
     "bet_type": "SPREAD",
@@ -13277,7 +13277,7 @@
     "event_id": "401858494",
     "official_reconciled": false,
     "ingest_validated": true,
-    "ingest_validation_version": 22,
+    "ingest_validation_version": 23,
     "id": "ec6ee8ac8709981f",
     "source_post_evidence": {
       "2110858929919983847": {
@@ -13296,12 +13296,12 @@
     "game_time": "2026-10-17T23:30Z",
     "game_matchup": "Wisconsin @ UCLA",
     "game_match_status": "MATCHED",
-    "game_match_confidence": "UNIQUE",
+    "game_match_confidence": "LOCKED_VALIDATED",
     "game_match_source": "ESPN",
     "game_match_review_reason": null,
-    "event_resolution_method": "UNIQUE_SELECTED_MASCOT_TEAM_REPAIR",
+    "event_resolution_method": "EXISTING_EVENT_ID",
     "event_resolution_candidates": [],
-    "schedule_checked_at": "2026-10-16T16:27:01.733417+00:00",
+    "schedule_checked_at": "2026-10-16T16:52:10.516484+00:00",
     "source_mascot_team_text": "Badgers",
     "pre_mascot_resolver_team": "Badgers",
     "pre_mascot_resolver_side": "Badgers",
