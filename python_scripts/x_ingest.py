@@ -47,6 +47,13 @@ from espn_resolver import (
     resolve_event_detailed,
 )
 
+from official_result_verify import (
+    OFFICIAL_ROW_RECONCILIATION_REQUIRED_KEY,
+    result_emoji as official_result_emoji,
+    verify_all_official_rows,
+    verify_official_week_rows,
+)
+
 
 # ============================================================
 # CONFIG
@@ -96,7 +103,7 @@ OFFICIAL_RESULT_STATE_KEY = (
 # Durable official-results source ledger. This is intentionally separate
 # from the normal-post ingest generation: a PAT HILL source post is immutable
 # evidence and must not be sent back through vision on every code change.
-PAT_HILL_RECONCILIATION_VERSION = 2
+PAT_HILL_RECONCILIATION_VERSION = 3
 PAT_HILL_RECONCILIATION_VERSION_KEY = (
     "pat_hill_reconciliation_version"
 )
@@ -1514,12 +1521,21 @@ def should_scan_standings(state):
     ):
         snapshot_backfill_needed = True
 
+    row_reconciliation_required = bool(
+        state.get(
+            OFFICIAL_ROW_RECONCILIATION_REQUIRED_KEY,
+            [],
+        )
+        or []
+    )
+
     expected_completed = (
         completed_week_now()
     )
 
     return (
         snapshot_backfill_needed
+        or row_reconciliation_required
         or now_pt.weekday() == 1
         or last_official < expected_completed
     )
@@ -8714,11 +8730,16 @@ def validate_official_results(
                     row_tuple = _result_tuple_from_picks(normalized_picks)
 
                 if row_tuple != root_tuple:
-                    raise ValueError(
-                        f"{picker} root weekly record does not match row "
-                        f"results: {root_tuple[0]}-{root_tuple[1]}-"
-                        f"{root_tuple[2]} vs {row_tuple[0]}-"
-                        f"{row_tuple[1]}-{row_tuple[2]}"
+                    print(
+                        "PAT HILL ROOT/ROW RESULT CONFLICT DEFERRED TO "
+                        "FULL ESPN ROW VERIFICATION:",
+                        picker,
+                        "| root weekly:",
+                        f"{root_tuple[0]}-{root_tuple[1]}-{root_tuple[2]}",
+                        "| source row markers:",
+                        f"{row_tuple[0]}-{row_tuple[1]}-{row_tuple[2]}",
+                        "| action: preserve every source marker and verify "
+                        "each wager against its exact ESPN final before commit",
                     )
 
             if card_total == row_total and card_tuple != root_tuple:
@@ -8965,6 +8986,41 @@ def build_official_week_rows(
 
                 "result":
                     result,
+
+                # Preserve the literal game-by-game PAT HILL marker forever.
+                # ESPN may correct the tracker result, but source evidence is
+                # never destroyed or rewritten.
+                "source_result_marker":
+                    str(
+                        source_pick.get("pat_hill_image_result")
+                        or source_pick.get("result")
+                        or result
+                    ).upper(),
+
+                "source_result_emoji":
+                    official_result_emoji(
+                        source_pick.get("pat_hill_image_result")
+                        or source_pick.get("result")
+                        or result
+                    ),
+
+                "result_emoji":
+                    official_result_emoji(result),
+
+                "display_result_emoji":
+                    official_result_emoji(result),
+
+                "source_selection_text":
+                    clean_text(source_pick.get("selection")) or None,
+
+                "source_matchup_text":
+                    clean_text(source_pick.get("matchup")) or None,
+
+                "source_team_text":
+                    clean_text(source_pick.get("team")) or None,
+
+                "official_card_row_index":
+                    int(index),
 
                 "profit_units":
                     profit_units,
@@ -9384,6 +9440,18 @@ def reconcile_pat_hill_standings(
     )
     all_snapshot_backfills_current = not exact_fetch_failures
 
+    forced_row_reconciliation_weeks = {
+        int(value)
+        for value in (
+            state.get(
+                OFFICIAL_ROW_RECONCILIATION_REQUIRED_KEY,
+                [],
+            )
+            or []
+        )
+        if str(value).isdigit()
+    }
+
     for root_post in root_candidates:
         root_id = str(root_post.get("id") or "")
         if not root_id:
@@ -9394,6 +9462,19 @@ def reconcile_pat_hill_standings(
             print("Could not determine standings week:", root_id)
             all_snapshot_backfills_current = False
             continue
+
+        force_row_source_recovery = (
+            int(target_week) in forced_row_reconciliation_weeks
+        )
+        if force_row_source_recovery:
+            print(
+                "PAT HILL CONTROLLED SOURCE RECOVERY FORCED BY "
+                "GAME-BY-GAME ESPN CONTRACT:",
+                "Week",
+                target_week,
+                "| root:",
+                root_id,
+            )
 
         source_text = source_post_text(root_post)
         parsed_records = parse_pat_hill_root_records(
@@ -9440,7 +9521,11 @@ def reconcile_pat_hill_standings(
 
         # Durable source contract: if this immutable official post already has
         # a current snapshot and stored rows still match it, do not AI-reread.
-        if root_id in processed and snapshot_current:
+        if (
+            root_id in processed
+            and snapshot_current
+            and not force_row_source_recovery
+        ):
             healthy = official_week_is_healthy(
                 existing,
                 target_week=target_week,
@@ -9465,7 +9550,7 @@ def reconcile_pat_hill_standings(
         # post, create the durable root-text snapshot without another vision
         # reread. Only weeks whose stored rows actually conflict with the root
         # weekly record are sent through controlled source-card recovery.
-        if not snapshot_current:
+        if not snapshot_current and not force_row_source_recovery:
             existing_week_healthy = official_week_is_healthy(
                 existing,
                 target_week=target_week,
@@ -9570,6 +9655,41 @@ def reconcile_pat_hill_standings(
             all_snapshot_backfills_current = False
             continue
 
+        # ----------------------------------------------------
+        # ROW-LEVEL ESPN FINAL VERIFICATION — TRANSACTION GATE
+        # ----------------------------------------------------
+        # Every individual official wager is resolved and graded against its
+        # exact ESPN final before this week replaces stored history. The root
+        # weekly record is an aggregate invariant, never a license to invent
+        # a balancing WIN/LOSS. If even one row cannot be independently
+        # verified, or the verified rows do not exactly equal the official
+        # weekly root, preserve the existing database and retry later.
+        try:
+            row_verify_report = verify_official_week_rows(
+                official_rows,
+                target_week=target_week,
+                expected_weekly_records=weekly_records,
+                force=True,
+            )
+        except Exception as exc:
+            print(
+                "OFFICIAL RECONCILIATION ABORTED — ESPN ROW VERIFICATION "
+                "FAILED:",
+                type(exc).__name__,
+                exc,
+            )
+            all_snapshot_backfills_current = False
+            continue
+
+        if not row_verify_report.get("weekly_contract_ok"):
+            print(
+                "OFFICIAL RECONCILIATION ABORTED — VERIFIED GAME-BY-GAME "
+                "RESULTS DO NOT RECONCILE TO OFFICIAL WEEKLY RECORD:",
+                row_verify_report.get("errors"),
+            )
+            all_snapshot_backfills_current = False
+            continue
+
         candidate_existing = replace_week_with_official(
             existing,
             official_rows=official_rows,
@@ -9606,7 +9726,12 @@ def reconcile_pat_hill_standings(
             "marker_kind": parsed_records.get("marker_kind"),
             "weekly_records": weekly_records,
             "season_standings": season_standings,
-            "validated_weekly_records": _record_snapshot_summary(validated),
+            "validated_weekly_records": (
+                _stored_week_snapshot_summary(
+                    existing,
+                    target_week,
+                )
+            ),
             "reconciled_at": now_iso(),
         }
 
@@ -10037,7 +10162,67 @@ def ingest():
         )
 
     # --------------------------------------------------------
-    # 11. Permanent canonical dedupe.
+    # 11. Historical official row-by-row ESPN final verification.
+    # --------------------------------------------------------
+    # One-time backfill verifies every existing official game result. Future
+    # runs skip rows whose source-identity fingerprint is unchanged. Any
+    # source identity repair invalidates only that row and deterministically
+    # re-verifies it. Aggregate mismatches are recorded in state and force the
+    # corresponding PAT HILL source week to reopen; they are never "balanced"
+    # by guessing which result to flip.
+    existing, official_row_verify_summary = (
+        verify_all_official_rows(
+            existing,
+            state,
+        )
+    )
+
+    # If the exact ESPN row grades exposed one or more historical weeks whose
+    # stored source-card extraction does not reconcile to the official weekly
+    # root, repair those source weeks immediately in the SAME workflow run.
+    # This avoids requiring the user to manually run the pipeline a second
+    # time just to complete deterministic historical self-healing.
+    row_repair_weeks = list(
+        state.get(
+            OFFICIAL_ROW_RECONCILIATION_REQUIRED_KEY,
+            [],
+        )
+        or []
+    )
+
+    if row_repair_weeks:
+        print()
+        print(
+            "PAT HILL SAME-RUN ROW CONTRACT RECOVERY:",
+            row_repair_weeks,
+        )
+
+        existing = reconcile_pat_hill_standings(
+            existing,
+            state,
+            official_user_id,
+        )
+
+        # Reapply only the existing source-verified identity repairs because a
+        # controlled week replacement may have rebuilt one of those rows.
+        existing, second_pass_historical_repairs = (
+            apply_verified_historical_official_overrides(existing)
+        )
+        if second_pass_historical_repairs:
+            print(
+                "Second-pass verified historical official identity repairs:",
+                second_pass_historical_repairs,
+            )
+
+        existing, official_row_verify_summary = (
+            verify_all_official_rows(
+                existing,
+                state,
+            )
+        )
+
+    # --------------------------------------------------------
+    # 12. Permanent canonical dedupe.
     # --------------------------------------------------------
 
     existing = dedupe_picks(
@@ -10045,7 +10230,7 @@ def ingest():
     )
 
     # --------------------------------------------------------
-    # 12. Permanent deterministic wager-ID integrity.
+    # 13. Permanent deterministic wager-ID integrity.
     #
     # Existing IDs are preserved. Any valid historical/recovered
     # wager that lacks an ID receives the same deterministic ID it
@@ -10060,7 +10245,7 @@ def ingest():
     )
 
     # --------------------------------------------------------
-    # 12. Save atomically at end of successful ingest run.
+    # 14. Save atomically at end of successful ingest run.
     # --------------------------------------------------------
 
     state[
