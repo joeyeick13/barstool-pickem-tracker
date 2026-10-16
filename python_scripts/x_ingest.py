@@ -41,7 +41,10 @@ from football_identity import (
 
 from espn_resolver import (
     build_complete_week_slate,
+    event_contains_team,
     event_matchup_text,
+    lock_pick_to_event,
+    resolve_event_detailed,
 )
 
 
@@ -102,7 +105,7 @@ MAX_PROCESSED_POST_IDS = 2000
 MAX_FAILED_POST_IDS = 250
 
 # Increment only when normal-post extraction/validation semantics change.
-CURRENT_INGEST_VALIDATION_VERSION = 24
+CURRENT_INGEST_VALIDATION_VERSION = 25
 
 # Always rescan a bounded recent window from the official account.
 # Processed IDs make this cheap/idempotent, while the overlap prevents
@@ -3693,8 +3696,25 @@ def validate_normal_pick(pick):
             pick["line"] = visible_line
 
         if selected and not _spread_selected_team_matches_source_matchup(pick):
-            errors.append(
-                "spread selected team conflicts with complete source matchup"
+            # Source extraction and event identity are separate states.
+            #
+            # A complete, count-reconciled source row is durable evidence even
+            # when its compact team token cannot yet be canonicalized. Do not
+            # throw away the entire X post or force repeated AI rereads for an
+            # identity problem. Preserve the literal source fields and let the
+            # shared ESPN resolver retry deterministically from that snapshot.
+            pick["source_identity_resolution_state"] = "PENDING"
+            pick["source_identity_resolution_reason"] = (
+                "SPREAD_SELECTED_TEAM_MATCHUP_CONFLICT"
+            )
+
+            print(
+                "SOURCE IDENTITY DEFERRED TO SHARED ESPN RESOLVER:",
+                picker,
+                "|",
+                selection,
+                "| source matchup:",
+                pick.get("source_matchup_text") or pick.get("matchup"),
             )
 
     if market == "TOTAL":
@@ -4210,6 +4230,230 @@ def repair_spread_identity_from_espn_schedule(
         anchor,
         "| proof:",
         proof_method,
+    )
+
+    return pick, True
+
+
+
+# ============================================================
+# INGEST-TIME SHARED ESPN EVENT LOCK
+# ============================================================
+
+def attach_shared_espn_event_lock(
+    pick,
+    *,
+    season_year,
+    week,
+    slate_cache,
+):
+    """
+    Resolve a source-validated wager with the SAME resolver used later by
+    schedule_enrich.py.
+
+    Important durability rule:
+      - failure to resolve an event does NOT invalidate or reread the source;
+      - the literal source snapshot remains committed;
+      - unresolved identity becomes PENDING_EVENT_RESOLUTION and is retried
+        deterministically on later runs;
+      - a successful event lock is persisted immediately so downstream stages
+        never reinterpret the wager with a different identity policy.
+    """
+    cache_key = (
+        int(season_year),
+        int(week),
+    )
+
+    if cache_key not in slate_cache:
+        try:
+            slate_cache[cache_key] = build_complete_week_slate(
+                [pick],
+                int(season_year),
+                int(week),
+            )
+        except Exception as exc:
+            print(
+                "INGEST SHARED ESPN RESOLUTION UNAVAILABLE:",
+                pick.get("picker"),
+                "|",
+                pick.get("selection"),
+                "|",
+                type(exc).__name__,
+                exc,
+            )
+            slate_cache[cache_key] = None
+
+    events = slate_cache.get(cache_key)
+
+    if not events:
+        pick["event_resolution_state"] = "PENDING"
+        pick["event_resolution_phase"] = "INGEST"
+        pick["event_resolution_reason"] = (
+            "ESPN_WEEK_SCHEDULE_UNAVAILABLE"
+        )
+        return pick, False
+
+    result = resolve_event_detailed(
+        pick,
+        events,
+    )
+
+    event = result.get("event")
+
+    if event is None:
+        pick["event_resolution_state"] = "PENDING"
+        pick["event_resolution_phase"] = "INGEST"
+        pick["event_resolution_method"] = (
+            result.get("method")
+            or "NO_CONFIDENT_EVENT_MATCH"
+        )
+        pick["event_resolution_reason"] = (
+            result.get("reason")
+            or "No confident ESPN event match."
+        )
+        pick["event_resolution_candidates"] = (
+            result.get("candidate_event_ids")
+            or []
+        )
+
+        print(
+            "INGEST EVENT RESOLUTION PENDING:",
+            pick.get("picker"),
+            "|",
+            pick.get("selection"),
+            "| method:",
+            pick.get("event_resolution_method"),
+            "| reason:",
+            pick.get("event_resolution_reason"),
+        )
+
+        return pick, False
+
+    details = result.get("details") or {}
+    method = (
+        result.get("method")
+        or "SHARED_ESPN_RESOLVER"
+    )
+
+    # Never persist a resolver event for a team-sided wager if the selected
+    # team itself contradicts that event. The structural resolver supplies a
+    # selected_team when context proves an opaque source token. Other resolver
+    # methods must independently contain the selected team (or be the explicit
+    # slate-unique mascot path).
+    selected_before_lock = clean_text(
+        side_identity(pick)
+    )
+
+    if (
+        selected_before_lock
+        and method != "SOURCE_STRUCTURAL_MATCHUP"
+        and method != "UNIQUE_SELECTED_MASCOT"
+        and not event_contains_team(
+            event,
+            selected_before_lock,
+        )
+    ):
+        pick["event_resolution_state"] = "PENDING"
+        pick["event_resolution_phase"] = "INGEST"
+        pick["event_resolution_method"] = (
+            "SELECTED_TEAM_EVENT_CONFLICT"
+        )
+        pick["event_resolution_reason"] = (
+            "Resolver candidate does not contain the wager's selected team."
+        )
+        pick["event_resolution_candidates"] = [
+            str(event.get("id") or "")
+        ]
+
+        print(
+            "INGEST EVENT LOCK REJECTED — SELECTED TEAM CONFLICT:",
+            pick.get("picker"),
+            "|",
+            pick.get("selection"),
+            "| candidate event:",
+            str(event.get("id") or ""),
+            "|",
+            event_matchup_text(event),
+        )
+
+        return pick, False
+
+    # Structural resolution may prove a canonical selected team even when the
+    # source literal is UW/MSU/UH/etc. Change derived identity only; never
+    # rewrite source_selection_text/source_team_text/source_matchup_text.
+    selected_team = clean_text(
+        details.get("selected_team")
+    )
+    opponent_team = clean_text(
+        details.get("opponent_team")
+    )
+
+    if selected_team:
+        pick["team"] = selected_team
+
+        side = clean_text(
+            pick.get("side")
+        )
+        if (
+            side
+            and side.upper() not in {"OVER", "UNDER"}
+        ):
+            pick["side"] = selected_team
+
+        pick["source_identity_resolution_state"] = "RESOLVED"
+        pick["source_identity_resolution_reason"] = None
+
+    if opponent_team:
+        pick["opponent"] = opponent_team
+
+    resolved_matchup = clean_text(
+        event_matchup_text(event)
+    )
+
+    if resolved_matchup:
+        current_matchup = clean_text(
+            pick.get("matchup")
+        )
+
+        if (
+            current_matchup
+            and not clean_text(pick.get("source_matchup_text"))
+        ):
+            pick["source_matchup_text"] = current_matchup
+
+        pick["matchup"] = resolved_matchup
+        pick["game_matchup"] = resolved_matchup
+
+    lock_pick_to_event(
+        pick,
+        event,
+        method=method,
+    )
+
+    pick["event_resolution_state"] = "LOCKED"
+    pick["event_resolution_phase"] = "INGEST"
+    pick["event_resolution_reason"] = result.get("reason")
+    pick["event_resolution_candidates"] = (
+        result.get("candidate_event_ids")
+        or []
+    )
+    pick["game_match_status"] = "MATCHED"
+    pick["game_match_source"] = "ESPN"
+    pick["game_match_confidence"] = (
+        result.get("confidence")
+    )
+
+    print(
+        "INGEST EVENT LOCKED:",
+        pick.get("picker"),
+        "|",
+        pick.get("selection"),
+        "| event:",
+        pick.get("event_id"),
+        "|",
+        resolved_matchup,
+        "| method:",
+        method,
     )
 
     return pick, True
@@ -4806,6 +5050,14 @@ def validate_normal_post_payload(
         )
 
         validate_normal_pick(pick)
+
+        pick, _ = attach_shared_espn_event_lock(
+            pick,
+            season_year=season_year,
+            week=pick_week(pick),
+            slate_cache=slate_cache,
+        )
+
         normalized.append(pick)
 
     if len(normalized) != independent_count:
@@ -5004,7 +5256,87 @@ def stored_pick_from_ai(
             None,
 
         "event_id":
-            None,
+            extracted.get(
+                "event_id"
+            ),
+
+        "competition_id":
+            extracted.get(
+                "competition_id"
+            ),
+
+        "game_time":
+            extracted.get(
+                "game_time"
+            ),
+
+        "event_matchup":
+            extracted.get(
+                "event_matchup"
+            ),
+
+        "event_status":
+            extracted.get(
+                "event_status"
+            ),
+
+        "event_resolution_method":
+            extracted.get(
+                "event_resolution_method"
+            ),
+
+        "event_resolution_state":
+            extracted.get(
+                "event_resolution_state"
+            ),
+
+        "event_resolution_phase":
+            extracted.get(
+                "event_resolution_phase"
+            ),
+
+        "event_resolution_reason":
+            extracted.get(
+                "event_resolution_reason"
+            ),
+
+        "event_resolution_candidates":
+            list(
+                extracted.get(
+                    "event_resolution_candidates"
+                )
+                or []
+            ),
+
+        "game_matchup":
+            extracted.get(
+                "game_matchup"
+            ),
+
+        "game_match_status":
+            extracted.get(
+                "game_match_status"
+            ),
+
+        "game_match_source":
+            extracted.get(
+                "game_match_source"
+            ),
+
+        "game_match_confidence":
+            extracted.get(
+                "game_match_confidence"
+            ),
+
+        "source_identity_resolution_state":
+            extracted.get(
+                "source_identity_resolution_state"
+            ),
+
+        "source_identity_resolution_reason":
+            extracted.get(
+                "source_identity_resolution_reason"
+            ),
 
         "official_reconciled":
             False,
